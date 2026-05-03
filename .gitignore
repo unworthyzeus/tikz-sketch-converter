@@ -12,6 +12,8 @@ dist
 dist-ssr
 *.local
 .playwright-cli
+
+# Local screenshots and downloaded competitor assets
 output
 
 # Editor directories and files

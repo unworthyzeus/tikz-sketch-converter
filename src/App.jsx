@@ -22,7 +22,11 @@ import {
   Square,
   Trash2,
   Type,
+  Upload,
   Workflow,
+  Maximize2,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
@@ -343,49 +347,205 @@ function formatNumber(value) {
   return Object.is(rounded, -0) ? '0' : `${rounded}`
 }
 
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function erf(value) {
+  const sign = value < 0 ? -1 : 1
+  const x = Math.abs(value)
+  const t = 1 / (1 + 0.3275911 * x)
+  const y =
+    1 -
+    (((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) *
+      t *
+      Math.exp(-x * x))
+
+  return sign * y
+}
+
+function logGamma(value) {
+  if (value <= 0 && Number.isInteger(value)) return Number.NaN
+
+  if (value < 0.5) {
+    return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * value)) - logGamma(1 - value)
+  }
+
+  const coefficients = [
+    676.5203681218851,
+    -1259.1392167224028,
+    771.3234287776531,
+    -176.6150291621406,
+    12.507343278686905,
+    -0.13857109526572012,
+    9.984369578019572e-6,
+    1.5056327351493116e-7,
+  ]
+  let x = 0.9999999999998099
+  const z = value - 1
+
+  coefficients.forEach((coefficient, index) => {
+    x += coefficient / (z + index + 1)
+  })
+
+  const t = z + coefficients.length - 0.5
+  return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x)
+}
+
+function gamma(value) {
+  if (value > 171.6) return Number.POSITIVE_INFINITY
+  return Math.exp(logGamma(value))
+}
+
+function factorial(value) {
+  if (value < 0) return Number.NaN
+  if (!Number.isInteger(value)) return gamma(value + 1)
+
+  let result = 1
+  for (let index = 2; index <= value; index += 1) result *= index
+  return result
+}
+
+function besselJ0(value) {
+  const x = Number(value)
+  let term = 1
+  let sum = 1
+  const factor = (x * x) / 4
+
+  for (let k = 1; k <= 80; k += 1) {
+    term *= -factor / (k * k)
+    sum += term
+    if (Math.abs(term) < 1e-13) break
+  }
+
+  return sum
+}
+
+function besselJ1(value) {
+  const x = Number(value)
+  let term = x / 2
+  let sum = term
+  const factor = (x * x) / 4
+
+  for (let k = 1; k <= 80; k += 1) {
+    term *= -factor / (k * (k + 1))
+    sum += term
+    if (Math.abs(term) < 1e-13) break
+  }
+
+  return sum
+}
+
+function besselJ(order, value) {
+  const n = Math.round(order)
+  const x = Number(value)
+  if (n < 0 || Math.abs(n - order) > 1e-9) return Number.NaN
+  if (n === 0) return besselJ0(x)
+  if (n === 1) return besselJ1(x)
+  if (x === 0) return 0
+
+  let previous = besselJ0(x)
+  let current = besselJ1(x)
+  for (let k = 1; k < n; k += 1) {
+    const next = (2 * k * current) / x - previous
+    previous = current
+    current = next
+  }
+
+  return current
+}
+
+const mathConstants = {
+  e: Math.E,
+  phi: (1 + Math.sqrt(5)) / 2,
+  pi: Math.PI,
+  tau: Math.PI * 2,
+}
+
+const mathFunctionHelpers = {
+  abs: Math.abs,
+  acos: Math.acos,
+  acosh: Math.acosh,
+  asin: Math.asin,
+  asinh: Math.asinh,
+  atan: Math.atan,
+  atan2: Math.atan2,
+  atanh: Math.atanh,
+  besselj: besselJ,
+  besselj0: besselJ0,
+  besselj1: besselJ1,
+  ceil: Math.ceil,
+  clamp: (value, minimum, maximum) => Math.min(Math.max(value, minimum), maximum),
+  cos: Math.cos,
+  cosh: Math.cosh,
+  deg: (value) => (value * 180) / Math.PI,
+  erf,
+  exp: Math.exp,
+  factorial,
+  floor: Math.floor,
+  gamma,
+  heaviside: (value) => (value < 0 ? 0 : 1),
+  hypot: Math.hypot,
+  j0: besselJ0,
+  j1: besselJ1,
+  lgamma: logGamma,
+  ln: Math.log,
+  log: Math.log,
+  log10: Math.log10,
+  log2: Math.log2,
+  max: Math.max,
+  min: Math.min,
+  mod: (value, modulus) => ((value % modulus) + modulus) % modulus,
+  nin: Math.min,
+  pow: Math.pow,
+  rad: (value) => (value * Math.PI) / 180,
+  rect: (value) => (Math.abs(value) <= 0.5 ? 1 : 0),
+  round: Math.round,
+  sgn: Math.sign,
+  sign: Math.sign,
+  sin: Math.sin,
+  sinc: (value) => (Math.abs(value) < 1e-9 ? 1 : Math.sin(value) / value),
+  sinh: Math.sinh,
+  sqrt: Math.sqrt,
+  step: (value) => (value < 0 ? 0 : 1),
+  tan: Math.tan,
+  tanh: Math.tanh,
+  tri: (value) => Math.max(1 - Math.abs(value), 0),
+}
+
 function compileExpression(expression) {
   const source = expression.trim()
   if (!source) throw new Error('La expresion esta vacia')
-  if (!/^[0-9xX+\-*/^().,\sA-Za-z]+$/.test(source)) {
+  if (!/^[0-9xX+\-*/^%().,\sA-Za-z]+$/.test(source)) {
     throw new Error('Usa solo x, numeros, operadores y funciones matematicas')
   }
 
-  const allowedNames = new Set([
-    'x',
-    'sin',
-    'cos',
-    'tan',
-    'asin',
-    'acos',
-    'atan',
-    'sqrt',
-    'abs',
-    'log',
-    'ln',
-    'exp',
-    'floor',
-    'ceil',
-    'round',
-    'min',
-    'max',
-    'pow',
-    'pi',
-    'e',
-  ])
-
-  const names = source.toLowerCase().match(/[a-z]+/g) ?? []
-  const unknown = names.find((name) => !allowedNames.has(name))
+  const normalized = source.toLowerCase()
+  const names = normalized.match(/[a-z][a-z0-9]*/g) ?? []
+  const unknown = names.find(
+    (name) =>
+      name !== 'x' &&
+      !Object.prototype.hasOwnProperty.call(mathConstants, name) &&
+      !Object.prototype.hasOwnProperty.call(mathFunctionHelpers, name),
+  )
   if (unknown) throw new Error(`Nombre no permitido: ${unknown}`)
 
-  const jsExpression = source
-    .toLowerCase()
+  const jsExpression = normalized
     .replace(/\^/g, '**')
-    .replace(/\bln\b/g, 'Math.log')
-    .replace(/\b(sin|cos|tan|asin|acos|atan|sqrt|abs|log|exp|floor|ceil|round|min|max|pow)\b/g, 'Math.$1')
-    .replace(/\bpi\b/g, 'Math.PI')
-    .replace(/\be\b/g, 'Math.E')
+    .replace(/\b([a-z][a-z0-9]*)\b/g, (name) => {
+      if (name === 'x') return 'x'
+      if (Object.prototype.hasOwnProperty.call(mathConstants, name)) return `constants.${name}`
+      if (Object.prototype.hasOwnProperty.call(mathFunctionHelpers, name)) return `helpers.${name}`
+      return name
+    })
 
-  return Function('x', `"use strict"; return (${jsExpression});`)
+  const evaluator = Function('x', 'helpers', 'constants', `"use strict"; return (${jsExpression});`)
+  return (x) => evaluator(x, mathFunctionHelpers, mathConstants)
 }
 
 function sampleFunction(element) {
@@ -1276,7 +1436,9 @@ function buildTikz(elements, exportOptions = {}) {
 
 function App() {
   const svgRef = useRef(null)
+  const importInputRef = useRef(null)
   const [tool, setTool] = useState('select')
+  const [zoom, setZoom] = useState(1)
   const [elements, setElements] = useState(seedElements)
   const [selectedId, setSelectedId] = useState('seed-function')
   const [draft, setDraft] = useState(null)
@@ -1312,6 +1474,7 @@ function App() {
   })
   const [functionError, setFunctionError] = useState('')
   const [librarySearch, setLibrarySearch] = useState('')
+  const [libraryGroup, setLibraryGroup] = useState('All')
   const [symbolSearch, setSymbolSearch] = useState('')
   const [symbolsOpen, setSymbolsOpen] = useState(false)
   const [customLibrary, setCustomLibrary] = useState({
@@ -1335,30 +1498,40 @@ function App() {
       }),
     [elements, settings.caption, settings.exportGrid, settings.label, settings.monochromeExport, settings.wrapFigure],
   )
+  const paletteGroups = useMemo(() => ['All', ...Array.from(new Set(libraryPaletteItems.map((preset) => preset.group))).sort()], [])
   const visiblePaletteItems = useMemo(() => {
     const query = librarySearch.trim().toLowerCase()
-    if (!query) return libraryPaletteItems
 
-    return libraryPaletteItems.filter((preset) =>
-      [
-        preset.title,
-        preset.group,
-        preset.description,
-        ...(preset.tags ?? []),
-        ...(preset.libraries ?? []),
-        ...(preset.pgfplotsLibraries ?? []),
-        ...(preset.packages ?? []),
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(query),
-    )
-  }, [librarySearch])
+    return libraryPaletteItems.filter((preset) => {
+      const matchesGroup = libraryGroup === 'All' || preset.group === libraryGroup
+      const matchesSearch =
+        !query ||
+        [
+          preset.title,
+          preset.group,
+          preset.description,
+          ...(preset.tags ?? []),
+          ...(preset.libraries ?? []),
+          ...(preset.pgfplotsLibraries ?? []),
+          ...(preset.packages ?? []),
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(query)
+
+      return matchesGroup && matchesSearch
+    })
+  }, [libraryGroup, librarySearch])
   const visibleLatexSymbols = useMemo(() => {
     const query = symbolSearch.trim().toLowerCase()
     if (!query) return latexSymbols
     return latexSymbols.filter((symbol) => symbol.haystack.includes(query))
   }, [symbolSearch])
+
+  const setCanvasZoom = (nextZoom) => {
+    const value = Number(nextZoom)
+    setZoom(Math.min(2.25, Math.max(0.55, Number.isFinite(value) ? value : 1)))
+  }
 
   const pushHistory = (snapshot = elements) => {
     setPast((items) => [...items, snapshot].slice(-50))
@@ -1751,13 +1924,84 @@ function App() {
   }
 
   const downloadTikz = () => {
-    const blob = new Blob([tikzCode], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'sketch-tikz.tex'
-    link.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(new Blob([tikzCode], { type: 'text/plain;charset=utf-8' }), 'sketch-tikz.tex')
+  }
+
+  const downloadBoardState = () => {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      elements,
+      settings,
+    }
+    downloadBlob(
+      new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' }),
+      'tikz-sketch-board.json',
+    )
+  }
+
+  const importBoardState = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const payload = JSON.parse(await file.text())
+      const nextElements = Array.isArray(payload) ? payload : payload.elements
+      if (!Array.isArray(nextElements)) throw new Error('Missing elements array')
+      if (!nextElements.every((element) => element && typeof element === 'object' && typeof element.type === 'string')) {
+        throw new Error('Invalid element payload')
+      }
+
+      pushHistory(elements)
+      setElements(nextElements)
+      setSelectedId(nextElements[0]?.id ?? null)
+      setFuture([])
+      if (payload.settings && typeof payload.settings === 'object') {
+        setSettings((state) => ({ ...state, ...payload.settings }))
+      }
+      setTool('select')
+    } catch (error) {
+      window.alert(`No pude importar ese archivo: ${error.message}`)
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  const downloadCanvasPng = async () => {
+    if (!svgRef.current) return
+
+    const clone = svgRef.current.cloneNode(true)
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    clone.setAttribute('width', `${CANVAS.width}`)
+    clone.setAttribute('height', `${CANVAS.height}`)
+
+    const svgText = new XMLSerializer().serializeToString(clone)
+    const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' })
+    const url = URL.createObjectURL(svgBlob)
+
+    try {
+      const image = new Image()
+      await new Promise((resolve, reject) => {
+        image.onload = resolve
+        image.onerror = reject
+        image.src = url
+      })
+
+      const pixelRatio = 2
+      const canvas = document.createElement('canvas')
+      canvas.width = CANVAS.width * pixelRatio
+      canvas.height = CANVAS.height * pixelRatio
+      const context = canvas.getContext('2d')
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, canvas.width, canvas.height)
+      context.scale(pixelRatio, pixelRatio)
+      context.drawImage(image, 0, 0, CANVAS.width, CANVAS.height)
+
+      const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 1))
+      if (pngBlob) downloadBlob(pngBlob, 'tikz-sketch-board.png')
+    } finally {
+      URL.revokeObjectURL(url)
+    }
   }
 
   const renderPolyline = (points, className, element, halo = false) => {
@@ -2493,6 +2737,13 @@ function App() {
 
       <section className="workspace">
         <header className="topbar">
+          <input
+            ref={importInputRef}
+            className="hidden-file-input"
+            type="file"
+            accept="application/json,.json,.txt"
+            onChange={importBoardState}
+          />
           <div>
             <h1>TikZ Sketch Converter</h1>
             <p>
@@ -2530,6 +2781,10 @@ function App() {
               <Download size={17} />
               Exportar .TeX
             </button>
+            <button type="button" className="ghost-button" onClick={downloadCanvasPng}>
+              <Download size={17} />
+              Exportar PNG
+            </button>
             <button type="button" className="primary-button" onClick={copyTikz}>
               <Copy size={17} />
               {copyLabel}
@@ -2538,48 +2793,66 @@ function App() {
         </header>
 
         <div className="canvas-shell">
-          <svg
-            ref={svgRef}
-            className={`sketch-canvas tool-${tool}`}
-            viewBox={`0 0 ${CANVAS.width} ${CANVAS.height}`}
-            role="img"
-            aria-label="Lienzo de dibujo con coordenadas"
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={handlePaletteDrop}
-          >
-            <rect width={CANVAS.width} height={CANVAS.height} fill="#ffffff" />
-            {settings.grid && (
-              <g className="grid-layer">
-                {gridLines.map((line) => (
-                  <line
-                    key={line.id}
-                    x1={line.x1}
-                    y1={line.y1}
-                    x2={line.x2}
-                    y2={line.y2}
-                    className={line.axis ? 'axis-line' : 'grid-line'}
-                    vectorEffect="non-scaling-stroke"
-                  />
+          <div className="canvas-viewport">
+            <svg
+              ref={svgRef}
+              className={`sketch-canvas tool-${tool}`}
+              viewBox={`0 0 ${CANVAS.width} ${CANVAS.height}`}
+              role="img"
+              aria-label="Lienzo de dibujo con coordenadas"
+              style={{
+                width: `${CANVAS.width * zoom}px`,
+                height: `${CANVAS.height * zoom}px`,
+              }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={handlePaletteDrop}
+            >
+              <rect width={CANVAS.width} height={CANVAS.height} fill="#ffffff" />
+              {settings.grid && (
+                <g className="grid-layer">
+                  {gridLines.map((line) => (
+                    <line
+                      key={line.id}
+                      x1={line.x1}
+                      y1={line.y1}
+                      x2={line.x2}
+                      y2={line.y2}
+                      className={line.axis ? 'axis-line' : 'grid-line'}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                </g>
+              )}
+              <g>
+                {elements.map((element) => (
+                  <g
+                    key={element.id}
+                    className={`canvas-element ${selectedId === element.id ? 'is-selected' : ''}`}
+                    onPointerDown={(event) => handleElementPointerDown(event, element)}
+                  >
+                    {selectedId === element.id && renderElementShape(element, true)}
+                    {renderElementShape(element)}
+                  </g>
                 ))}
               </g>
-            )}
-            <g>
-              {elements.map((element) => (
-                <g
-                  key={element.id}
-                  className={`canvas-element ${selectedId === element.id ? 'is-selected' : ''}`}
-                  onPointerDown={(event) => handleElementPointerDown(event, element)}
-                >
-                  {selectedId === element.id && renderElementShape(element, true)}
-                  {renderElementShape(element)}
-                </g>
-              ))}
-            </g>
-            {draft && <g className="draft-layer">{renderElementShape(draft)}</g>}
-          </svg>
+              {draft && <g className="draft-layer">{renderElementShape(draft)}</g>}
+            </svg>
+          </div>
+          <div className="canvas-zoom-controls" aria-label="Zoom de lienzo">
+            <button type="button" className="zoom-button" title="Alejar" aria-label="Alejar" onClick={() => setCanvasZoom(zoom - 0.1)}>
+              <ZoomOut size={16} />
+            </button>
+            <span className="zoom-readout">{Math.round(zoom * 100)}%</span>
+            <button type="button" className="zoom-button" title="Acercar" aria-label="Acercar" onClick={() => setCanvasZoom(zoom + 0.1)}>
+              <ZoomIn size={16} />
+            </button>
+            <button type="button" className="zoom-button" title="Restaurar zoom" aria-label="Restaurar zoom" onClick={() => setCanvasZoom(1)}>
+              <Maximize2 size={16} />
+            </button>
+          </div>
         </div>
 
         <footer className="status-strip">
@@ -2745,7 +3018,7 @@ function App() {
               type="text"
               value={functionDraft.expression}
               onChange={(event) => setFunctionDraft((state) => ({ ...state, expression: event.target.value }))}
-              placeholder="sin(x), x^2, exp(-x^2)"
+              placeholder="sin(x), max(x,0), besselj0(x)"
             />
           </label>
           <div className="field-pair">
@@ -2778,7 +3051,7 @@ function App() {
           </label>
           {functionError && <p className="form-error">{functionError}</p>}
           <div className="example-row">
-            {['sin(x)', 'cos(2*x)', '0.2*x^2 - 2'].map((expression) => (
+            {['sin(x)', 'max(x, 0)', 'min(sin(x), 0.5)', 'besselj0(x)', 'sinc(x)', 'erf(x)'].map((expression) => (
               <button
                 key={expression}
                 type="button"
@@ -2873,6 +3146,18 @@ function App() {
               placeholder="resistor, axis, estado, matrix..."
             />
           </label>
+          <div className="library-filter-row" aria-label="Filtrar objetos TikZ">
+            {paletteGroups.map((group) => (
+              <button
+                key={group}
+                type="button"
+                className={`filter-chip ${libraryGroup === group ? 'is-active' : ''}`}
+                onClick={() => setLibraryGroup(group)}
+              >
+                {group}
+              </button>
+            ))}
+          </div>
           <div className="library-grid">
             {visiblePaletteItems.map((preset) => (
               <button
@@ -3198,6 +3483,18 @@ function App() {
           <div className="export-actions">
             <button type="button" className="ghost-button" onClick={restoreDemo}>
               Restaurar demo
+            </button>
+            <button type="button" className="ghost-button" onClick={() => importInputRef.current?.click()}>
+              <Upload size={17} />
+              Importar JSON
+            </button>
+            <button type="button" className="ghost-button" onClick={downloadBoardState}>
+              <Download size={17} />
+              Guardar JSON
+            </button>
+            <button type="button" className="ghost-button" onClick={downloadCanvasPng}>
+              <Download size={17} />
+              Exportar PNG
             </button>
             <button type="button" className="ghost-button danger-action" onClick={clearBoard} disabled={!elements.length}>
               <Trash2 size={17} />
