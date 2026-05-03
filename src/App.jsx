@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import './App.css'
 import { libraryPresets } from './tikzLibraryPresets'
+import { libraryPaletteItems } from './tikzPaletteItems'
 
 const CANVAS = {
   width: 920,
@@ -34,11 +35,11 @@ const CANVAS = {
 const SNAP_STEP = 0.25
 
 const strokeColors = [
-  { label: 'Tinta', value: '#111827' },
-  { label: 'Azul', value: '#2563eb' },
-  { label: 'Verde', value: '#059669' },
-  { label: 'Ambar', value: '#d97706' },
-  { label: 'Rojo', value: '#dc2626' },
+  { label: 'Ink', value: '#111111' },
+  { label: 'Graphite', value: '#4b5563' },
+  { label: 'Muted blue', value: '#1f4e79' },
+  { label: 'Muted green', value: '#2f6f4e' },
+  { label: 'Muted red', value: '#8c2f39' },
 ]
 
 const toolMeta = [
@@ -59,7 +60,7 @@ const diagramPresets = [
     description: 'Fuente, resistor y capacitor',
     icon: CircuitBoard,
     origin: { x: -9.25, y: 6.2 },
-    stroke: '#111827',
+    stroke: '#111111',
   },
   {
     kind: 'gantt',
@@ -67,7 +68,7 @@ const diagramPresets = [
     description: 'Plan de tareas con barras',
     icon: CalendarDays,
     origin: { x: 1.75, y: 6.1 },
-    stroke: '#059669',
+    stroke: '#111111',
   },
   {
     kind: 'ml',
@@ -75,7 +76,7 @@ const diagramPresets = [
     description: 'Datos, features, modelo, metricas',
     icon: Workflow,
     origin: { x: -9.25, y: -4.8 },
-    stroke: '#2563eb',
+    stroke: '#111111',
   },
   {
     kind: 'dl',
@@ -83,7 +84,7 @@ const diagramPresets = [
     description: 'Capas densas conectadas',
     icon: BrainCircuit,
     origin: { x: 2.25, y: -4.1 },
-    stroke: '#d97706',
+    stroke: '#111111',
   },
 ]
 
@@ -91,49 +92,31 @@ const seedElements = [
   {
     id: 'seed-function',
     type: 'function',
-    expression: 'sin(x)',
-    domainStart: -7.5,
-    domainEnd: 7.5,
-    samples: 140,
-    stroke: '#2563eb',
-    width: 1.35,
+    expression: 'exp(-0.5*x^2)',
+    domainStart: -5,
+    domainEnd: 5,
+    samples: 160,
+    stroke: '#111111',
+    width: 0.75,
     dashed: false,
     smooth: true,
   },
   {
     id: 'seed-line',
     type: 'line',
-    start: { x: -6.25, y: -2.5 },
-    end: { x: -1.75, y: 2.25 },
-    stroke: '#111827',
-    width: 1.2,
+    start: { x: -5, y: 0.5 },
+    end: { x: 5, y: 0.5 },
+    stroke: '#111111',
+    width: 0.45,
     dashed: true,
-  },
-  {
-    id: 'seed-rect',
-    type: 'rect',
-    start: { x: 2.25, y: 1.75 },
-    end: { x: 5.75, y: -1.25 },
-    stroke: '#059669',
-    width: 1.1,
-    dashed: false,
-  },
-  {
-    id: 'seed-ellipse',
-    type: 'ellipse',
-    start: { x: -0.75, y: -3.25 },
-    end: { x: 2.25, y: -5 },
-    stroke: '#d97706',
-    width: 1.15,
-    dashed: false,
   },
   {
     id: 'seed-text',
     type: 'text',
-    position: { x: 4.15, y: 2.55 },
-    text: '$A$',
-    stroke: '#111827',
-    width: 1,
+    position: { x: 2.7, y: 1.05 },
+    text: '$f(x)$',
+    stroke: '#111111',
+    width: 0.8,
   },
 ]
 
@@ -148,28 +131,33 @@ function makeDiagramElement(preset) {
     title: preset.title,
     origin: preset.origin,
     stroke: preset.stroke,
-    width: 1.1,
+    width: 0.75,
     dashed: false,
   }
 }
 
-function makeLibraryElement(preset) {
+function makeLibraryElement(preset, origin = preset.origin) {
   return {
     id: createId(),
     type: 'library',
     presetId: preset.id,
     title: preset.title,
     group: preset.group,
-    origin: preset.origin,
+    origin,
     stroke: preset.stroke,
-    width: 1.1,
+    width: preset.defaultStrokeWidth ?? 0.75,
     dashed: false,
   }
 }
 
 function getLibraryPreset(element) {
   if (element.customPreset) return element.customPreset
-  return libraryPresets.find((preset) => preset.id === element.presetId) ?? libraryPresets[0]
+  return (
+    libraryPaletteItems.find((preset) => preset.id === element.presetId) ??
+    libraryPresets.find((preset) => preset.id === element.presetId) ??
+    libraryPaletteItems[0] ??
+    libraryPresets[0]
+  )
 }
 
 function splitList(value) {
@@ -480,7 +468,7 @@ function elementLabel(element) {
     function: 'Funcion',
     text: 'Texto',
     diagram: element.title ?? 'Diagrama',
-    library: element.title ?? 'Biblioteca TikZ',
+    library: element.title ?? 'Objeto TikZ',
   }
 
   return labels[element.type] ?? 'Elemento'
@@ -506,6 +494,18 @@ function escapeTikzText(text) {
 function formatTikzNodeText(text) {
   if (/[\\$]/.test(text)) return text
   return escapeTikzText(text)
+}
+
+function indentLatex(lines, spaces = 2) {
+  const pad = ' '.repeat(spaces)
+  return lines.map((line) => (line ? `${pad}${line}` : line))
+}
+
+function safeLatexLabel(label) {
+  return label
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9:_.-]/g, '')
 }
 
 function previewText(text) {
@@ -739,20 +739,26 @@ function collectRequirements(elements) {
   }
 }
 
-function buildTikz(elements, includeGrid) {
+function buildTikz(elements, exportOptions = {}) {
+  const includeGrid = exportOptions.includeGrid ?? false
+  const monochrome = exportOptions.monochrome ?? true
+  const wrapFigure = exportOptions.wrapFigure ?? false
+  const figureCaption = exportOptions.caption?.trim() ?? ''
+  const figureLabel = safeLatexLabel(exportOptions.label ?? '')
   const requirements = collectRequirements(elements)
   const standaloneSnippets = []
   const usedColors = new Map()
   const ensureColor = (hex) => {
     if (!hex || hex === 'none') return 'none'
+    if (monochrome) return 'black'
     const clean = hex.replace('#', '').toUpperCase()
     if (!usedColors.has(clean)) {
       const known = {
-        '111827': 'tikzInk',
-        '2563EB': 'tikzBlue',
-        '059669': 'tikzGreen',
-        D97706: 'tikzAmber',
-        DC2626: 'tikzRed',
+        111111: 'tikzInk',
+        '4B5563': 'tikzGraphite',
+        '1F4E79': 'tikzMutedBlue',
+        '2F6F4E': 'tikzMutedGreen',
+        '8C2F39': 'tikzMutedRed',
       }
       usedColors.set(clean, known[clean] ?? `tikzColor${usedColors.size + 1}`)
     }
@@ -773,7 +779,7 @@ function buildTikz(elements, includeGrid) {
     return `[${options.join(', ')}]`
   }
 
-  const lines = [
+  const preambleLines = [
     '% Generated with TikZ Sketch Converter',
     '% Preamble suggestions:',
     ...requirements.packages.map((item) => `% ${item}`),
@@ -781,18 +787,18 @@ function buildTikz(elements, includeGrid) {
     ...(requirements.pgfplotsLibraries.length ? [`% \\usepgfplotslibrary{${requirements.pgfplotsLibraries.join(',')}}`] : []),
     ...requirements.afterPreamble.map((item) => `% ${item}`),
     ...definitions,
-    '\\begin{tikzpicture}[x=1cm, y=1cm]',
   ]
+  const pictureLines = ['\\begin{tikzpicture}[x=1cm, y=1cm, line cap=round, line join=round, >=Stealth, every node/.style={font=\\small}]']
 
   if (includeGrid) {
-    lines.push(
-      `  \\draw[step=1cm, line width=0.2pt, color=gray!25] (${Math.floor(worldBounds.minX)},${Math.floor(
+    pictureLines.push(
+      `  \\draw[step=1cm, line width=0.2pt, color=gray!18] (${Math.floor(worldBounds.minX)},${Math.floor(
         worldBounds.minY,
       )}) grid (${Math.ceil(worldBounds.maxX)},${Math.ceil(worldBounds.maxY)});`,
-      `  \\draw[->, color=gray!65] (${formatNumber(worldBounds.minX)},0) -- (${formatNumber(
+      `  \\draw[->, line width=0.35pt, color=gray!55] (${formatNumber(worldBounds.minX)},0) -- (${formatNumber(
         worldBounds.maxX,
       )},0) node[right] {$x$};`,
-      `  \\draw[->, color=gray!65] (0,${formatNumber(worldBounds.minY)}) -- (0,${formatNumber(
+      `  \\draw[->, line width=0.35pt, color=gray!55] (0,${formatNumber(worldBounds.minY)}) -- (0,${formatNumber(
         worldBounds.maxY,
       )}) node[above] {$y$};`,
     )
@@ -800,7 +806,7 @@ function buildTikz(elements, includeGrid) {
 
   elements.forEach((element) => {
     if (element.type === 'line') {
-      lines.push(
+      pictureLines.push(
         `  \\draw${optionsFor(element)} (${formatNumber(element.start.x)},${formatNumber(
           element.start.y,
         )}) -- (${formatNumber(element.end.x)},${formatNumber(element.end.y)});`,
@@ -808,7 +814,7 @@ function buildTikz(elements, includeGrid) {
     }
 
     if (element.type === 'rect') {
-      lines.push(
+      pictureLines.push(
         `  \\draw${optionsFor(element)} (${formatNumber(element.start.x)},${formatNumber(
           element.start.y,
         )}) rectangle (${formatNumber(element.end.x)},${formatNumber(element.end.y)});`,
@@ -822,7 +828,7 @@ function buildTikz(elements, includeGrid) {
       }
       const radiusX = Math.abs(element.end.x - element.start.x) / 2
       const radiusY = Math.abs(element.end.y - element.start.y) / 2
-      lines.push(
+      pictureLines.push(
         `  \\draw${optionsFor(element)} (${formatNumber(center.x)},${formatNumber(
           center.y,
         )}) ellipse [x radius=${formatNumber(radiusX)}, y radius=${formatNumber(radiusY)}];`,
@@ -834,9 +840,9 @@ function buildTikz(elements, includeGrid) {
       if (points.length > 1) {
         const coords = points.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
         if (element.smooth) {
-          lines.push(`  \\draw${optionsFor(element, ['smooth'])} plot coordinates { ${coords} };`)
+          pictureLines.push(`  \\draw${optionsFor(element, ['smooth'])} plot coordinates { ${coords} };`)
         } else {
-          lines.push(`  \\draw${optionsFor(element)} ${coords.replaceAll(') (', ') -- (')};`)
+          pictureLines.push(`  \\draw${optionsFor(element)} ${coords.replaceAll(') (', ') -- (')};`)
         }
       }
     }
@@ -850,13 +856,13 @@ function buildTikz(elements, includeGrid) {
       segments.forEach((segment, index) => {
         const coords = segment.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
         const comment = index === 0 ? ` % f(x) = ${element.expression}` : ''
-        lines.push(`  \\draw${optionsFor(element, ['smooth'])} plot coordinates { ${coords} };${comment}`)
+        pictureLines.push(`  \\draw${optionsFor(element, ['smooth'])} plot coordinates { ${coords} };${comment}`)
       })
     }
 
     if (element.type === 'text') {
       const color = ensureColor(element.stroke)
-      lines.push(
+      pictureLines.push(
         `  \\node[text=${color}] at (${formatNumber(element.position.x)},${formatNumber(
           element.position.y,
         )}) {${formatTikzNodeText(element.text)}};`,
@@ -864,7 +870,7 @@ function buildTikz(elements, includeGrid) {
     }
 
     if (element.type === 'diagram') {
-      lines.push(...buildDiagramTikz(element, ensureColor))
+      pictureLines.push(...buildDiagramTikz(element, ensureColor))
     }
 
     if (element.type === 'library') {
@@ -873,16 +879,25 @@ function buildTikz(elements, includeGrid) {
       if (preset.standalone) {
         standaloneSnippets.push(...snippet)
       } else {
-        lines.push(...snippet)
+        pictureLines.push(...snippet)
       }
     }
   })
 
-  lines.push('\\end{tikzpicture}')
+  pictureLines.push('\\end{tikzpicture}')
   if (standaloneSnippets.length) {
-    lines.push('', '% Standalone library environments', ...standaloneSnippets)
+    pictureLines.push('', '% Standalone library environments', ...standaloneSnippets)
   }
-  return lines.join('\n')
+
+  if (!wrapFigure) {
+    return [...preambleLines, ...pictureLines].join('\n')
+  }
+
+  const figureLines = ['\\begin{figure}[htbp]', '  \\centering', ...indentLatex(pictureLines)]
+  if (figureCaption) figureLines.push(`  \\caption{${figureCaption}}`)
+  if (figureLabel) figureLines.push(`  \\label{${figureLabel}}`)
+  figureLines.push('\\end{figure}')
+  return [...preambleLines, ...figureLines].join('\n')
 }
 
 function App() {
@@ -897,13 +912,17 @@ function App() {
   const [copyLabel, setCopyLabel] = useState('Copiar')
   const [mouseWorld, setMouseWorld] = useState({ x: 0, y: 0 })
   const [settings, setSettings] = useState({
-    stroke: '#111827',
-    width: 1.2,
+    stroke: '#111111',
+    width: 0.8,
     dashed: false,
     smooth: true,
     snap: true,
     grid: true,
-    exportGrid: true,
+    exportGrid: false,
+    monochromeExport: true,
+    wrapFigure: true,
+    caption: 'Paper-ready TikZ figure.',
+    label: 'fig:tikz-sketch',
   })
   const [functionDraft, setFunctionDraft] = useState({
     expression: '0.25*x^2 - 2',
@@ -922,16 +941,27 @@ function App() {
   })
 
   const selectedElement = elements.find((element) => element.id === selectedId)
-  const tikzCode = useMemo(() => buildTikz(elements, settings.exportGrid), [elements, settings.exportGrid])
-  const visibleLibraryPresets = useMemo(() => {
+  const tikzCode = useMemo(
+    () =>
+      buildTikz(elements, {
+        includeGrid: settings.exportGrid,
+        monochrome: settings.monochromeExport,
+        wrapFigure: settings.wrapFigure,
+        caption: settings.caption,
+        label: settings.label,
+      }),
+    [elements, settings.caption, settings.exportGrid, settings.label, settings.monochromeExport, settings.wrapFigure],
+  )
+  const visiblePaletteItems = useMemo(() => {
     const query = librarySearch.trim().toLowerCase()
-    if (!query) return libraryPresets
+    if (!query) return libraryPaletteItems
 
-    return libraryPresets.filter((preset) =>
+    return libraryPaletteItems.filter((preset) =>
       [
         preset.title,
         preset.group,
         preset.description,
+        ...(preset.tags ?? []),
         ...(preset.libraries ?? []),
         ...(preset.pgfplotsLibraries ?? []),
         ...(preset.packages ?? []),
@@ -949,15 +979,17 @@ function App() {
     setSelectedId(nextSelectedId)
   }
 
-  const getWorldPoint = (event) => {
+  const getWorldPointFromClient = (clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect()
     const screenPoint = {
-      x: ((event.clientX - rect.left) / rect.width) * CANVAS.width,
-      y: ((event.clientY - rect.top) / rect.height) * CANVAS.height,
+      x: ((clientX - rect.left) / rect.width) * CANVAS.width,
+      y: ((clientY - rect.top) / rect.height) * CANVAS.height,
     }
     const worldPoint = screenToWorld(screenPoint)
     return settings.snap ? snapPoint(worldPoint) : worldPoint
   }
+
+  const getWorldPoint = (event) => getWorldPointFromClient(event.clientX, event.clientY)
 
   const makeBaseElement = () => ({
     id: createId(),
@@ -1137,7 +1169,7 @@ function App() {
         domainEnd: Number(functionDraft.domainEnd),
         samples: Number(functionDraft.samples),
         yOffset: 0,
-        stroke: settings.stroke === '#111827' ? '#2563eb' : settings.stroke,
+        stroke: settings.stroke,
         smooth: true,
       }
       setFunctionError('')
@@ -1154,10 +1186,21 @@ function App() {
     setTool('select')
   }
 
-  const addLibraryPreset = (preset) => {
-    const nextElement = makeLibraryElement(preset)
+  const addLibraryPreset = (preset, origin = preset.origin) => {
+    const nextElement = makeLibraryElement(preset, origin)
     commitElements([...elements, nextElement], nextElement.id)
     setTool('select')
+  }
+
+  const handlePaletteDrop = (event) => {
+    event.preventDefault()
+    const itemId = event.dataTransfer.getData('application/x-tikz-palette-item')
+    if (!itemId) return
+
+    const item = libraryPaletteItems.find((preset) => preset.id === itemId)
+    if (!item) return
+
+    addLibraryPreset(item, getWorldPointFromClient(event.clientX, event.clientY))
   }
 
   const addCustomLibrary = () => {
@@ -1228,8 +1271,8 @@ function App() {
         className={className}
         points={screenPoints}
         fill="none"
-        stroke={halo ? '#f59e0b' : element.stroke}
-        strokeWidth={(halo ? element.width + 4 : element.width) * 1.3}
+        stroke={halo ? '#6b7280' : element.stroke}
+        strokeWidth={(halo ? element.width + 3 : element.width) * 1.05}
         strokeDasharray={element.dashed && !halo ? '8 8' : undefined}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -1251,11 +1294,12 @@ function App() {
           y={topLeft.y}
           width={bottomRight.x - topLeft.x}
           height={bottomRight.y - topLeft.y}
-          rx="10"
-          fill="#f59e0b"
-          opacity="0.14"
-          stroke="#f59e0b"
-          strokeWidth="2"
+          rx="0"
+          fill="none"
+          opacity="0.7"
+          stroke="#6b7280"
+          strokeWidth="1"
+          strokeDasharray="5 4"
           vectorEffect="non-scaling-stroke"
         />
       )
@@ -1265,7 +1309,7 @@ function App() {
     const lineProps = {
       fill: 'none',
       stroke: element.stroke,
-      strokeWidth: element.width * 1.35,
+      strokeWidth: element.width * 1.05,
       strokeLinecap: 'round',
       strokeLinejoin: 'round',
       vectorEffect: 'non-scaling-stroke',
@@ -1273,15 +1317,15 @@ function App() {
     const labelProps = {
       fill: element.stroke,
       fontSize: 14,
-      fontFamily: 'Inter, system-ui, sans-serif',
-      fontWeight: 700,
+      fontFamily: '"Times New Roman", Georgia, serif',
+      fontWeight: 600,
       textAnchor: 'middle',
       dominantBaseline: 'middle',
     }
     const smallLabelProps = {
       ...labelProps,
       fontSize: 11,
-      fontWeight: 650,
+      fontWeight: 600,
     }
     const pathPoints = (points) => points.map(point).map((item) => `${item.x},${item.y}`).join(' ')
 
@@ -1337,7 +1381,7 @@ function App() {
             y={point({ x: 0, y: 0 }).y}
             width={6.5 * CANVAS.scale}
             height={2.75 * CANVAS.scale}
-            fill="#f8fafc"
+            fill="#ffffff"
             stroke={element.stroke}
             strokeOpacity="0.45"
             strokeWidth="1.1"
@@ -1362,9 +1406,7 @@ function App() {
                   y={barStart.y}
                   width={(task.end - task.start) * CANVAS.scale}
                   height={0.36 * CANVAS.scale}
-                  rx="4"
-                  fill={element.stroke}
-                  fillOpacity="0.18"
+                  fill="#ffffff"
                   stroke={element.stroke}
                   strokeWidth="1.1"
                   vectorEffect="non-scaling-stroke"
@@ -1404,7 +1446,7 @@ function App() {
                     markerEnd={`url(#${markerId})`}
                   />
                 )}
-                <rect x={center.x - 32} y={center.y - 18} width="64" height="36" rx="6" fill="#eff6ff" stroke={element.stroke} />
+                <rect x={center.x - 32} y={center.y - 18} width="64" height="36" rx="0" fill="#ffffff" stroke={element.stroke} />
                 <text {...smallLabelProps} x={center.x} y={center.y}>
                   {step}
                 </text>
@@ -1441,7 +1483,7 @@ function App() {
             ),
           )}
           {nodes.map((node) => (
-            <circle key={node.id} cx={node.point.x} cy={node.point.y} r="8" fill="#fff7ed" stroke={element.stroke} strokeWidth="1.2" />
+            <circle key={node.id} cx={node.point.x} cy={node.point.y} r="8" fill="#ffffff" stroke={element.stroke} strokeWidth="1.1" />
           ))}
           {['Input', 'Hidden', 'Latent', 'Output'].map((label, index) => {
             const labelPoint = point({ x: index * 1.65, y: -1.85 })
@@ -1473,11 +1515,12 @@ function App() {
           y={topLeft.y - 4}
           width={width + 8}
           height={height + 8}
-          rx="10"
-          fill="#f59e0b"
-          opacity="0.13"
-          stroke="#f59e0b"
-          strokeWidth="2"
+          rx="0"
+          fill="none"
+          opacity="0.7"
+          stroke="#6b7280"
+          strokeWidth="1"
+          strokeDasharray="5 4"
           vectorEffect="non-scaling-stroke"
         />
       )
@@ -1489,13 +1532,98 @@ function App() {
     const shapeCommon = {
       fill: 'none',
       stroke: previewStroke,
-      strokeWidth: 1.4,
+      strokeWidth: 1.0,
       strokeLinecap: 'round',
       strokeLinejoin: 'round',
       vectorEffect: 'non-scaling-stroke',
     }
 
     const renderPreview = () => {
+      if (preset.preview === 'resistor') {
+        return (
+          <g>
+            <polyline {...shapeCommon} points={`${sx(0.08)},${sy(0.5)} ${sx(0.28)},${sy(0.5)} ${sx(0.34)},${sy(0.38)} ${sx(0.42)},${sy(0.62)} ${sx(0.5)},${sy(0.38)} ${sx(0.58)},${sy(0.62)} ${sx(0.66)},${sy(0.38)} ${sx(0.72)},${sy(0.5)} ${sx(0.92)},${sy(0.5)}`} />
+            <text x={sx(0.5)} y={sy(0.22)} fill="#111111" fontSize="13" fontFamily='"Times New Roman", Georgia, serif' textAnchor="middle">
+              R
+            </text>
+          </g>
+        )
+      }
+
+      if (preset.preview === 'capacitor') {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.5)} x2={sx(0.43)} y2={sy(0.5)} />
+            <line {...shapeCommon} x1={sx(0.46)} y1={sy(0.28)} x2={sx(0.46)} y2={sy(0.72)} />
+            <line {...shapeCommon} x1={sx(0.54)} y1={sy(0.28)} x2={sx(0.54)} y2={sy(0.72)} />
+            <line {...shapeCommon} x1={sx(0.57)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+            <text x={sx(0.5)} y={sy(0.18)} fill="#111111" fontSize="13" fontFamily='"Times New Roman", Georgia, serif' textAnchor="middle">
+              C
+            </text>
+          </g>
+        )
+      }
+
+      if (preset.preview === 'inductor') {
+        const coils = Array.from({ length: 4 }, (_, index) => {
+          const x = 0.32 + index * 0.09
+          return <path key={index} {...shapeCommon} d={`M ${sx(x)} ${sy(0.5)} q ${width * 0.045} ${-height * 0.28} ${width * 0.09} 0`} />
+        })
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.5)} x2={sx(0.32)} y2={sy(0.5)} />
+            {coils}
+            <line {...shapeCommon} x1={sx(0.68)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+
+      if (preset.preview === 'diode') {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.5)} x2={sx(0.34)} y2={sy(0.5)} />
+            <path {...shapeCommon} d={`M ${sx(0.34)} ${sy(0.28)} L ${sx(0.62)} ${sy(0.5)} L ${sx(0.34)} ${sy(0.72)} Z`} />
+            <line {...shapeCommon} x1={sx(0.64)} y1={sy(0.28)} x2={sx(0.64)} y2={sy(0.72)} />
+            <line {...shapeCommon} x1={sx(0.64)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+
+      if (preset.preview === 'source') {
+        return (
+          <g>
+            <circle cx={sx(0.28)} cy={sy(0.42)} r="14" fill="#ffffff" stroke={previewStroke} strokeWidth="1" />
+            <line {...shapeCommon} x1={sx(0.28)} y1={sy(0.62)} x2={sx(0.28)} y2={sy(0.78)} />
+            <line {...shapeCommon} x1={sx(0.16)} y1={sy(0.78)} x2={sx(0.4)} y2={sy(0.78)} />
+            <line {...shapeCommon} x1={sx(0.2)} y1={sy(0.84)} x2={sx(0.36)} y2={sy(0.84)} />
+            <line {...shapeCommon} x1={sx(0.24)} y1={sy(0.9)} x2={sx(0.32)} y2={sy(0.9)} />
+            <line {...shapeCommon} x1={sx(0.42)} y1={sy(0.42)} x2={sx(0.9)} y2={sy(0.42)} />
+          </g>
+        )
+      }
+
+      if (preset.preview === 'opamp') {
+        return (
+          <g>
+            <path {...shapeCommon} d={`M ${sx(0.28)} ${sy(0.22)} L ${sx(0.28)} ${sy(0.78)} L ${sx(0.78)} ${sy(0.5)} Z`} />
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.36)} x2={sx(0.28)} y2={sy(0.36)} />
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.64)} x2={sx(0.28)} y2={sy(0.64)} />
+            <line {...shapeCommon} x1={sx(0.78)} y1={sy(0.5)} x2={sx(0.94)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+
+      if (preset.preview === 'gate') {
+        return (
+          <g>
+            <rect {...shapeCommon} x={sx(0.32)} y={sy(0.28)} width={width * 0.34} height={height * 0.44} />
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.4)} x2={sx(0.32)} y2={sy(0.4)} />
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.6)} x2={sx(0.32)} y2={sy(0.6)} />
+            <line {...shapeCommon} x1={sx(0.66)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+
       if (preset.preview === 'plot') {
         const points = Array.from({ length: 22 }, (_, index) => {
           const t = index / 21
@@ -1584,23 +1712,12 @@ function App() {
       )
     }
 
-    return (
-      <g>
-        <rect x={topLeft.x} y={topLeft.y} width={width} height={height} rx="8" fill={`${element.stroke}12`} stroke={element.stroke} strokeOpacity="0.35" />
-        <text x={sx(0.06)} y={sy(0.16)} fill={element.stroke} fontSize="12" fontWeight="800" fontFamily="Inter, system-ui, sans-serif">
-          {preset.group}
-        </text>
-        <text x={sx(0.06)} y={sy(0.29)} fill="#0f172a" fontSize="13" fontWeight="760" fontFamily="Inter, system-ui, sans-serif">
-          {element.title}
-        </text>
-        {renderPreview()}
-      </g>
-    )
+    return <g>{renderPreview()}</g>
   }
 
   const renderElementShape = (element, halo = false) => {
-    const stroke = halo ? '#f59e0b' : element.stroke
-    const strokeWidth = (halo ? element.width + 4 : element.width) * 1.3
+    const stroke = halo ? '#6b7280' : element.stroke
+    const strokeWidth = (halo ? element.width + 3 : element.width) * 1.05
     const common = {
       fill: 'none',
       stroke,
@@ -1681,7 +1798,7 @@ function App() {
     if (element.type === 'text') {
       const position = worldToScreen(element.position)
       if (halo) {
-        return <circle cx={position.x} cy={position.y} r="16" fill="#f59e0b" opacity="0.18" />
+        return <circle cx={position.x} cy={position.y} r="16" fill="#6b7280" opacity="0.16" />
       }
 
       return (
@@ -1689,8 +1806,8 @@ function App() {
           x={position.x}
           y={position.y}
           fill={element.stroke}
-          fontSize="19"
-          fontFamily="Georgia, serif"
+          fontSize="18"
+          fontFamily='"Times New Roman", Georgia, serif'
           textAnchor="middle"
           dominantBaseline="middle"
         >
@@ -1759,8 +1876,8 @@ function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <h1>TikZ Sketch Converter</h1>
-            <p>Dibuja funciones, trazos y geometria; exporta TikZ limpio al instante.</p>
+            <h1>TikZ Figure Workbench</h1>
+            <p>Figuras sobrias para articulos, tesis y notas tecnicas.</p>
           </div>
           <div className="topbar-actions">
             <button type="button" className="ghost-button" onClick={() => setSettings((state) => ({ ...state, grid: !state.grid }))}>
@@ -1784,6 +1901,8 @@ function App() {
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={handlePaletteDrop}
           >
             <rect width={CANVAS.width} height={CANVAS.height} fill="#ffffff" />
             {settings.grid && (
@@ -1820,9 +1939,7 @@ function App() {
         <footer className="status-strip">
           <span>{elements.length} elementos</span>
           <span>{selectedElement ? elementLabel(selectedElement) : 'Sin seleccion'}</span>
-          <span>
-            x {formatNumber(mouseWorld.x)} · y {formatNumber(mouseWorld.y)}
-          </span>
+          <span>x {formatNumber(mouseWorld.x)} - y {formatNumber(mouseWorld.y)}</span>
           <span>{settings.snap ? `Snap ${SNAP_STEP}` : 'Snap libre'}</span>
         </footer>
       </section>
@@ -1943,7 +2060,7 @@ function App() {
           </div>
           <button type="button" className="primary-button full" onClick={addFunction}>
             <Sigma size={17} />
-            Añadir funcion
+            Anadir funcion
           </button>
         </section>
 
@@ -1971,20 +2088,30 @@ function App() {
         <section className="panel-section library-section">
           <div className="panel-title">
             <Code2 size={18} />
-            <h2>Biblioteca TikZ</h2>
+            <h2>Objetos TikZ</h2>
           </div>
           <label className="field">
-            <span>Buscar libreria o paquete</span>
+            <span>Buscar objeto o simbolo</span>
             <input
               type="search"
               value={librarySearch}
               onChange={(event) => setLibrarySearch(event.target.value)}
-              placeholder="circuitikz, pgfplots, automata..."
+              placeholder="resistor, axis, estado, matrix..."
             />
           </label>
           <div className="library-grid">
-            {visibleLibraryPresets.map((preset) => (
-              <button key={preset.id} type="button" className="library-button" onClick={() => addLibraryPreset(preset)}>
+            {visiblePaletteItems.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="library-button"
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = 'copy'
+                  event.dataTransfer.setData('application/x-tikz-palette-item', preset.id)
+                }}
+                onClick={() => addLibraryPreset(preset)}
+              >
                 <strong>{preset.title}</strong>
                 <span>{preset.group}</span>
                 <small>{preset.description}</small>
@@ -2095,7 +2222,7 @@ function App() {
                 <>
                   {selectedElement.type === 'library' && (
                     <p className="selection-note">
-                      {getLibraryPreset(selectedElement).group} · {getLibraryPreset(selectedElement).packages?.join(', ') || '\\usepackage{tikz}'}
+                      {getLibraryPreset(selectedElement).group} - {getLibraryPreset(selectedElement).packages?.join(', ') || '\\usepackage{tikz}'}
                     </p>
                   )}
                   <label className="field">
@@ -2149,8 +2276,44 @@ function App() {
               checked={settings.exportGrid}
               onChange={(event) => setSettings((state) => ({ ...state, exportGrid: event.target.checked }))}
             />
-            <span>Exportar ejes y cuadricula</span>
+            <span>Exportar ejes de referencia</span>
           </label>
+          <label className="toggle export-toggle">
+            <input
+              type="checkbox"
+              checked={settings.monochromeExport}
+              onChange={(event) => setSettings((state) => ({ ...state, monochromeExport: event.target.checked }))}
+            />
+            <span>Salida monocroma</span>
+          </label>
+          <label className="toggle export-toggle">
+            <input
+              type="checkbox"
+              checked={settings.wrapFigure}
+              onChange={(event) => setSettings((state) => ({ ...state, wrapFigure: event.target.checked }))}
+            />
+            <span>Envolver en figure</span>
+          </label>
+          {settings.wrapFigure && (
+            <div className="field-pair">
+              <label className="field">
+                <span>Caption</span>
+                <input
+                  type="text"
+                  value={settings.caption}
+                  onChange={(event) => setSettings((state) => ({ ...state, caption: event.target.value }))}
+                />
+              </label>
+              <label className="field">
+                <span>Label</span>
+                <input
+                  type="text"
+                  value={settings.label}
+                  onChange={(event) => setSettings((state) => ({ ...state, label: event.target.value }))}
+                />
+              </label>
+            </div>
+          )}
           <textarea className="code-output" value={tikzCode} readOnly spellCheck="false" />
           <div className="export-actions">
             <button type="button" className="ghost-button" onClick={() => commitElements(seedElements, 'seed-function')}>

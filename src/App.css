@@ -1,6 +1,6 @@
 .app-shell {
   display: grid;
-  grid-template-columns: 68px minmax(0, 1fr) minmax(332px, 380px);
+  grid-template-columns: 58px minmax(0, 1fr) minmax(340px, 390px);
   min-height: 100vh;
   color: var(--text);
   background: var(--app-bg);
@@ -14,9 +14,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 16px;
   height: 100vh;
-  padding: 14px 10px;
+  padding: 12px 8px;
   background: var(--rail-bg);
   border-right: 1px solid var(--border);
   box-sizing: border-box;
@@ -25,12 +25,12 @@
 .rail-mark {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
-  background: #eff6ff;
-  color: #1d4ed8;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #111111;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111111;
   font-size: 13px;
   font-weight: 800;
   line-height: 1;
@@ -46,11 +46,11 @@
 .tool-button {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border: 1px solid transparent;
-  border-radius: 8px;
-  color: #475569;
+  border-radius: 4px;
+  color: #4b5563;
   background: transparent;
   cursor: pointer;
   transition:
@@ -61,15 +61,15 @@
 }
 
 .tool-button:hover {
-  border-color: #dbe3ef;
-  background: #f8fafc;
-  color: #0f172a;
+  border-color: #9aa3b2;
+  background: #ffffff;
+  color: #111111;
 }
 
 .tool-button.is-active {
-  border-color: #93c5fd;
-  background: #dbeafe;
-  color: #1d4ed8;
+  border-color: #111111;
+  background: #111111;
+  color: #ffffff;
 }
 
 .tool-button:disabled {
@@ -87,12 +87,12 @@
 .icon-danger:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid #111111;
   outline-offset: 2px;
 }
 
 .tool-button.subtle {
-  color: #64748b;
+  color: #5d6675;
 }
 
 .workspace {
@@ -100,7 +100,7 @@ textarea:focus-visible {
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 100vh;
-  padding: 18px 20px 14px;
+  padding: 14px 18px 12px;
   box-sizing: border-box;
 }
 
@@ -109,15 +109,15 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 62px;
-  padding: 0 4px 14px;
+  min-height: 54px;
+  padding: 0 2px 12px;
 }
 
 .topbar h1 {
   margin: 0;
-  color: #0f172a;
-  font-size: 24px;
-  font-weight: 780;
+  color: #111111;
+  font-size: 22px;
+  font-weight: 720;
   line-height: 1.08;
   letter-spacing: 0;
 }
@@ -125,7 +125,7 @@ textarea:focus-visible {
 .topbar p {
   margin: 6px 0 0;
   max-width: 620px;
-  color: #64748b;
+  color: #5d6675;
   font-size: 13px;
   line-height: 1.35;
 }
@@ -141,11 +141,11 @@ textarea:focus-visible {
   position: relative;
   display: grid;
   min-height: 0;
-  padding: 10px;
-  border: 1px solid #dbe3ef;
-  border-radius: 8px;
-  background: #f1f5f9;
-  box-shadow: 0 18px 42px rgb(15 23 42 / 0.08);
+  padding: 14px;
+  border: 1px solid #c7ccd6;
+  border-radius: 4px;
+  background: #dfe4eb;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7);
 }
 
 .sketch-canvas {
@@ -153,8 +153,8 @@ textarea:focus-visible {
   max-height: calc(100vh - 140px);
   min-height: 460px;
   aspect-ratio: 920 / 620;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border: 1px solid #9aa3b2;
+  border-radius: 2px;
   background: #ffffff;
   touch-action: none;
   cursor: crosshair;
@@ -169,13 +169,13 @@ textarea:focus-visible {
 }
 
 .grid-line {
-  stroke: #e2e8f0;
-  stroke-width: 1;
+  stroke: #e8ebf0;
+  stroke-width: 0.8;
 }
 
 .axis-line {
-  stroke: #94a3b8;
-  stroke-width: 1.5;
+  stroke: #aab2bf;
+  stroke-width: 0.95;
 }
 
 .canvas-element {
@@ -196,7 +196,7 @@ textarea:focus-visible {
   gap: 10px;
   min-height: 34px;
   padding: 10px 4px 0;
-  color: #64748b;
+  color: #5d6675;
   font-size: 12px;
   line-height: 1.25;
 }
@@ -213,7 +213,7 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 12px;
   height: 100vh;
-  padding: 18px 14px;
+  padding: 14px 12px;
   border-left: 1px solid var(--border);
   background: var(--panel-bg);
   box-sizing: border-box;
@@ -226,9 +226,9 @@ textarea:focus-visible {
   flex: 0 0 auto;
   gap: 12px;
   min-height: 0;
-  padding: 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid #d8dce4;
+  border-radius: 4px;
   background: #ffffff;
 }
 
@@ -245,14 +245,14 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #334155;
+  color: #4b5563;
 }
 
 .panel-title h2 {
   margin: 0;
-  color: #0f172a;
+  color: #111111;
   font-size: 14px;
-  font-weight: 760;
+  font-weight: 720;
   line-height: 1.2;
   letter-spacing: 0;
 }
@@ -266,7 +266,7 @@ textarea:focus-visible {
   width: 28px;
   height: 28px;
   border: 2px solid #ffffff;
-  border-radius: 999px;
+  border-radius: 50%;
   background: var(--swatch);
   box-shadow: 0 0 0 1px #cbd5e1;
   cursor: pointer;
@@ -274,8 +274,8 @@ textarea:focus-visible {
 
 .swatch.is-active {
   box-shadow:
-    0 0 0 1px #2563eb,
-    0 0 0 4px #dbeafe;
+    0 0 0 1px #111111,
+    0 0 0 4px #d7dce4;
 }
 
 .field {
@@ -285,7 +285,7 @@ textarea:focus-visible {
 
 .field span,
 .toggle span {
-  color: #475569;
+  color: #4b5563;
   font-size: 12px;
   font-weight: 650;
   line-height: 1.2;
@@ -294,10 +294,10 @@ textarea:focus-visible {
 .field input,
 .code-output {
   min-width: 0;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border: 1px solid #c7ccd6;
+  border-radius: 3px;
   background: #ffffff;
-  color: #0f172a;
+  color: #111111;
   font: 13px/1.3 var(--sans);
   box-sizing: border-box;
 }
@@ -310,7 +310,7 @@ textarea:focus-visible {
 .field input[type='range'] {
   height: 24px;
   padding: 0;
-  accent-color: #2563eb;
+  accent-color: #111111;
 }
 
 .field-pair {
@@ -336,7 +336,7 @@ textarea:focus-visible {
   width: 16px;
   height: 16px;
   margin: 0;
-  accent-color: #2563eb;
+  accent-color: #111111;
 }
 
 .example-row {
@@ -347,10 +347,10 @@ textarea:focus-visible {
 
 .chip-button {
   min-height: 28px;
-  border: 1px solid #dbe3ef;
-  border-radius: 999px;
-  background: #f8fafc;
-  color: #334155;
+  border: 1px solid #d8dce4;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #303846;
   font-size: 12px;
   font-weight: 650;
   line-height: 1;
@@ -368,19 +368,19 @@ textarea:focus-visible {
   grid-template-columns: 22px minmax(0, 1fr);
   align-items: start;
   gap: 8px;
-  min-height: 66px;
-  padding: 10px;
-  border: 1px solid #dbe3ef;
-  border-radius: 7px;
-  background: #f8fafc;
-  color: #334155;
+  min-height: 62px;
+  padding: 9px;
+  border: 1px solid #d8dce4;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #303846;
   text-align: left;
   cursor: pointer;
 }
 
 .preset-button:hover {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: #111111;
+  background: #f5f6f8;
 }
 
 .preset-button strong,
@@ -392,26 +392,26 @@ textarea:focus-visible {
 }
 
 .preset-button strong {
-  color: #0f172a;
+  color: #111111;
   font-size: 12px;
   font-weight: 780;
 }
 
 .preset-button small {
   margin-top: 4px;
-  color: #64748b;
+  color: #5d6675;
   font-size: 11px;
   font-weight: 600;
 }
 
 .library-section {
-  max-height: 460px;
+  max-height: 500px;
 }
 
 .library-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 7px;
   overflow: auto;
   padding-right: 2px;
 }
@@ -419,19 +419,23 @@ textarea:focus-visible {
 .library-button {
   display: grid;
   gap: 4px;
-  min-height: 82px;
-  padding: 10px;
-  border: 1px solid #dbe3ef;
-  border-radius: 7px;
+  min-height: 74px;
+  padding: 9px;
+  border: 1px solid #d8dce4;
+  border-radius: 3px;
   background: #ffffff;
-  color: #334155;
+  color: #303846;
   text-align: left;
-  cursor: pointer;
+  cursor: grab;
+}
+
+.library-button:active {
+  cursor: grabbing;
 }
 
 .library-button:hover {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: #111111;
+  background: #f5f6f8;
 }
 
 .library-button strong,
@@ -443,31 +447,31 @@ textarea:focus-visible {
 }
 
 .library-button strong {
-  color: #0f172a;
+  color: #111111;
   font-size: 12px;
   font-weight: 780;
 }
 
 .library-button span {
-  color: #2563eb;
+  color: #4b5563;
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .library-button small {
-  color: #64748b;
+  color: #5d6675;
   font-size: 11px;
   font-weight: 600;
 }
 
 .custom-snippet {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #d8dce4;
   padding-top: 10px;
 }
 
 .custom-snippet summary {
-  color: #334155;
+  color: #303846;
   font-size: 12px;
   font-weight: 760;
   cursor: pointer;
@@ -481,9 +485,9 @@ textarea:focus-visible {
 .snippet-input {
   min-height: 88px;
   padding: 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  color: #0f172a;
+  border: 1px solid #c7ccd6;
+  border-radius: 3px;
+  color: #111111;
   font: 11px/1.45 var(--mono);
   resize: vertical;
 }
@@ -495,10 +499,10 @@ textarea:focus-visible {
   justify-content: center;
   gap: 7px;
   min-height: 36px;
-  border-radius: 7px;
+  border-radius: 3px;
   padding: 0 12px;
   font-size: 13px;
-  font-weight: 720;
+  font-weight: 700;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -509,24 +513,24 @@ textarea:focus-visible {
 }
 
 .ghost-button {
-  border: 1px solid #cbd5e1;
+  border: 1px solid #c7ccd6;
   background: #ffffff;
-  color: #334155;
+  color: #303846;
 }
 
 .ghost-button:hover {
-  border-color: #94a3b8;
-  background: #f8fafc;
+  border-color: #111111;
+  background: #f5f6f8;
 }
 
 .primary-button {
-  border: 1px solid #1d4ed8;
-  background: #2563eb;
+  border: 1px solid #111111;
+  background: #111111;
   color: #ffffff;
 }
 
 .primary-button:hover {
-  background: #1d4ed8;
+  background: #303846;
 }
 
 .primary-button.full,
@@ -536,14 +540,14 @@ textarea:focus-visible {
 
 .form-error {
   margin: -4px 0 0;
-  color: #dc2626;
+  color: #8c2f39;
   font-size: 12px;
   line-height: 1.3;
 }
 
 .empty-state {
   margin: 0;
-  color: #64748b;
+  color: #5d6675;
   font-size: 13px;
   line-height: 1.45;
 }
@@ -556,7 +560,7 @@ textarea:focus-visible {
 
 .selection-note {
   margin: 0;
-  color: #64748b;
+  color: #5d6675;
   font-size: 12px;
   line-height: 1.35;
 }
@@ -567,7 +571,7 @@ textarea:focus-visible {
   justify-content: space-between;
   gap: 10px;
   min-height: 32px;
-  color: #0f172a;
+  color: #111111;
   font-size: 13px;
   font-weight: 760;
 }
@@ -577,10 +581,10 @@ textarea:focus-visible {
   place-items: center;
   width: 32px;
   height: 32px;
-  border: 1px solid #fecaca;
-  border-radius: 7px;
-  background: #fff5f5;
-  color: #dc2626;
+  border: 1px solid #d8dce4;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #8c2f39;
   cursor: pointer;
 }
 
@@ -598,8 +602,8 @@ textarea:focus-visible {
   min-height: 180px;
   resize: none;
   padding: 11px;
-  background: #0f172a;
-  color: #dbeafe;
+  background: #fbfbfc;
+  color: #111111;
   font-family: var(--mono);
   font-size: 11px;
   line-height: 1.48;
