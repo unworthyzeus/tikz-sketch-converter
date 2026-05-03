@@ -40,3 +40,7 @@ http://127.0.0.1:5173
 npm run lint
 npm run build
 ```
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
