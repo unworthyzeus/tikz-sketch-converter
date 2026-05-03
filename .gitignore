@@ -15,6 +15,7 @@ dist-ssr
 
 # Local screenshots and downloaded competitor assets
 output
+docs/tikzmaker-feature-gap.md
 
 # Editor directories and files
 .vscode/*
