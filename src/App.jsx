@@ -24,6 +24,8 @@ import {
   Type,
   Workflow,
 } from 'lucide-react'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 import './App.css'
 import { latexSymbolGroups } from './latexSymbols'
 import { libraryPresets } from './tikzLibraryPresets'
@@ -43,6 +45,21 @@ const strokeColors = [
   { label: 'Muted blue', value: '#1f4e79' },
   { label: 'Muted green', value: '#2f6f4e' },
   { label: 'Muted red', value: '#8c2f39' },
+  { label: 'Amber', value: '#b45309' },
+  { label: 'Violet', value: '#6d28d9' },
+  { label: 'Teal', value: '#0f766e' },
+  { label: 'Black', value: '#000000' },
+]
+
+const fillColors = [
+  { label: 'Sin relleno', value: 'none' },
+  { label: 'White', value: '#ffffff' },
+  { label: 'Blue wash', value: '#dbeafe' },
+  { label: 'Green wash', value: '#dcfce7' },
+  { label: 'Red wash', value: '#fee2e2' },
+  { label: 'Amber wash', value: '#fef3c7' },
+  { label: 'Violet wash', value: '#ede9fe' },
+  { label: 'Cyan wash', value: '#cffafe' },
 ]
 
 const arrowStyleOptions = [
@@ -177,6 +194,10 @@ function makeDiagramElement(preset) {
     title: preset.title,
     origin: preset.origin,
     stroke: preset.stroke,
+    fill: preset.fill ?? 'none',
+    fillOpacity: preset.fillOpacity ?? 0.18,
+    scale: preset.scale ?? 1,
+    tikzOptions: preset.tikzOptions ?? '',
     width: 0.75,
     dashed: false,
   }
@@ -191,6 +212,10 @@ function makeLibraryElement(preset, origin = preset.origin) {
     group: preset.group,
     origin,
     stroke: preset.stroke,
+    fill: preset.fill ?? 'none',
+    fillOpacity: preset.fillOpacity ?? 0.18,
+    scale: preset.scale ?? 1,
+    tikzOptions: preset.tikzOptions ?? '',
     width: preset.defaultStrokeWidth ?? 0.75,
     dashed: false,
   }
@@ -210,6 +235,13 @@ function mathContent(text) {
 
 function appendLatexSymbol(text, symbol) {
   if (symbol.accent) {
+    const inlineMath = [...text.matchAll(/\$([^$]+)\$/g)]
+    if (inlineMath.length) {
+      const last = inlineMath.at(-1)
+      const accented = symbol.value.replace('__BASE__', last[1].trim() || 'x')
+      return `${text.slice(0, last.index)}$${accented}$${text.slice(last.index + last[0].length)}`
+    }
+
     const base = mathContent(text) || 'x'
     return `$${symbol.value.replace('__BASE__', base)}$`
   }
@@ -631,19 +663,79 @@ function previewLatexContent(content) {
     .replace(/\\[A-Za-z]+/g, (command) => latexCommandPreviewMap.get(command) ?? command)
 }
 
-function previewText(text) {
-  const mathMatch = text.match(/^\$(.*)\$$/)
-  return mathMatch ? previewLatexContent(mathMatch[1]) : text
+function escapeHtml(value) {
+  return `${value}`.replace(/[&<>"']/g, (char) => {
+    const replacements = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }
+
+    return replacements[char]
+  })
+}
+
+function renderMathHtml(content) {
+  try {
+    return katex.renderToString(content, {
+      displayMode: false,
+      output: 'html',
+      throwOnError: false,
+      strict: false,
+    })
+  } catch {
+    return `<span class="latex-fallback">${escapeHtml(previewLatexContent(content))}</span>`
+  }
+}
+
+function renderInlineLatexHtml(text) {
+  return `${text}`
+    .split(/(\$[^$]+\$)/g)
+    .filter(Boolean)
+    .map((part) => {
+      if (part.startsWith('$') && part.endsWith('$')) {
+        return renderMathHtml(part.slice(1, -1))
+      }
+
+      return escapeHtml(part)
+    })
+    .join('')
+}
+
+function plainTextForMeasure(text) {
+  return `${text}`.replace(/\$([^$]+)\$/g, (_, content) => previewLatexContent(content))
+}
+
+function labelBoxForText(text) {
+  const plain = plainTextForMeasure(text)
+  return {
+    width: Math.min(760, Math.max(72, plain.length * 10 + 36)),
+    height: 40,
+  }
+}
+
+function colorWithOpacity(color, opacity = 1) {
+  if (!color || color === 'none') return 'transparent'
+  const clean = color.replace('#', '')
+  if (!/^[0-9a-f]{6}$/i.test(clean)) return color
+  const red = parseInt(clean.slice(0, 2), 16)
+  const green = parseInt(clean.slice(2, 4), 16)
+  const blue = parseInt(clean.slice(4, 6), 16)
+  return `rgb(${red} ${green} ${blue} / ${Math.max(0, Math.min(1, opacity))})`
 }
 
 function diagramPoint(element, point) {
+  const scale = Number(element.scale) || 1
   return {
-    x: element.origin.x + point.x,
-    y: element.origin.y + point.y,
+    x: element.origin.x + point.x * scale,
+    y: element.origin.y + point.y * scale,
   }
 }
 
 function diagramBounds(element) {
+  const scale = Number(element.scale) || 1
   const bounds = {
     circuit: { x: -0.45, y: -2.75, width: 5.75, height: 3.25 },
     gantt: { x: -0.55, y: -3.1, width: 7.35, height: 3.75 },
@@ -652,10 +744,10 @@ function diagramBounds(element) {
   }[element.diagramKind] ?? { x: -0.5, y: -0.5, width: 3, height: 2 }
 
   return {
-    minX: element.origin.x + bounds.x,
-    maxX: element.origin.x + bounds.x + bounds.width,
-    minY: element.origin.y + bounds.y,
-    maxY: element.origin.y + bounds.y + bounds.height,
+    minX: element.origin.x + bounds.x * scale,
+    maxX: element.origin.x + (bounds.x + bounds.width) * scale,
+    minY: element.origin.y + bounds.y * scale,
+    maxY: element.origin.y + (bounds.y + bounds.height) * scale,
   }
 }
 
@@ -688,6 +780,10 @@ function dlLayerCounts() {
 
 function buildDiagramTikz(element, ensureColor) {
   const color = ensureColor(element.stroke)
+  const fill = ensureColor(element.fill)
+  const fillOpacity = formatNumber(element.fillOpacity ?? 0.18)
+  const nodeFillStyle = fill === 'none' ? `fill=${color}!8` : `fill=${fill}, fill opacity=${fillOpacity}, text opacity=1`
+  const markFillStyle = fill === 'none' ? `fill=${color}!10` : `fill=${fill}, fill opacity=${fillOpacity}, text opacity=1`
   const title = formatTikzNodeText(element.title)
 
   if (element.diagramKind === 'circuit') {
@@ -720,7 +816,7 @@ function buildDiagramTikz(element, ensureColor) {
       const y = -0.45 - task.row * 0.58
       lines.push(
         `  \\node[anchor=east, font=\\scriptsize, text=${color}] at ${tikzPoint(element, { x: -0.18, y })} {${task.label}};`,
-        `  \\filldraw[fill=${color}!18, draw=${color}, rounded corners=1.5pt] ${tikzPoint(element, {
+        `  \\filldraw[${fill === 'none' ? `fill=${color}!18` : `fill=${fill}, fill opacity=${fillOpacity}`}, draw=${color}, rounded corners=1.5pt] ${tikzPoint(element, {
           x: task.start,
           y: y + 0.18,
         })} rectangle ${tikzPoint(element, { x: task.end, y: y - 0.18 })};`,
@@ -740,7 +836,7 @@ function buildDiagramTikz(element, ensureColor) {
     steps.forEach((step, index) => {
       const name = tikzNodeId(element, `step${index}`)
       lines.push(
-        `  \\node[draw=${color}, fill=${color}!8, rounded corners=2pt, minimum width=1.18cm, minimum height=0.62cm, align=center] (${name}) at ${tikzPoint(
+        `  \\node[draw=${color}, ${nodeFillStyle}, rounded corners=2pt, minimum width=1.18cm, minimum height=0.62cm, align=center] (${name}) at ${tikzPoint(
           element,
           { x: index * 1.55, y: 0 },
         )} {\\scriptsize ${step}};`,
@@ -765,7 +861,7 @@ function buildDiagramTikz(element, ensureColor) {
       for (let nodeIndex = 0; nodeIndex < count; nodeIndex += 1) {
         const y = (count - 1) * 0.36 - nodeIndex * 0.72
         lines.push(
-          `  \\node[circle, draw=${color}, fill=${color}!10, minimum size=0.22cm, inner sep=0pt] (${tikzNodeId(
+          `  \\node[circle, draw=${color}, ${markFillStyle}, minimum size=0.22cm, inner sep=0pt] (${tikzNodeId(
             element,
             `l${layerIndex}n${nodeIndex}`,
           )}) at ${tikzPoint(element, { x, y })} {};`,
@@ -798,10 +894,11 @@ function buildDiagramTikz(element, ensureColor) {
 
 function libraryBounds(element) {
   const preset = getLibraryPreset(element)
+  const scale = Number(element.scale) || 1
   return {
     minX: element.origin.x,
-    maxX: element.origin.x + preset.width,
-    minY: element.origin.y - preset.height,
+    maxX: element.origin.x + preset.width * scale,
+    minY: element.origin.y - preset.height * scale,
     maxY: element.origin.y,
   }
 }
@@ -839,7 +936,19 @@ function elementIntersectsEraser(element, point, radius = 0.24) {
   }
 
   if (element.type === 'text') {
-    return distance(point, element.position) <= 0.42
+    const box = labelBoxForText(element.text)
+    const halfWidth = box.width / CANVAS.scale / 2
+    const halfHeight = box.height / CANVAS.scale / 2
+    return pointInBounds(
+      point,
+      {
+        minX: element.position.x - halfWidth,
+        maxX: element.position.x + halfWidth,
+        minY: element.position.y - halfHeight,
+        maxY: element.position.y + halfHeight,
+      },
+      radius,
+    )
   }
 
   if (element.type === 'diagram') {
@@ -853,9 +962,18 @@ function elementIntersectsEraser(element, point, radius = 0.24) {
   return false
 }
 
-function replaceLibraryTokens(line, element, color) {
-  return line
+function replaceLibraryTokens(line, element, color, fill) {
+  const fillColor = fill === 'none' ? color : fill
+  const fillAwareLine =
+    fill === 'none'
+      ? line
+      : line.replace(/fill=__COLOR__![0-9.]+/g, 'fill=__FILL__, fill opacity=__FILL_OPACITY__')
+
+  return fillAwareLine
     .replaceAll('__COLOR__', color)
+    .replaceAll('__FILL__', fillColor)
+    .replaceAll('__FILL_OPACITY__', formatNumber(element.fillOpacity ?? 0.18))
+    .replaceAll('__OPTIONS__', element.tikzOptions?.trim() ?? '')
     .replaceAll('__TITLE__', formatTikzNodeText(element.title))
     .replaceAll('__GROUP__', formatTikzNodeText(element.group ?? 'TikZ'))
 }
@@ -863,7 +981,8 @@ function replaceLibraryTokens(line, element, color) {
 function buildLibraryTikz(element, ensureColor) {
   const preset = getLibraryPreset(element)
   const color = ensureColor(element.stroke)
-  const body = preset.snippet.map((line) => replaceLibraryTokens(line, element, color))
+  const fill = ensureColor(element.fill)
+  const body = preset.snippet.map((line) => replaceLibraryTokens(line, element, color, fill))
 
   if (preset.standalone) {
     return [
@@ -873,9 +992,19 @@ function buildLibraryTikz(element, ensureColor) {
     ]
   }
 
+  const scale = Number(element.scale) || 1
+  const scopeOptions = [`shift={(${formatNumber(element.origin.x)},${formatNumber(element.origin.y)})}`]
+  if (scale !== 1) scopeOptions.push(`scale=${formatNumber(scale)}`)
+  if (fill !== 'none') {
+    scopeOptions.push(
+      `every node/.append style={fill=${fill}, fill opacity=${formatNumber(element.fillOpacity ?? 0.18)}, text opacity=1}`,
+    )
+  }
+  if (element.tikzOptions?.trim()) scopeOptions.push(element.tikzOptions.trim())
+
   return [
     `  % ${preset.group}: ${element.title}`,
-    `  \\begin{scope}[shift={(${formatNumber(element.origin.x)},${formatNumber(element.origin.y)})}]`,
+    `  \\begin{scope}[${scopeOptions.join(', ')}]`,
     ...body.map((line) => `    ${line}`),
     '  \\end{scope}',
   ]
@@ -954,11 +1083,22 @@ function buildTikz(elements, exportOptions = {}) {
     const clean = hex.replace('#', '').toUpperCase()
     if (!usedColors.has(clean)) {
       const known = {
+        '000000': 'tikzBlack',
         111111: 'tikzInk',
+        FFFFFF: 'tikzWhite',
         '4B5563': 'tikzGraphite',
         '1F4E79': 'tikzMutedBlue',
         '2F6F4E': 'tikzMutedGreen',
         '8C2F39': 'tikzMutedRed',
+        B45309: 'tikzAmber',
+        '6D28D9': 'tikzViolet',
+        '0F766E': 'tikzTeal',
+        DBEAFE: 'tikzBlueWash',
+        DCFCE7: 'tikzGreenWash',
+        FEE2E2: 'tikzRedWash',
+        FEF3C7: 'tikzAmberWash',
+        EDE9FE: 'tikzVioletWash',
+        CFFAFE: 'tikzCyanWash',
       }
       usedColors.set(clean, known[clean] ?? `tikzColor${usedColors.size + 1}`)
     }
@@ -966,16 +1106,23 @@ function buildTikz(elements, exportOptions = {}) {
     return usedColors.get(clean)
   }
 
-  elements.forEach((element) => ensureColor(element.stroke))
+  elements.forEach((element) => {
+    ensureColor(element.stroke)
+    ensureColor(element.fill)
+  })
 
   const definitions = [...usedColors.entries()].map(
     ([hex, name]) => `\\definecolor{${name}}{HTML}{${hex}}`,
   )
 
-  const optionsFor = (element, extras = []) => {
+  const optionsFor = (element, extras = [], allowFill = false) => {
     const options = [`draw=${ensureColor(element.stroke)}`, `line width=${formatNumber(element.width ?? 1)}pt`]
     if (element.dashed) options.push('dashed')
+    if (allowFill && element.fill && element.fill !== 'none') {
+      options.push(`fill=${ensureColor(element.fill)}`, `fill opacity=${formatNumber(element.fillOpacity ?? 0.18)}`)
+    }
     if (extras.length) options.push(...extras)
+    if (element.tikzOptions?.trim()) options.push(element.tikzOptions.trim())
     return `[${options.join(', ')}]`
   }
 
@@ -1023,7 +1170,7 @@ function buildTikz(elements, exportOptions = {}) {
 
     if (element.type === 'rect') {
       pictureLines.push(
-        `  \\draw${optionsFor(element)} (${formatNumber(element.start.x)},${formatNumber(
+        `  \\draw${optionsFor(element, [], true)} (${formatNumber(element.start.x)},${formatNumber(
           element.start.y,
         )}) rectangle (${formatNumber(element.end.x)},${formatNumber(element.end.y)});`,
       )
@@ -1037,7 +1184,7 @@ function buildTikz(elements, exportOptions = {}) {
       const radiusX = Math.abs(element.end.x - element.start.x) / 2
       const radiusY = Math.abs(element.end.y - element.start.y) / 2
       pictureLines.push(
-        `  \\draw${optionsFor(element)} (${formatNumber(center.x)},${formatNumber(
+        `  \\draw${optionsFor(element, [], true)} (${formatNumber(center.x)},${formatNumber(
           center.y,
         )}) ellipse [x radius=${formatNumber(radiusX)}, y radius=${formatNumber(radiusY)}];`,
       )
@@ -1064,21 +1211,40 @@ function buildTikz(elements, exportOptions = {}) {
       segments.forEach((segment, index) => {
         const coords = segment.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
         const comment = index === 0 ? ` % f(x) = ${element.expression}` : ''
-        pictureLines.push(`  \\draw${optionsFor(element, ['smooth'])} plot coordinates { ${coords} };${comment}`)
+        pictureLines.push(`  \\draw${optionsFor(element, element.smooth === false ? [] : ['smooth'])} plot coordinates { ${coords} };${comment}`)
       })
     }
 
     if (element.type === 'text') {
       const color = ensureColor(element.stroke)
+      const nodeOptions = [`text=${color}`]
+      if (element.fill && element.fill !== 'none') {
+        nodeOptions.push(
+          `fill=${ensureColor(element.fill)}`,
+          `fill opacity=${formatNumber(element.fillOpacity ?? 0.18)}`,
+          'text opacity=1',
+          'inner sep=2pt',
+        )
+      }
+      if (element.tikzOptions?.trim()) nodeOptions.push(element.tikzOptions.trim())
       pictureLines.push(
-        `  \\node[text=${color}] at (${formatNumber(element.position.x)},${formatNumber(
+        `  \\node[${nodeOptions.join(', ')}] at (${formatNumber(element.position.x)},${formatNumber(
           element.position.y,
         )}) {${formatTikzNodeText(element.text)}};`,
       )
     }
 
     if (element.type === 'diagram') {
-      pictureLines.push(...buildDiagramTikz(element, ensureColor))
+      const diagramLines = buildDiagramTikz(element, ensureColor)
+      if (element.tikzOptions?.trim()) {
+        pictureLines.push(
+          `  \\begin{scope}[${element.tikzOptions.trim()}]`,
+          ...diagramLines.map((line) => `  ${line}`),
+          '  \\end{scope}',
+        )
+      } else {
+        pictureLines.push(...diagramLines)
+      }
     }
 
     if (element.type === 'library') {
@@ -1121,12 +1287,16 @@ function App() {
   const [mouseWorld, setMouseWorld] = useState({ x: 0, y: 0 })
   const [settings, setSettings] = useState({
     stroke: '#111111',
+    fill: 'none',
+    fillOpacity: 0.18,
     width: 0.8,
     dashed: false,
     smooth: true,
     snap: true,
     grid: true,
     arrowStyle: 'stealth',
+    objectScale: 1,
+    tikzOptions: '',
     labelText: 'Etiqueta',
     exportGrid: false,
     monochromeExport: true,
@@ -1216,10 +1386,13 @@ function App() {
   const makeBaseElement = () => ({
     id: createId(),
     stroke: settings.stroke,
+    fill: settings.fill,
+    fillOpacity: settings.fillOpacity,
     width: settings.width,
     dashed: settings.dashed,
     smooth: settings.smooth,
     arrowStyle: settings.arrowStyle,
+    tikzOptions: settings.tikzOptions,
   })
 
   const eraseIds = (ids, snapshot = elements) => {
@@ -1481,13 +1654,27 @@ function App() {
   }
 
   const addDiagramPreset = (preset) => {
-    const nextElement = makeDiagramElement(preset)
+    const nextElement = {
+      ...makeDiagramElement(preset),
+      stroke: settings.stroke,
+      fill: settings.fill,
+      fillOpacity: settings.fillOpacity,
+      scale: settings.objectScale,
+      tikzOptions: settings.tikzOptions,
+    }
     commitElements([...elements, nextElement], nextElement.id)
     setTool('select')
   }
 
   const addLibraryPreset = (preset, origin = preset.origin) => {
-    const nextElement = makeLibraryElement(preset, origin)
+    const nextElement = {
+      ...makeLibraryElement(preset, origin),
+      stroke: settings.stroke,
+      fill: settings.fill,
+      fillOpacity: settings.fillOpacity,
+      scale: settings.objectScale,
+      tikzOptions: settings.tikzOptions,
+    }
     commitElements([...elements, nextElement], nextElement.id)
     setTool('select')
   }
@@ -1511,6 +1698,10 @@ function App() {
       description: 'User supplied TikZ snippet',
       origin: { x: -1.5, y: 1.5 },
       stroke: settings.stroke,
+      fill: settings.fill,
+      fillOpacity: settings.fillOpacity,
+      scale: settings.objectScale,
+      tikzOptions: settings.tikzOptions,
       width: 4.8,
       height: 2.4,
       preview: 'flow',
@@ -1520,6 +1711,11 @@ function App() {
     }
     const nextElement = {
       ...makeLibraryElement(customPreset),
+      stroke: settings.stroke,
+      fill: settings.fill,
+      fillOpacity: settings.fillOpacity,
+      scale: settings.objectScale,
+      tikzOptions: settings.tikzOptions,
       customPreset,
     }
     commitElements([...elements, nextElement], nextElement.id)
@@ -1606,6 +1802,10 @@ function App() {
     }
 
     const point = (relative) => worldToScreen(diagramPoint(element, relative))
+    const uiScale = Number(element.scale) || 1
+    const shapeFill = element.fill && element.fill !== 'none' ? element.fill : '#ffffff'
+    const shapeFillOpacity = element.fill && element.fill !== 'none' ? element.fillOpacity ?? 0.18 : 1
+    const diagramScale = CANVAS.scale * (Number(element.scale) || 1)
     const lineProps = {
       fill: 'none',
       stroke: element.stroke,
@@ -1655,7 +1855,7 @@ function App() {
           <polyline {...lineProps} points={pathPoints([{ x: 4.8, y: -1.22 }, { x: 4.8, y: -2.4 }, { x: 0, y: -2.4 }])} />
           <polyline {...lineProps} points={pathPoints([{ x: 0, y: -2.4 }, { x: 0, y: -1.58 }])} />
           <polyline {...lineProps} points={pathPoints([{ x: 0, y: -0.82 }, { x: 0, y: 0 }])} />
-          <circle cx={sourceCenter.x} cy={sourceCenter.y} r={0.38 * CANVAS.scale} {...lineProps} />
+          <circle cx={sourceCenter.x} cy={sourceCenter.y} r={0.38 * diagramScale} {...lineProps} />
           <text {...smallLabelProps} x={label.x} y={label.y}>
             R
           </text>
@@ -1679,9 +1879,10 @@ function App() {
           <rect
             x={point({ x: 0, y: 0 }).x}
             y={point({ x: 0, y: 0 }).y}
-            width={6.5 * CANVAS.scale}
-            height={2.75 * CANVAS.scale}
-            fill="#ffffff"
+            width={6.5 * diagramScale}
+            height={2.75 * diagramScale}
+            fill={shapeFill}
+            fillOpacity={shapeFillOpacity}
             stroke={element.stroke}
             strokeOpacity="0.45"
             strokeWidth="1.1"
@@ -1704,9 +1905,10 @@ function App() {
                 <rect
                   x={barStart.x}
                   y={barStart.y}
-                  width={(task.end - task.start) * CANVAS.scale}
-                  height={0.36 * CANVAS.scale}
-                  fill="#ffffff"
+                  width={(task.end - task.start) * diagramScale}
+                  height={0.36 * diagramScale}
+                  fill={shapeFill}
+                  fillOpacity={shapeFillOpacity}
                   stroke={element.stroke}
                   strokeWidth="1.1"
                   vectorEffect="non-scaling-stroke"
@@ -1737,16 +1939,25 @@ function App() {
               <g key={step}>
                 {index < mlSteps().length - 1 && (
                   <line
-                    x1={center.x + 27}
+                    x1={center.x + 27 * uiScale}
                     y1={center.y}
-                    x2={nextCenter.x - 27}
+                    x2={nextCenter.x - 27 * uiScale}
                     y2={nextCenter.y}
                     stroke={element.stroke}
                     strokeWidth="1.2"
                     markerEnd={`url(#${markerId})`}
                   />
                 )}
-                <rect x={center.x - 32} y={center.y - 18} width="64" height="36" rx="0" fill="#ffffff" stroke={element.stroke} />
+                <rect
+                  x={center.x - 32 * uiScale}
+                  y={center.y - 18 * uiScale}
+                  width={64 * uiScale}
+                  height={36 * uiScale}
+                  rx="0"
+                  fill={shapeFill}
+                  fillOpacity={shapeFillOpacity}
+                  stroke={element.stroke}
+                />
                 <text {...smallLabelProps} x={center.x} y={center.y}>
                   {step}
                 </text>
@@ -1783,7 +1994,16 @@ function App() {
             ),
           )}
           {nodes.map((node) => (
-            <circle key={node.id} cx={node.point.x} cy={node.point.y} r="8" fill="#ffffff" stroke={element.stroke} strokeWidth="1.1" />
+            <circle
+              key={node.id}
+              cx={node.point.x}
+              cy={node.point.y}
+              r={8 * uiScale}
+              fill={shapeFill}
+              fillOpacity={shapeFillOpacity}
+              stroke={element.stroke}
+              strokeWidth="1.1"
+            />
           ))}
           {['Input', 'Hidden', 'Latent', 'Output'].map((label, index) => {
             const labelPoint = point({ x: index * 1.65, y: -1.85 })
@@ -1829,6 +2049,8 @@ function App() {
     const sx = (x) => topLeft.x + x * width
     const sy = (y) => topLeft.y + y * height
     const previewStroke = element.stroke
+    const previewFill = element.fill && element.fill !== 'none' ? element.fill : '#ffffff'
+    const previewFillOpacity = element.fill && element.fill !== 'none' ? element.fillOpacity ?? 0.18 : 1
     const shapeCommon = {
       fill: 'none',
       stroke: previewStroke,
@@ -1836,6 +2058,11 @@ function App() {
       strokeLinecap: 'round',
       strokeLinejoin: 'round',
       vectorEffect: 'non-scaling-stroke',
+    }
+    const filledShapeCommon = {
+      ...shapeCommon,
+      fill: previewFill,
+      fillOpacity: previewFillOpacity,
     }
 
     const renderPreview = () => {
@@ -1892,7 +2119,15 @@ function App() {
       if (preset.preview === 'source') {
         return (
           <g>
-            <circle cx={sx(0.28)} cy={sy(0.42)} r="14" fill="#ffffff" stroke={previewStroke} strokeWidth="1" />
+            <circle
+              cx={sx(0.28)}
+              cy={sy(0.42)}
+              r="14"
+              fill={previewFill}
+              fillOpacity={previewFillOpacity}
+              stroke={previewStroke}
+              strokeWidth="1"
+            />
             <line {...shapeCommon} x1={sx(0.28)} y1={sy(0.62)} x2={sx(0.28)} y2={sy(0.78)} />
             <line {...shapeCommon} x1={sx(0.16)} y1={sy(0.78)} x2={sx(0.4)} y2={sy(0.78)} />
             <line {...shapeCommon} x1={sx(0.2)} y1={sy(0.84)} x2={sx(0.36)} y2={sy(0.84)} />
@@ -1916,7 +2151,7 @@ function App() {
       if (preset.preview === 'gate') {
         return (
           <g>
-            <rect {...shapeCommon} x={sx(0.32)} y={sy(0.28)} width={width * 0.34} height={height * 0.44} />
+            <rect {...filledShapeCommon} x={sx(0.32)} y={sy(0.28)} width={width * 0.34} height={height * 0.44} />
             <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.4)} x2={sx(0.32)} y2={sy(0.4)} />
             <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.6)} x2={sx(0.32)} y2={sy(0.6)} />
             <line {...shapeCommon} x1={sx(0.66)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
@@ -1950,7 +2185,8 @@ function App() {
                   width={width * 0.13}
                   height={height * 0.11}
                   rx="3"
-                  fill="#ffffff"
+                  fill={previewFill}
+                  fillOpacity={previewFillOpacity}
                   stroke={previewStroke}
                   strokeWidth="1"
                 />
@@ -1973,7 +2209,16 @@ function App() {
               <line key={index} {...shapeCommon} x1={sx(nodes[0][0])} y1={sy(nodes[0][1])} x2={sx(node[0])} y2={sy(node[1])} opacity="0.45" />
             ))}
             {nodes.map((node, index) => (
-              <circle key={index} cx={sx(node[0])} cy={sy(node[1])} r="8" fill="#ffffff" stroke={previewStroke} strokeWidth="1.2" />
+              <circle
+                key={index}
+                cx={sx(node[0])}
+                cy={sy(node[1])}
+                r="8"
+                fill={previewFill}
+                fillOpacity={previewFillOpacity}
+                stroke={previewStroke}
+                strokeWidth="1.2"
+              />
             ))}
           </g>
         )
@@ -1992,8 +2237,8 @@ function App() {
       if (preset.preview === 'cube') {
         return (
           <g>
-            <rect {...shapeCommon} x={sx(0.28)} y={sy(0.38)} width={width * 0.28} height={height * 0.24} />
-            <rect {...shapeCommon} x={sx(0.42)} y={sy(0.24)} width={width * 0.28} height={height * 0.24} opacity="0.75" />
+            <rect {...filledShapeCommon} x={sx(0.28)} y={sy(0.38)} width={width * 0.28} height={height * 0.24} />
+            <rect {...filledShapeCommon} x={sx(0.42)} y={sy(0.24)} width={width * 0.28} height={height * 0.24} opacity="0.75" />
             <line {...shapeCommon} x1={sx(0.28)} y1={sy(0.38)} x2={sx(0.42)} y2={sy(0.24)} />
             <line {...shapeCommon} x1={sx(0.56)} y1={sy(0.38)} x2={sx(0.7)} y2={sy(0.24)} />
             <line {...shapeCommon} x1={sx(0.56)} y1={sy(0.62)} x2={sx(0.7)} y2={sy(0.48)} />
@@ -2003,9 +2248,9 @@ function App() {
 
       return (
         <g>
-          <rect {...shapeCommon} x={sx(0.18)} y={sy(0.36)} width={width * 0.18} height={height * 0.18} rx="4" />
-          <rect {...shapeCommon} x={sx(0.44)} y={sy(0.36)} width={width * 0.18} height={height * 0.18} rx="4" />
-          <rect {...shapeCommon} x={sx(0.7)} y={sy(0.36)} width={width * 0.18} height={height * 0.18} rx="4" />
+          <rect {...filledShapeCommon} x={sx(0.18)} y={sy(0.36)} width={width * 0.18} height={height * 0.18} rx="4" />
+          <rect {...filledShapeCommon} x={sx(0.44)} y={sy(0.36)} width={width * 0.18} height={height * 0.18} rx="4" />
+          <rect {...filledShapeCommon} x={sx(0.7)} y={sy(0.36)} width={width * 0.18} height={height * 0.18} rx="4" />
           <line {...shapeCommon} x1={sx(0.36)} y1={sy(0.45)} x2={sx(0.44)} y2={sy(0.45)} />
           <line {...shapeCommon} x1={sx(0.62)} y1={sy(0.45)} x2={sx(0.7)} y2={sy(0.45)} />
         </g>
@@ -2058,8 +2303,10 @@ function App() {
   const renderElementShape = (element, halo = false) => {
     const stroke = halo ? '#6b7280' : element.stroke
     const strokeWidth = (halo ? element.width + 3 : element.width) * 1.05
+    const fill = !halo && element.fill && element.fill !== 'none' ? element.fill : 'none'
     const common = {
-      fill: 'none',
+      fill,
+      fillOpacity: fill === 'none' ? undefined : element.fillOpacity ?? 0.18,
       stroke,
       strokeWidth,
       strokeDasharray: element.dashed && !halo ? '8 8' : undefined,
@@ -2072,7 +2319,7 @@ function App() {
     if (element.type === 'line') {
       const start = worldToScreen(element.start)
       const end = worldToScreen(element.end)
-      return <line {...common} x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
+      return <line {...common} fill="none" x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
     }
 
     if (element.type === 'arrow') {
@@ -2081,7 +2328,7 @@ function App() {
       const style = element.arrowStyle ?? settings.arrowStyle
       return (
         <g>
-          <line {...common} x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
+          <line {...common} fill="none" x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
           {renderArrowHead(end, start, style, stroke, halo)}
           {style === 'both' && renderArrowHead(start, end, style, stroke, halo)}
         </g>
@@ -2150,22 +2397,40 @@ function App() {
 
     if (element.type === 'text') {
       const position = worldToScreen(element.position)
+      const box = labelBoxForText(element.text)
       if (halo) {
-        return <circle cx={position.x} cy={position.y} r="16" fill="#6b7280" opacity="0.16" />
+        return (
+          <rect
+            x={position.x - box.width / 2}
+            y={position.y - box.height / 2}
+            width={box.width}
+            height={box.height}
+            rx="0"
+            fill="#6b7280"
+            opacity="0.16"
+          />
+        )
       }
 
       return (
-        <text
-          x={position.x}
-          y={position.y}
-          fill={element.stroke}
-          fontSize="18"
-          fontFamily='"Times New Roman", Georgia, serif'
-          textAnchor="middle"
-          dominantBaseline="middle"
+        <foreignObject
+          x={position.x - box.width / 2}
+          y={position.y - box.height / 2}
+          width={box.width}
+          height={box.height}
+          className="canvas-label-object"
         >
-          {previewText(element.text)}
-        </text>
+          <div
+            xmlns="http://www.w3.org/1999/xhtml"
+            className="canvas-label"
+            style={{
+              color: element.stroke,
+              background: colorWithOpacity(element.fill, element.fillOpacity ?? 0.18),
+              opacity: 1,
+            }}
+            dangerouslySetInnerHTML={{ __html: renderInlineLatexHtml(element.text) }}
+          />
+        </foreignObject>
       )
     }
 
@@ -2331,21 +2596,57 @@ function App() {
             <Layers size={18} />
             <h2>Estilo</h2>
           </div>
-          <div className="color-row" aria-label="Color de trazo">
-            {strokeColors.map((color) => (
-              <button
-                key={color.value}
-                type="button"
-                className={`swatch ${settings.stroke === color.value ? 'is-active' : ''}`}
-                title={color.label}
-                style={{ '--swatch': color.value }}
-                onClick={() => {
-                  setSettings((state) => ({ ...state, stroke: color.value }))
-                  if (selectedElement && selectedElement.type !== 'function') updateSelected({ stroke: color.value })
-                }}
-              />
-            ))}
+          <div className="color-group">
+            <span className="color-label">Borde / trazo</span>
+            <div className="color-row" aria-label="Color de trazo">
+              {strokeColors.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  className={`swatch ${((selectedElement?.stroke ?? settings.stroke) === color.value) ? 'is-active' : ''}`}
+                  title={color.label}
+                  style={{ '--swatch': color.value }}
+                  onClick={() => {
+                    setSettings((state) => ({ ...state, stroke: color.value }))
+                    updateSelected({ stroke: color.value })
+                  }}
+                />
+              ))}
+            </div>
           </div>
+          <div className="color-group">
+            <span className="color-label">Relleno</span>
+            <div className="color-row" aria-label="Color de relleno">
+              {fillColors.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  className={`swatch ${color.value === 'none' ? 'is-none' : ''} ${((selectedElement?.fill ?? settings.fill) === color.value) ? 'is-active' : ''}`}
+                  title={color.label}
+                  style={{ '--swatch': color.value === 'none' ? '#ffffff' : color.value }}
+                  onClick={() => {
+                    setSettings((state) => ({ ...state, fill: color.value }))
+                    updateSelected({ fill: color.value })
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+          <label className="field">
+            <span>Opacidad relleno</span>
+            <input
+              type="range"
+              min="0.05"
+              max="1"
+              step="0.05"
+              value={selectedElement?.fillOpacity ?? settings.fillOpacity}
+              onChange={(event) => {
+                const fillOpacity = Number(event.target.value)
+                setSettings((state) => ({ ...state, fillOpacity }))
+                updateSelected({ fillOpacity })
+              }}
+            />
+          </label>
           <label className="field">
             <span>Grosor</span>
             <input
@@ -2381,6 +2682,35 @@ function App() {
             <ArrowRight size={17} />
             Anadir flecha
           </button>
+          <label className="field">
+            <span>Escala objetos</span>
+            <input
+              type="range"
+              min="0.4"
+              max="2.2"
+              step="0.05"
+              value={selectedElement?.type === 'diagram' || selectedElement?.type === 'library' ? selectedElement.scale ?? 1 : settings.objectScale}
+              onChange={(event) => {
+                const objectScale = Number(event.target.value)
+                setSettings((state) => ({ ...state, objectScale }))
+                if (selectedElement?.type === 'diagram' || selectedElement?.type === 'library') {
+                  updateSelected({ scale: objectScale })
+                }
+              }}
+            />
+          </label>
+          <label className="field">
+            <span>Opciones TikZ</span>
+            <input
+              type="text"
+              value={selectedElement?.tikzOptions ?? settings.tikzOptions}
+              onChange={(event) => {
+                setSettings((state) => ({ ...state, tikzOptions: event.target.value }))
+                updateSelected({ tikzOptions: event.target.value })
+              }}
+              placeholder="rounded corners=2pt, opacity=.9..."
+            />
+          </label>
           <div className="toggle-grid">
             <label className="toggle">
               <input
@@ -2618,10 +2948,76 @@ function App() {
                 </button>
               </div>
               {selectedElement.type === 'text' && (
-                <label className="field">
-                  <span>Texto</span>
-                  <input type="text" value={selectedElement.text} onChange={(event) => updateSelected({ text: event.target.value })} />
-                </label>
+                <>
+                  <label className="field">
+                    <span>Texto</span>
+                    <input type="text" value={selectedElement.text} onChange={(event) => updateSelected({ text: event.target.value })} />
+                  </label>
+                  <div className="field-pair">
+                    <label className="field">
+                      <span>Posicion x</span>
+                      <input
+                        type="number"
+                        step="0.25"
+                        value={selectedElement.position.x}
+                        onChange={(event) => updateSelected({ position: { ...selectedElement.position, x: Number(event.target.value) } })}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Posicion y</span>
+                      <input
+                        type="number"
+                        step="0.25"
+                        value={selectedElement.position.y}
+                        onChange={(event) => updateSelected({ position: { ...selectedElement.position, y: Number(event.target.value) } })}
+                      />
+                    </label>
+                  </div>
+                </>
+              )}
+              {['line', 'arrow', 'rect', 'ellipse'].includes(selectedElement.type) && (
+                <>
+                  <div className="field-pair">
+                    <label className="field">
+                      <span>Inicio x</span>
+                      <input
+                        type="number"
+                        step="0.25"
+                        value={selectedElement.start.x}
+                        onChange={(event) => updateSelected({ start: { ...selectedElement.start, x: Number(event.target.value) } })}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Inicio y</span>
+                      <input
+                        type="number"
+                        step="0.25"
+                        value={selectedElement.start.y}
+                        onChange={(event) => updateSelected({ start: { ...selectedElement.start, y: Number(event.target.value) } })}
+                      />
+                    </label>
+                  </div>
+                  <div className="field-pair">
+                    <label className="field">
+                      <span>Fin x</span>
+                      <input
+                        type="number"
+                        step="0.25"
+                        value={selectedElement.end.x}
+                        onChange={(event) => updateSelected({ end: { ...selectedElement.end, x: Number(event.target.value) } })}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Fin y</span>
+                      <input
+                        type="number"
+                        step="0.25"
+                        value={selectedElement.end.y}
+                        onChange={(event) => updateSelected({ end: { ...selectedElement.end, y: Number(event.target.value) } })}
+                      />
+                    </label>
+                  </div>
+                </>
               )}
               {selectedElement.type === 'function' && (
                 <>
@@ -2660,6 +3056,24 @@ function App() {
                       onChange={(event) => updateSelected({ yOffset: Number(event.target.value) })}
                     />
                   </label>
+                  <label className="field">
+                    <span>Muestras</span>
+                    <input
+                      type="number"
+                      min="8"
+                      max="400"
+                      value={selectedElement.samples ?? 120}
+                      onChange={(event) => updateSelected({ samples: Number(event.target.value) })}
+                    />
+                  </label>
+                  <label className="toggle">
+                    <input
+                      type="checkbox"
+                      checked={selectedElement.smooth ?? true}
+                      onChange={(event) => updateSelected({ smooth: event.target.checked })}
+                    />
+                    <span>Suavizar curva</span>
+                  </label>
                 </>
               )}
               {(selectedElement.type === 'diagram' || selectedElement.type === 'library') && (
@@ -2697,7 +3111,29 @@ function App() {
                       />
                     </label>
                   </div>
+                  <label className="field">
+                    <span>Escala</span>
+                    <input
+                      type="number"
+                      min="0.4"
+                      max="2.2"
+                      step="0.05"
+                      value={selectedElement.scale ?? 1}
+                      onChange={(event) => updateSelected({ scale: Number(event.target.value) })}
+                    />
+                  </label>
                 </>
+              )}
+              {selectedElement.type !== 'function' && (
+                <label className="field">
+                  <span>Opciones TikZ del objeto</span>
+                  <input
+                    type="text"
+                    value={selectedElement.tikzOptions ?? ''}
+                    onChange={(event) => updateSelected({ tikzOptions: event.target.value })}
+                    placeholder="draw opacity=.8, rounded corners=1pt..."
+                  />
+                </label>
               )}
               {selectedElement.type === 'path' && (
                 <button type="button" className="ghost-button full" onClick={recognizeSelectedPath}>
