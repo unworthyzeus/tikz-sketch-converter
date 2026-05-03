@@ -143,7 +143,12 @@ textarea:focus-visible {
 .export-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.topbar-actions {
+  justify-content: flex-end;
 }
 
 .canvas-shell {
@@ -601,6 +606,27 @@ textarea:focus-visible {
 .ghost-button:hover {
   border-color: #111111;
   background: #f5f6f8;
+}
+
+.ghost-button.is-active {
+  border-color: #111111;
+  background: #111111;
+  color: #ffffff;
+}
+
+.ghost-button.danger-action {
+  color: #8c2f39;
+}
+
+.ghost-button.danger-action:hover {
+  border-color: #8c2f39;
+  background: #fff7f7;
+}
+
+.ghost-button:disabled,
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .primary-button {

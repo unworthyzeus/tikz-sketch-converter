@@ -270,6 +270,41 @@ function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }
 
+function distanceToSegment(point, start, end) {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSquared = dx * dx + dy * dy
+  if (!lengthSquared) return distance(point, start)
+
+  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+  return distance(point, { x: start.x + t * dx, y: start.y + t * dy })
+}
+
+function normalBounds(start, end) {
+  return {
+    minX: Math.min(start.x, end.x),
+    maxX: Math.max(start.x, end.x),
+    minY: Math.min(start.y, end.y),
+    maxY: Math.max(start.y, end.y),
+  }
+}
+
+function pointInBounds(point, bounds, padding = 0) {
+  return (
+    point.x >= bounds.minX - padding &&
+    point.x <= bounds.maxX + padding &&
+    point.y >= bounds.minY - padding &&
+    point.y <= bounds.maxY + padding
+  )
+}
+
+function polylineHitsPoint(points, point, radius) {
+  return points.some((candidate, index) => {
+    if (index === 0) return distance(candidate, point) <= radius
+    return distanceToSegment(point, points[index - 1], candidate) <= radius
+  })
+}
+
 function formatNumber(value) {
   if (!Number.isFinite(value)) return '0'
   const rounded = Math.round(value * 1000) / 1000
@@ -771,6 +806,53 @@ function libraryBounds(element) {
   }
 }
 
+function elementIntersectsEraser(element, point, radius = 0.24) {
+  if (element.type === 'line' || element.type === 'arrow') {
+    return distanceToSegment(point, element.start, element.end) <= radius
+  }
+
+  if (element.type === 'rect') {
+    return pointInBounds(point, normalBounds(element.start, element.end), radius)
+  }
+
+  if (element.type === 'ellipse') {
+    const bounds = normalBounds(element.start, element.end)
+    const center = {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    }
+    const rx = Math.max((bounds.maxX - bounds.minX) / 2, radius)
+    const ry = Math.max((bounds.maxY - bounds.minY) / 2, radius)
+    const normalized = ((point.x - center.x) / rx) ** 2 + ((point.y - center.y) / ry) ** 2
+    return normalized <= 1.15
+  }
+
+  if (element.type === 'path') {
+    return polylineHitsPoint(element.points, point, radius)
+  }
+
+  if (element.type === 'function') {
+    const points = sampleFunction(element)
+      .filter(Boolean)
+      .map((sample) => ({ x: sample.x, y: sample.y + (Number(element.yOffset) || 0) }))
+    return polylineHitsPoint(points, point, radius)
+  }
+
+  if (element.type === 'text') {
+    return distance(point, element.position) <= 0.42
+  }
+
+  if (element.type === 'diagram') {
+    return pointInBounds(point, diagramBounds(element), radius)
+  }
+
+  if (element.type === 'library') {
+    return pointInBounds(point, libraryBounds(element), radius)
+  }
+
+  return false
+}
+
 function replaceLibraryTokens(line, element, color) {
   return line
     .replaceAll('__COLOR__', color)
@@ -1108,9 +1190,13 @@ function App() {
     return latexSymbols.filter((symbol) => symbol.haystack.includes(query))
   }, [symbolSearch])
 
-  const commitElements = (nextElements, nextSelectedId = selectedId) => {
-    setPast((items) => [...items, elements].slice(-50))
+  const pushHistory = (snapshot = elements) => {
+    setPast((items) => [...items, snapshot].slice(-50))
     setFuture([])
+  }
+
+  const commitElements = (nextElements, nextSelectedId = selectedId) => {
+    pushHistory(elements)
     setElements(nextElements)
     setSelectedId(nextSelectedId)
   }
@@ -1136,6 +1222,30 @@ function App() {
     arrowStyle: settings.arrowStyle,
   })
 
+  const eraseIds = (ids, snapshot = elements) => {
+    if (!ids.length) return
+    const idSet = new Set(ids)
+    pushHistory(snapshot)
+    setElements((current) => current.filter((element) => !idSet.has(element.id)))
+    setSelectedId(null)
+  }
+
+  const findEraserHits = (point, sourceElements = elements) =>
+    sourceElements.filter((element) => elementIntersectsEraser(element, point)).map((element) => element.id)
+
+  const beginErase = (event, forcedElement = null) => {
+    const point = getWorldPoint(event)
+    const hitIds = forcedElement ? [forcedElement.id] : findEraserHits(point)
+    svgRef.current?.setPointerCapture?.(event.pointerId)
+    eraseIds(hitIds, elements)
+    setInteraction({
+      mode: 'erase',
+      snapshot: elements,
+      erasedIds: hitIds,
+      hasErased: hitIds.length > 0,
+    })
+  }
+
   const handlePointerDown = (event) => {
     const point = getWorldPoint(event)
     setMouseWorld(point)
@@ -1146,6 +1256,11 @@ function App() {
     }
 
     if (tool === 'function') {
+      return
+    }
+
+    if (tool === 'erase') {
+      beginErase(event)
       return
     }
 
@@ -1181,6 +1296,25 @@ function App() {
   const handlePointerMove = (event) => {
     const point = getWorldPoint(event)
     setMouseWorld(point)
+
+    if (interaction?.mode === 'erase') {
+      const existingIds = new Set(interaction.erasedIds)
+      const hitIds = findEraserHits(point).filter((id) => !existingIds.has(id))
+
+      if (hitIds.length) {
+        if (!interaction.hasErased) pushHistory(interaction.snapshot)
+        const hitSet = new Set(hitIds)
+        setElements((current) => current.filter((element) => !hitSet.has(element.id)))
+        setSelectedId(null)
+        setInteraction({
+          ...interaction,
+          hasErased: true,
+          erasedIds: [...interaction.erasedIds, ...hitIds],
+        })
+      }
+
+      return
+    }
 
     if (interaction?.mode === 'move') {
       const deltaX = point.x - interaction.origin.x
@@ -1248,10 +1382,7 @@ function App() {
     event.stopPropagation()
 
     if (tool === 'erase') {
-      commitElements(
-        elements.filter((item) => item.id !== element.id),
-        null,
-      )
+      beginErase(event, element)
       return
     }
 
@@ -1305,6 +1436,17 @@ function App() {
       elements.filter((element) => element.id !== selectedElement.id),
       null,
     )
+  }
+
+  const clearBoard = () => {
+    if (!elements.length) return
+    commitElements([], null)
+    setTool('select')
+  }
+
+  const restoreDemo = () => {
+    commitElements(seedElements, 'seed-function')
+    setTool('select')
   }
 
   const recognizeSelectedPath = () => {
@@ -2087,9 +2229,9 @@ function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <h1>TikZ Figure Workbench</h1>
+            <h1>TikZ Sketch Converter</h1>
             <p>
-              Figuras sobrias para articulos, tesis y notas tecnicas.
+              Editor visual para convertir bocetos, funciones y diagramas en TikZ limpio para papers.
               <span className="byline">Made by Guillem Moreno Garcia</span>
             </p>
           </div>
@@ -2103,9 +2245,25 @@ function App() {
               <GitBranch size={17} />
               GitHub
             </a>
+            <button
+              type="button"
+              className={`ghost-button ${tool === 'erase' ? 'is-active' : ''}`}
+              onClick={() => setTool((current) => (current === 'erase' ? 'select' : 'erase'))}
+            >
+              <Eraser size={17} />
+              Borrador
+            </button>
+            <button type="button" className="ghost-button danger-action" onClick={clearBoard} disabled={!elements.length}>
+              <Trash2 size={17} />
+              Limpiar tablero
+            </button>
             <button type="button" className="ghost-button" onClick={() => setSettings((state) => ({ ...state, grid: !state.grid }))}>
               <Grid3X3 size={17} />
               {settings.grid ? 'Ocultar grid' : 'Mostrar grid'}
+            </button>
+            <button type="button" className="ghost-button" onClick={downloadTikz}>
+              <Download size={17} />
+              Exportar .TeX
             </button>
             <button type="button" className="primary-button" onClick={copyTikz}>
               <Copy size={17} />
@@ -2602,15 +2760,16 @@ function App() {
           )}
           <textarea className="code-output" value={tikzCode} readOnly spellCheck="false" />
           <div className="export-actions">
-            <button type="button" className="ghost-button" onClick={() => commitElements(seedElements, 'seed-function')}>
+            <button type="button" className="ghost-button" onClick={restoreDemo}>
               Restaurar demo
             </button>
-            <button type="button" className="ghost-button" onClick={() => commitElements([], null)}>
-              Limpiar
+            <button type="button" className="ghost-button danger-action" onClick={clearBoard} disabled={!elements.length}>
+              <Trash2 size={17} />
+              Limpiar tablero
             </button>
             <button type="button" className="primary-button" onClick={downloadTikz}>
               <Download size={17} />
-              .tex
+              Exportar .TeX
             </button>
           </div>
         </section>
