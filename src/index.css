@@ -30,6 +30,15 @@ html {
   background: var(--app-bg);
 }
 
+html[data-theme='dark'] {
+  --app-bg: #111318;
+  --rail-bg: #171a20;
+  --panel-bg: #181c23;
+  --border: #2d333d;
+  --text: #edf0f4;
+  --muted: #a5adbb;
+}
+
 body {
   min-width: 320px;
   min-height: 100vh;

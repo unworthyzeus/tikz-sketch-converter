@@ -47,13 +47,19 @@ Local evidence captures live in `output/tikzmaker-*` and are intentionally ignor
 - Added editable board import/export as JSON.
 - Added this comparison document and kept browser research captures under ignored `output/`.
 
+## Added after the future-work pass
+
+- Added a circuit-specific object editor for CircuitikZ-like components with label, value, terminal style, terminal length, orientation, IEC/American selector, and auto-numbered labels.
+- Added basic topology helpers: snap-to-terminal, two-terminal inference for circuit components and wires, and optional right-angle wire routing for new line/cable strokes.
+- Added independent canvas pan mode in the left rail.
+- Added SVG export for the current canvas preview and renamed the main copy action to `Copy .TeX code`.
+- Added shareable encoded board URLs alongside editable board JSON import/export.
+- Added dark mode and an app settings modal.
+- Added multi-select editing, copy/paste/duplicate selection controls, and a replace-component flow in the inspector and context menu.
+- Added tutorial/help, updates, and known-bugs modal pages inside the app.
+
 ## Still missing or future work
 
-- Circuit-specific editing panel with values, labels, terminals, orientation, IEC/American style, and auto-label numbering.
-- True circuit topology behavior: snap-to-terminal, wire routing, junction inference, and net-aware component replacement.
-- Canvas pan/move mode independent from object movement.
-- SVG export of the canvas preview.
-- Shareable encoded URLs.
-- Dark mode and settings modal.
-- Multi-select editing, replace-component context menu, and copy/paste selection workflows.
-- Tutorial/help pages and known-bugs/update pages.
+- Full netlist-level circuit semantics: robust junction inference, electrical-net validation, and net-aware replacement that preserves named nets across complex edits.
+- Rich SVG/PNG export settings such as transparent background, scale presets, and paper-size crop boxes.
+- Board collaboration/persistence beyond encoded local URLs, such as cloud saves or multi-user sessions.

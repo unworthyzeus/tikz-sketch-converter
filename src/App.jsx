@@ -1,29 +1,38 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
+  BookOpen,
   BrainCircuit,
   CalendarDays,
   Circle,
   Code2,
   Copy,
+  CopyPlus,
   CircuitBoard,
   Download,
   Eraser,
+  Files,
   Grid3X3,
   GitBranch,
   Layers,
+  Link,
   Minus,
+  Moon,
   MousePointer2,
+  Move,
   PenLine,
   RotateCcw,
   RotateCw,
+  Settings,
   Sigma,
   Sparkles,
   Square,
+  Sun,
   Trash2,
   Type,
   Upload,
   Workflow,
+  X,
   Maximize2,
   ZoomIn,
   ZoomOut,
@@ -118,6 +127,7 @@ const accentPreviewMarks = {
 
 const toolMeta = [
   { id: 'select', label: 'Seleccionar', icon: MousePointer2 },
+  { id: 'pan', label: 'Mover lienzo', icon: Move },
   { id: 'pen', label: 'Trazo libre', icon: PenLine },
   { id: 'line', label: 'Linea', icon: Minus },
   { id: 'arrow', label: 'Flecha', icon: ArrowRight },
@@ -162,6 +172,28 @@ const diagramPresets = [
     stroke: '#111111',
   },
 ]
+
+const defaultEditorSettings = {
+  stroke: '#111111',
+  fill: 'none',
+  fillOpacity: 0.18,
+  width: 0.8,
+  dashed: false,
+  smooth: true,
+  snap: true,
+  terminalSnap: true,
+  routeWires: true,
+  grid: true,
+  arrowStyle: 'stealth',
+  objectScale: 1,
+  tikzOptions: '',
+  labelText: 'Etiqueta',
+  exportGrid: false,
+  monochromeExport: true,
+  wrapFigure: true,
+  caption: 'Paper-ready TikZ figure.',
+  label: 'fig:tikz-sketch',
+}
 
 const seedElements = [
   {
@@ -276,7 +308,54 @@ function getLibraryPreset(element) {
   )
 }
 
+const circuitAutoPrefixes = {
+  resistor: 'R',
+  capacitor: 'C',
+  inductor: 'L',
+  diode: 'D',
+  source: 'V',
+  opamp: 'U',
+}
+
+function circuitAutoPrefix(preset = {}) {
+  if (preset.group !== 'Circuit') return ''
+  const key = `${preset.id ?? ''} ${preset.title ?? ''}`.toLowerCase()
+  return Object.entries(circuitAutoPrefixes).find(([needle]) => key.includes(needle))?.[1] ?? 'X'
+}
+
+function circuitTikzComponent(preset = {}, config = {}) {
+  const key = `${preset.id ?? ''} ${preset.title ?? ''}`.toLowerCase()
+  const style = config.circuitStyle
+  if (key.includes('resistor')) return style === 'american' ? 'R' : 'R'
+  if (key.includes('capacitor')) return 'C'
+  if (key.includes('inductor')) return 'L'
+  if (key.includes('diode')) return 'D'
+  if (key.includes('source')) return 'V'
+  return ''
+}
+
+function circuitEndPoint(config = {}) {
+  const length = Math.max(0.55, Math.min(5, Number(config.terminalLength) || 2.2))
+  const vectors = {
+    right: { x: length, y: 0 },
+    left: { x: -length, y: 0 },
+    up: { x: 0, y: length },
+    down: { x: 0, y: -length },
+  }
+  return vectors[config.circuitOrientation] ?? vectors.right
+}
+
+function circuitTerminalOption(style) {
+  const options = {
+    filled: '*-*',
+    open: 'o-o',
+    mixed: 'o-*',
+  }
+  return options[style] ?? ''
+}
+
 function defaultLibraryConfig(preset = {}) {
+  const circuitPrefix = circuitAutoPrefix(preset)
   return {
     stretchX: 1,
     stretchY: 1,
@@ -289,6 +368,13 @@ function defaultLibraryConfig(preset = {}) {
     connectNodes: true,
     calloutPointerX: 0.8,
     calloutPointerY: -0.5,
+    circuitValue: '',
+    circuitLabel: circuitPrefix ? `${circuitPrefix}_1` : preset.title ?? 'Object',
+    circuitOrientation: 'right',
+    circuitStyle: 'auto',
+    terminalStyle: 'none',
+    terminalLength: 2.2,
+    autoLabel: Boolean(circuitPrefix),
   }
 }
 
@@ -302,6 +388,13 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
     nodeSpacing: Math.max(0.25, Math.min(3, Number(config.nodeSpacing) || 0.85)),
     calloutPointerX: Number(config.calloutPointerX) || 0,
     calloutPointerY: Number(config.calloutPointerY) || 0,
+    circuitOrientation: ['right', 'left', 'up', 'down'].includes(config.circuitOrientation)
+      ? config.circuitOrientation
+      : 'right',
+    circuitStyle: ['auto', 'iec', 'american'].includes(config.circuitStyle) ? config.circuitStyle : 'auto',
+    terminalStyle: ['none', 'filled', 'open', 'mixed'].includes(config.terminalStyle) ? config.terminalStyle : 'none',
+    terminalLength: Math.max(0.55, Math.min(5, Number(config.terminalLength) || 2.2)),
+    autoLabel: Boolean(config.autoLabel),
   }
 }
 
@@ -424,6 +517,49 @@ function downloadBlob(blob, filename) {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+function encodeBoardPayload(payload) {
+  const bytes = new TextEncoder().encode(JSON.stringify(payload))
+  let binary = ''
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte)
+  })
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function decodeBoardPayload(value) {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+  const binary = atob(padded)
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  return JSON.parse(new TextDecoder().decode(bytes))
+}
+
+function readInitialSharedBoard() {
+  if (typeof window === 'undefined') return null
+  const encoded = window.location.hash.match(/^#board=(.+)$/)?.[1]
+  if (!encoded) return null
+
+  try {
+    const payload = decodeBoardPayload(encoded)
+    const nextElements = Array.isArray(payload) ? payload : payload.elements
+    if (!Array.isArray(nextElements)) return null
+    return {
+      elements: nextElements,
+      settings: payload.settings && typeof payload.settings === 'object' ? payload.settings : null,
+      theme: payload.theme === 'dark' || payload.theme === 'light' ? payload.theme : 'light',
+      viewport: payload.viewport && typeof payload.viewport === 'object' ? payload.viewport : null,
+    }
+  } catch {
+    return null
+  }
+}
+
+function cloneElementForPaste(element, offset = { x: 0.6, y: -0.6 }) {
+  const clone = JSON.parse(JSON.stringify(element))
+  clone.id = createId()
+  return moveElement(clone, offset.x, offset.y)
 }
 
 function erf(value) {
@@ -1125,12 +1261,65 @@ function buildDiagramTikz(element, ensureColor) {
 function libraryBounds(element) {
   const metrics = libraryMetrics(element)
   const scale = metrics.scale
+  const circuitEnd = circuitTikzComponent(metrics.preset, metrics.config) ? circuitEndPoint(metrics.config) : null
+  if (circuitEnd) {
+    const end = {
+      x: element.origin.x + circuitEnd.x * scale,
+      y: element.origin.y + circuitEnd.y * scale,
+    }
+    return {
+      minX: Math.min(element.origin.x, end.x) - 0.35 * scale,
+      maxX: Math.max(element.origin.x, end.x) + 0.35 * scale,
+      minY: Math.min(element.origin.y, end.y) - 0.35 * scale,
+      maxY: Math.max(element.origin.y, end.y) + 0.35 * scale,
+    }
+  }
+
   return {
     minX: element.origin.x - metrics.leftExtra * scale,
     maxX: element.origin.x + (metrics.baseWidth + metrics.rightExtra) * scale,
     minY: element.origin.y - (metrics.baseHeight + metrics.downExtra) * scale,
     maxY: element.origin.y + metrics.upExtra * scale,
   }
+}
+
+function terminalPointsForElement(element) {
+  if (element.type === 'line' || element.type === 'arrow') {
+    return [element.start, element.end]
+  }
+
+  if (element.type === 'path') {
+    return [element.points[0], element.points.at(-1)].filter(Boolean)
+  }
+
+  if (element.type === 'library') {
+    const preset = getLibraryPreset(element)
+    const config = getLibraryConfig(element, preset)
+    const component = circuitTikzComponent(preset, config)
+    if (!component) return []
+
+    const scale = Number(element.scale) || 1
+    const end = circuitEndPoint(config)
+    return [
+      element.origin,
+      {
+        x: element.origin.x + end.x * scale,
+        y: element.origin.y + end.y * scale,
+      },
+    ]
+  }
+
+  return []
+}
+
+function makeOrthogonalRoute(start, end) {
+  if (Math.abs(start.x - end.x) < 0.001 || Math.abs(start.y - end.y) < 0.001) {
+    return [start, end]
+  }
+
+  const horizontalFirst = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y)
+  const corner = horizontalFirst ? { x: end.x, y: start.y } : { x: start.x, y: end.y }
+  return [start, corner, end]
 }
 
 function elementIntersectsEraser(element, point, radius = 0.24) {
@@ -1209,6 +1398,24 @@ function buildConfiguredLibrarySnippet(preset, element) {
   const label = formatTikzNodeText(config.label || element.title)
   const width = formatNumber(Math.max(0.7, 1.35 * config.stretchX))
   const height = formatNumber(Math.max(0.35, 0.62 * config.stretchY))
+  const circuitComponent = circuitTikzComponent(preset, config)
+
+  if (circuitComponent) {
+    const end = circuitEndPoint(config)
+    const terminals = circuitTerminalOption(config.terminalStyle)
+    const componentOptions = [circuitComponent]
+    if (terminals) componentOptions.push(terminals)
+    const printedLabel = config.autoLabel ? config.circuitLabel : config.label
+    const value = `${config.circuitValue ?? ''}`.trim()
+    const circuitLabel = value ? `${printedLabel}=${value}` : printedLabel
+    if (circuitLabel.trim()) componentOptions.push(`l={${formatTikzNodeText(circuitLabel)}}`)
+
+    return [
+      `\\draw[draw=__COLOR__, line width=0.65pt] (0,0) to[${componentOptions.join(',')}] (${formatNumber(
+        end.x,
+      )},${formatNumber(end.y)});`,
+    ]
+  }
 
   if (preset.id === 'shape-callout') {
     return [
@@ -1635,37 +1842,31 @@ function buildTikz(elements, exportOptions = {}) {
 }
 
 function App() {
+  const [initialSharedBoard] = useState(readInitialSharedBoard)
+  const initialElements = initialSharedBoard?.elements ?? seedElements
+  const initialSelectedId = initialElements[0]?.id ?? null
   const svgRef = useRef(null)
   const importInputRef = useRef(null)
   const [tool, setTool] = useState('select')
-  const [zoom, setZoom] = useState(1)
-  const [elements, setElements] = useState(seedElements)
-  const [selectedId, setSelectedId] = useState('seed-function')
+  const [zoom, setZoom] = useState(initialSharedBoard?.viewport?.zoom ?? 1)
+  const [canvasPan, setCanvasPan] = useState(initialSharedBoard?.viewport?.canvasPan ?? { x: 0, y: 0 })
+  const [elements, setElements] = useState(initialElements)
+  const [selectedId, setSelectedId] = useState(initialSelectedId)
+  const [selectedIds, setSelectedIds] = useState(initialSelectedId ? [initialSelectedId] : [])
+  const [clipboardElements, setClipboardElements] = useState([])
   const [draft, setDraft] = useState(null)
   const [interaction, setInteraction] = useState(null)
   const [past, setPast] = useState([])
   const [future, setFuture] = useState([])
-  const [copyLabel, setCopyLabel] = useState('Copiar')
+  const [copyLabel, setCopyLabel] = useState('Copy .TeX code')
+  const [shareLabel, setShareLabel] = useState('Copiar URL')
+  const [theme, setTheme] = useState(initialSharedBoard?.theme ?? 'light')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [helpTab, setHelpTab] = useState('tutorial')
+  const [contextMenu, setContextMenu] = useState(null)
   const [mouseWorld, setMouseWorld] = useState({ x: 0, y: 0 })
-  const [settings, setSettings] = useState({
-    stroke: '#111111',
-    fill: 'none',
-    fillOpacity: 0.18,
-    width: 0.8,
-    dashed: false,
-    smooth: true,
-    snap: true,
-    grid: true,
-    arrowStyle: 'stealth',
-    objectScale: 1,
-    tikzOptions: '',
-    labelText: 'Etiqueta',
-    exportGrid: false,
-    monochromeExport: true,
-    wrapFigure: true,
-    caption: 'Paper-ready TikZ figure.',
-    label: 'fig:tikz-sketch',
-  })
+  const [settings, setSettings] = useState({ ...defaultEditorSettings, ...(initialSharedBoard?.settings ?? {}) })
   const [functionDraft, setFunctionDraft] = useState({
     expression: '0.25*x^2 - 2',
     domainStart: -6,
@@ -1685,7 +1886,12 @@ function App() {
     snippet: '\\node[draw=__COLOR__, rounded corners=2pt] (a) at (0,0) {Custom};\n\\draw[-{Stealth}, draw=__COLOR__] (a) -- ++(2,0) node[right] {edit me};',
   })
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+
   const selectedElement = elements.find((element) => element.id === selectedId)
+  const selectedElements = elements.filter((element) => selectedIds.includes(element.id))
   const selectedLibraryConfig = selectedElement?.type === 'library' ? getLibraryConfig(selectedElement) : null
   const activeLabelText = selectedElement?.type === 'text' ? selectedElement.text : settings.labelText
   const tikzCode = useMemo(
@@ -1743,16 +1949,48 @@ function App() {
     pushHistory(elements)
     setElements(nextElements)
     setSelectedId(nextSelectedId)
+    setSelectedIds(nextSelectedId ? [nextSelectedId] : [])
+  }
+
+  const commitElementsWithSelection = (nextElements, nextSelectedIds = []) => {
+    pushHistory(elements)
+    setElements(nextElements)
+    setSelectedIds(nextSelectedIds)
+    setSelectedId(nextSelectedIds.at(-1) ?? null)
+  }
+
+  const selectOnly = (id) => {
+    setSelectedId(id)
+    setSelectedIds(id ? [id] : [])
+  }
+
+  const snapToTerminal = (point, ignoreIds = []) => {
+    if (!settings.terminalSnap) return point
+
+    const ignored = new Set(ignoreIds)
+    const terminals = elements
+      .filter((element) => !ignored.has(element.id))
+      .flatMap((element) => terminalPointsForElement(element).map((terminal) => ({ ...terminal, elementId: element.id })))
+    const nearest = terminals.reduce(
+      (best, terminal) => {
+        const candidateDistance = distance(point, terminal)
+        return candidateDistance < best.distance ? { terminal, distance: candidateDistance } : best
+      },
+      { terminal: null, distance: 0.28 },
+    )
+
+    return nearest.terminal ? { x: nearest.terminal.x, y: nearest.terminal.y } : point
   }
 
   const getWorldPointFromClient = (clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect()
     const screenPoint = {
-      x: ((clientX - rect.left) / rect.width) * CANVAS.width,
-      y: ((clientY - rect.top) / rect.height) * CANVAS.height,
+      x: canvasPan.x + ((clientX - rect.left) / rect.width) * CANVAS.width,
+      y: canvasPan.y + ((clientY - rect.top) / rect.height) * CANVAS.height,
     }
     const worldPoint = screenToWorld(screenPoint)
-    return settings.snap ? snapPoint(worldPoint) : worldPoint
+    const snappedPoint = settings.snap ? snapPoint(worldPoint) : worldPoint
+    return snapToTerminal(snappedPoint)
   }
 
   const getWorldPoint = (event) => getWorldPointFromClient(event.clientX, event.clientY)
@@ -1775,6 +2013,7 @@ function App() {
     pushHistory(snapshot)
     setElements((current) => current.filter((element) => !idSet.has(element.id)))
     setSelectedId(null)
+    setSelectedIds([])
   }
 
   const findEraserHits = (point, sourceElements = elements) =>
@@ -1803,9 +2042,20 @@ function App() {
   const handlePointerDown = (event) => {
     const point = getWorldPoint(event)
     setMouseWorld(point)
+    setContextMenu(null)
+
+    if (tool === 'pan') {
+      svgRef.current?.setPointerCapture?.(event.pointerId)
+      setInteraction({
+        mode: 'pan',
+        startClient: { x: event.clientX, y: event.clientY },
+        startPan: canvasPan,
+      })
+      return
+    }
 
     if (tool === 'select') {
-      setSelectedId(null)
+      selectOnly(null)
       return
     }
 
@@ -1859,7 +2109,7 @@ function App() {
         if (!interaction.hasErased) pushHistory(interaction.snapshot)
         const hitSet = new Set(hitIds)
         setElements((current) => current.filter((element) => !hitSet.has(element.id)))
-        setSelectedId(null)
+        selectOnly(null)
         setInteraction({
           ...interaction,
           hasErased: true,
@@ -1867,6 +2117,17 @@ function App() {
         })
       }
 
+      return
+    }
+
+    if (interaction?.mode === 'pan') {
+      const rect = svgRef.current.getBoundingClientRect()
+      const dx = ((event.clientX - interaction.startClient.x) / rect.width) * CANVAS.width
+      const dy = ((event.clientY - interaction.startClient.y) / rect.height) * CANVAS.height
+      setCanvasPan({
+        x: interaction.startPan.x - dx,
+        y: interaction.startPan.y - dy,
+      })
       return
     }
 
@@ -1884,6 +2145,23 @@ function App() {
         current.map((element) =>
           element.id === interaction.id ? moveElement(interaction.original, deltaX, deltaY) : element,
         ),
+      )
+      return
+    }
+
+    if (interaction?.mode === 'move-selection') {
+      const deltaX = point.x - interaction.origin.x
+      const deltaY = point.y - interaction.origin.y
+      const originals = new Map(interaction.originals.map((element) => [element.id, element]))
+
+      if (!interaction.moved) {
+        setPast((items) => [...items, interaction.snapshot].slice(-50))
+        setFuture([])
+      }
+
+      setInteraction({ ...interaction, moved: true })
+      setElements((current) =>
+        current.map((element) => (originals.has(element.id) ? moveElement(originals.get(element.id), deltaX, deltaY) : element)),
       )
       return
     }
@@ -1926,7 +2204,22 @@ function App() {
     }
 
     if (distance(draft.start, draft.end) > 0.08) {
-      commitElements([...elements, draft], draft.id)
+      if (settings.routeWires && draft.type === 'line') {
+        const routedPoints = makeOrthogonalRoute(draft.start, draft.end)
+        const routedDraft =
+          routedPoints.length > 2
+            ? {
+                ...draft,
+                type: 'path',
+                points: routedPoints,
+                smooth: false,
+                title: 'Wire route',
+              }
+            : draft
+        commitElements([...elements, routedDraft], routedDraft.id)
+      } else {
+        commitElements([...elements, draft], draft.id)
+      }
     }
 
     setDraft(null)
@@ -1934,6 +2227,7 @@ function App() {
 
   const handleElementPointerDown = (event, element) => {
     event.stopPropagation()
+    setContextMenu(null)
 
     if (tool === 'erase') {
       beginErase(event, element)
@@ -1948,25 +2242,61 @@ function App() {
         ? hitElements[(selectedHitIndex + 1) % hitElements.length]
         : hitElements[0] ?? element
 
-    setSelectedId(targetElement.id)
-
     if (tool !== 'select') return
 
+    if (event.shiftKey) {
+      const nextSelectedIds = selectedIds.includes(targetElement.id)
+        ? selectedIds.filter((id) => id !== targetElement.id)
+        : [...selectedIds, targetElement.id]
+      setSelectedIds(nextSelectedIds)
+      setSelectedId(nextSelectedIds.at(-1) ?? null)
+      return
+    }
+
+    const activeSelectionIds = selectedIds.includes(targetElement.id) ? selectedIds : [targetElement.id]
+    setSelectedId(targetElement.id)
+    setSelectedIds(activeSelectionIds)
+
     svgRef.current?.setPointerCapture?.(event.pointerId)
-    setInteraction({
-      mode: 'move',
-      id: targetElement.id,
-      origin: point,
-      original: targetElement,
-      snapshot: elements,
-      moved: false,
+    if (activeSelectionIds.length > 1) {
+      setInteraction({
+        mode: 'move-selection',
+        ids: activeSelectionIds,
+        origin: point,
+        originals: elements.filter((candidate) => activeSelectionIds.includes(candidate.id)),
+        snapshot: elements,
+        moved: false,
+      })
+    } else {
+      setInteraction({
+        mode: 'move',
+        id: targetElement.id,
+        origin: point,
+        original: targetElement,
+        snapshot: elements,
+        moved: false,
+      })
+    }
+  }
+
+  const handleElementContextMenu = (event, element) => {
+    event.preventDefault()
+    event.stopPropagation()
+    selectOnly(element.id)
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      elementId: element.id,
     })
   }
 
   const updateSelected = (patch) => {
     if (!selectedElement) return
+    const styleKeys = new Set(['stroke', 'fill', 'fillOpacity', 'width', 'dashed', 'tikzOptions'])
+    const canApplyToSelection = selectedIds.length > 1 && Object.keys(patch).every((key) => styleKeys.has(key))
+    const targetIds = canApplyToSelection ? new Set(selectedIds) : new Set([selectedElement.id])
     setElements((current) =>
-      current.map((element) => (element.id === selectedElement.id ? { ...element, ...patch } : element)),
+      current.map((element) => (targetIds.has(element.id) ? { ...element, ...patch } : element)),
     )
   }
 
@@ -1997,21 +2327,25 @@ function App() {
   }
 
   const deleteSelected = () => {
-    if (!selectedElement) return
+    if (!selectedIds.length) return
+    const selectedSet = new Set(selectedIds)
     commitElements(
-      elements.filter((element) => element.id !== selectedElement.id),
+      elements.filter((element) => !selectedSet.has(element.id)),
       null,
     )
+    setContextMenu(null)
   }
 
   const clearBoard = () => {
     if (!elements.length) return
     commitElements([], null)
+    setContextMenu(null)
     setTool('select')
   }
 
   const restoreDemo = () => {
     commitElements(seedElements, 'seed-function')
+    setSelectedIds(['seed-function'])
     setTool('select')
   }
 
@@ -2060,6 +2394,13 @@ function App() {
   }
 
   const addLibraryPreset = (preset, origin = preset.origin) => {
+    const prefix = circuitAutoPrefix(preset)
+    const matchingCircuitCount = prefix
+      ? elements.filter((element) => {
+          const candidatePreset = element.type === 'library' ? getLibraryPreset(element) : null
+          return candidatePreset && circuitAutoPrefix(candidatePreset) === prefix
+        }).length
+      : 0
     const nextElement = {
       ...makeLibraryElement(preset, origin),
       stroke: settings.stroke,
@@ -2067,6 +2408,12 @@ function App() {
       fillOpacity: settings.fillOpacity,
       scale: settings.objectScale,
       tikzOptions: settings.tikzOptions,
+    }
+    if (prefix) {
+      nextElement.config = {
+        ...nextElement.config,
+        circuitLabel: `${prefix}_${matchingCircuitCount + 1}`,
+      }
     }
     commitElements([...elements, nextElement], nextElement.id)
     setTool('select')
@@ -2122,6 +2469,7 @@ function App() {
       setFuture((redoItems) => [elements, ...redoItems].slice(0, 50))
       setElements(previous)
       setSelectedId(null)
+      setSelectedIds([])
       return items.slice(0, -1)
     })
   }
@@ -2133,6 +2481,7 @@ function App() {
       setPast((undoItems) => [...undoItems, elements].slice(-50))
       setElements(next)
       setSelectedId(null)
+      setSelectedIds([])
       return items.slice(1)
     })
   }
@@ -2140,11 +2489,70 @@ function App() {
   const copyTikz = async () => {
     await navigator.clipboard.writeText(tikzCode)
     setCopyLabel('Copiado')
-    window.setTimeout(() => setCopyLabel('Copiar'), 1200)
+    window.setTimeout(() => setCopyLabel('Copy .TeX code'), 1200)
   }
 
   const downloadTikz = () => {
     downloadBlob(new Blob([tikzCode], { type: 'text/plain;charset=utf-8' }), 'sketch-tikz.tex')
+  }
+
+  const copySelection = async () => {
+    if (!selectedElements.length) return
+    setClipboardElements(selectedElements)
+    await navigator.clipboard.writeText(JSON.stringify({ version: 1, elements: selectedElements }, null, 2))
+  }
+
+  const pasteSelection = (sourceElements = clipboardElements) => {
+    if (!sourceElements.length) return
+    const clones = sourceElements.map((element) => cloneElementForPaste(element))
+    commitElementsWithSelection([...elements, ...clones], clones.map((element) => element.id))
+    setTool('select')
+  }
+
+  const duplicateSelection = () => {
+    if (!selectedElements.length) return
+    pasteSelection(selectedElements)
+  }
+
+  const replaceSelectedWithPreset = (presetId) => {
+    if (!selectedElement) return
+    const preset = libraryPaletteItems.find((item) => item.id === presetId)
+    if (!preset) return
+    const prefix = circuitAutoPrefix(preset)
+    const matchingCircuitCount = prefix
+      ? elements.filter((element) => {
+          const candidatePreset = element.type === 'library' ? getLibraryPreset(element) : null
+          return candidatePreset && circuitAutoPrefix(candidatePreset) === prefix
+        }).length
+      : 0
+
+    const origin =
+      selectedElement.origin ??
+      selectedElement.position ??
+      {
+        x: ((selectedElement.start?.x ?? 0) + (selectedElement.end?.x ?? 0)) / 2,
+        y: ((selectedElement.start?.y ?? 0) + (selectedElement.end?.y ?? 0)) / 2,
+      }
+    const replacement = {
+      ...makeLibraryElement(preset, origin),
+      id: createId(),
+      stroke: selectedElement.stroke ?? settings.stroke,
+      fill: selectedElement.fill ?? settings.fill,
+      fillOpacity: selectedElement.fillOpacity ?? settings.fillOpacity,
+      scale: selectedElement.scale ?? settings.objectScale,
+      tikzOptions: selectedElement.tikzOptions ?? settings.tikzOptions,
+    }
+    if (prefix) {
+      replacement.config = {
+        ...replacement.config,
+        circuitLabel: `${prefix}_${matchingCircuitCount + 1}`,
+      }
+    }
+    commitElements(
+      elements.map((element) => (element.id === selectedElement.id ? replacement : element)),
+      replacement.id,
+    )
+    setContextMenu(null)
   }
 
   const downloadBoardState = () => {
@@ -2153,11 +2561,29 @@ function App() {
       exportedAt: new Date().toISOString(),
       elements,
       settings,
+      theme,
+      viewport: { canvasPan, zoom },
     }
     downloadBlob(
       new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' }),
       'tikz-sketch-board.json',
     )
+  }
+
+  const copyShareUrl = async () => {
+    const payload = {
+      version: 1,
+      elements,
+      settings,
+      theme,
+      viewport: { canvasPan, zoom },
+    }
+    const encoded = encodeBoardPayload(payload)
+    const nextUrl = `${window.location.origin}${window.location.pathname}${window.location.search}#board=${encoded}`
+    await navigator.clipboard.writeText(nextUrl)
+    window.history.replaceState(null, '', nextUrl)
+    setShareLabel('URL copiada')
+    window.setTimeout(() => setShareLabel('Copiar URL'), 1400)
   }
 
   const importBoardState = async (event) => {
@@ -2175,9 +2601,15 @@ function App() {
       pushHistory(elements)
       setElements(nextElements)
       setSelectedId(nextElements[0]?.id ?? null)
+      setSelectedIds(nextElements[0]?.id ? [nextElements[0].id] : [])
       setFuture([])
       if (payload.settings && typeof payload.settings === 'object') {
         setSettings((state) => ({ ...state, ...payload.settings }))
+      }
+      if (payload.theme === 'dark' || payload.theme === 'light') setTheme(payload.theme)
+      if (payload.viewport && typeof payload.viewport === 'object') {
+        if (payload.viewport.canvasPan) setCanvasPan(payload.viewport.canvasPan)
+        if (payload.viewport.zoom) setCanvasZoom(payload.viewport.zoom)
       }
       setTool('select')
     } catch (error) {
@@ -2187,9 +2619,8 @@ function App() {
     }
   }
 
-  const downloadCanvasPng = async () => {
+  const serializeCanvasSvg = () => {
     if (!svgRef.current) return
-
     const clone = svgRef.current.cloneNode(true)
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
     clone.setAttribute('width', `${CANVAS.width}`)
@@ -2209,7 +2640,18 @@ function App() {
       .join('\n')
     clone.insertBefore(style, clone.firstChild)
 
-    const svgText = new XMLSerializer().serializeToString(clone)
+    return new XMLSerializer().serializeToString(clone)
+  }
+
+  const downloadCanvasSvg = () => {
+    const svgText = serializeCanvasSvg()
+    if (!svgText) return
+    downloadBlob(new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' }), 'tikz-sketch-board.svg')
+  }
+
+  const downloadCanvasPng = async () => {
+    const svgText = serializeCanvasSvg()
+    if (!svgText) return
     const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' })
     const url = URL.createObjectURL(svgBlob)
 
@@ -3137,14 +3579,18 @@ function App() {
 
   const gridLines = useMemo(() => {
     const lines = []
-    for (let x = Math.ceil(worldBounds.minX); x <= Math.floor(worldBounds.maxX); x += 1) {
-      const start = worldToScreen({ x, y: worldBounds.minY })
-      const end = worldToScreen({ x, y: worldBounds.maxY })
+    const minX = Math.ceil(worldBounds.minX) - 24
+    const maxX = Math.floor(worldBounds.maxX) + 24
+    const minY = Math.ceil(worldBounds.minY) - 18
+    const maxY = Math.floor(worldBounds.maxY) + 18
+    for (let x = minX; x <= maxX; x += 1) {
+      const start = worldToScreen({ x, y: minY })
+      const end = worldToScreen({ x, y: maxY })
       lines.push({ id: `x-${x}`, x1: start.x, y1: start.y, x2: end.x, y2: end.y, axis: x === 0 })
     }
-    for (let y = Math.ceil(worldBounds.minY); y <= Math.floor(worldBounds.maxY); y += 1) {
-      const start = worldToScreen({ x: worldBounds.minX, y })
-      const end = worldToScreen({ x: worldBounds.maxX, y })
+    for (let y = minY; y <= maxY; y += 1) {
+      const start = worldToScreen({ x: minX, y })
+      const end = worldToScreen({ x: maxX, y })
       lines.push({ id: `y-${y}`, x1: start.x, y1: start.y, x2: end.x, y2: end.y, axis: y === 0 })
     }
     return lines
@@ -3231,6 +3677,25 @@ function App() {
               <Download size={17} />
               Exportar PNG
             </button>
+            <button type="button" className="ghost-button" onClick={downloadCanvasSvg}>
+              <Download size={17} />
+              Exportar SVG
+            </button>
+            <button type="button" className="ghost-button" onClick={copyShareUrl}>
+              <Link size={17} />
+              {shareLabel}
+            </button>
+            <button type="button" className="ghost-button" onClick={() => setHelpOpen(true)}>
+              <BookOpen size={17} />
+              Ayuda
+            </button>
+            <button type="button" className="ghost-button" onClick={() => setSettingsOpen(true)}>
+              <Settings size={17} />
+              Ajustes
+            </button>
+            <button type="button" className="ghost-button icon-only" onClick={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))} title="Cambiar tema" aria-label="Cambiar tema">
+              {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
             <button type="button" className="primary-button" onClick={copyTikz}>
               <Copy size={17} />
               {copyLabel}
@@ -3243,7 +3708,7 @@ function App() {
             <svg
               ref={svgRef}
               className={`sketch-canvas tool-${tool}`}
-              viewBox={`0 0 ${CANVAS.width} ${CANVAS.height}`}
+              viewBox={`${formatNumber(canvasPan.x)} ${formatNumber(canvasPan.y)} ${CANVAS.width} ${CANVAS.height}`}
               role="img"
               aria-label="Lienzo de dibujo con coordenadas"
               style={{
@@ -3255,8 +3720,9 @@ function App() {
               onPointerUp={handlePointerUp}
               onDragOver={(event) => event.preventDefault()}
               onDrop={handlePaletteDrop}
+              onContextMenu={(event) => event.preventDefault()}
             >
-              <rect width={CANVAS.width} height={CANVAS.height} fill="#ffffff" />
+              <rect x={canvasPan.x} y={canvasPan.y} width={CANVAS.width} height={CANVAS.height} fill="#ffffff" />
               {settings.grid && (
                 <g className="grid-layer">
                   {gridLines.map((line) => (
@@ -3276,11 +3742,12 @@ function App() {
                 {elements.map((element) => (
                   <g
                     key={element.id}
-                    className={`canvas-element ${selectedId === element.id ? 'is-selected' : ''}`}
+                    className={`canvas-element ${selectedIds.includes(element.id) ? 'is-selected' : ''}`}
                     onPointerDown={(event) => handleElementPointerDown(event, element)}
+                    onContextMenu={(event) => handleElementContextMenu(event, element)}
                   >
                     {renderElementHitTarget(element)}
-                    {selectedId === element.id && renderElementShape(element, true)}
+                    {selectedIds.includes(element.id) && renderElementShape(element, true)}
                     {renderElementShape(element)}
                   </g>
                 ))}
@@ -3304,9 +3771,15 @@ function App() {
 
         <footer className="status-strip">
           <span>{elements.length} elementos</span>
-          <span>{selectedElement ? elementLabel(selectedElement) : 'Sin seleccion'}</span>
+          <span>
+            {selectedIds.length > 1
+              ? `${selectedIds.length} seleccionados`
+              : selectedElement
+                ? elementLabel(selectedElement)
+                : 'Sin seleccion'}
+          </span>
           <span>x {formatNumber(mouseWorld.x)} - y {formatNumber(mouseWorld.y)}</span>
-          <span>{settings.snap ? `Snap ${SNAP_STEP}` : 'Snap libre'}</span>
+          <span>{settings.snap ? `Grid ${SNAP_STEP}` : 'Grid libre'} · {settings.terminalSnap ? 'terminales' : 'sin terminales'}</span>
         </footer>
       </section>
 
@@ -3449,7 +3922,23 @@ function App() {
                 checked={settings.snap}
                 onChange={(event) => setSettings((state) => ({ ...state, snap: event.target.checked }))}
               />
-              <span>Ajustar</span>
+              <span>Grid snap</span>
+            </label>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={settings.terminalSnap}
+                onChange={(event) => setSettings((state) => ({ ...state, terminalSnap: event.target.checked }))}
+              />
+              <span>Terminales</span>
+            </label>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={settings.routeWires}
+                onChange={(event) => setSettings((state) => ({ ...state, routeWires: event.target.checked }))}
+              />
+              <span>Cable 90°</span>
             </label>
           </div>
         </section>
@@ -3668,17 +4157,57 @@ function App() {
         <section className="panel-section grow">
           <div className="panel-title">
             <Sparkles size={18} />
-            <h2>Seleccion</h2>
+          <h2>Seleccion</h2>
           </div>
-          {!selectedElement && <p className="empty-state">Selecciona un elemento del lienzo para editarlo o convertir trazos a figuras.</p>}
+          {!selectedElement && (
+            <>
+              <p className="empty-state">Selecciona un elemento del lienzo para editarlo o convertir trazos a figuras.</p>
+              <button type="button" className="ghost-button full" onClick={() => pasteSelection()} disabled={!clipboardElements.length}>
+                <Files size={17} />
+                Pegar seleccion
+              </button>
+            </>
+          )}
           {selectedElement && (
             <div className="selection-editor">
               <div className="selected-heading">
-                <span>{elementLabel(selectedElement)}</span>
+                <span>{selectedIds.length > 1 ? `${selectedIds.length} elementos` : elementLabel(selectedElement)}</span>
                 <button type="button" className="icon-danger" title="Eliminar" aria-label="Eliminar seleccionado" onClick={deleteSelected}>
                   <Trash2 size={17} />
                 </button>
               </div>
+              <div className="selection-actions">
+                <button type="button" className="ghost-button" onClick={copySelection}>
+                  <Copy size={16} />
+                  Copiar sel.
+                </button>
+                <button type="button" className="ghost-button" onClick={() => pasteSelection()} disabled={!clipboardElements.length}>
+                  <Files size={16} />
+                  Pegar
+                </button>
+                <button type="button" className="ghost-button" onClick={duplicateSelection}>
+                  <CopyPlus size={16} />
+                  Duplicar
+                </button>
+              </div>
+              {selectedIds.length > 1 && (
+                <p className="selection-note">
+                  Edicion multiple activa: colores, grosor, discontinuidad y opciones TikZ se aplican a todos los objetos seleccionados.
+                </p>
+              )}
+              <label className="field">
+                <span>Reemplazar por objeto TikZ</span>
+                <select value="" onChange={(event) => replaceSelectedWithPreset(event.target.value)}>
+                  <option value="" disabled>
+                    Escoge un preset...
+                  </option>
+                  {libraryPaletteItems.slice(0, 80).map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.group} - {preset.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {selectedElement.type === 'text' && (
                 <>
                   <label className="field">
@@ -3888,6 +4417,87 @@ function App() {
                           onChange={(event) => updateSelectedLibraryConfig({ label: event.target.value })}
                         />
                       </label>
+                      {circuitTikzComponent(getLibraryPreset(selectedElement), selectedLibraryConfig) && (
+                        <div className="circuit-config">
+                          <label className="toggle">
+                            <input
+                              type="checkbox"
+                              checked={selectedLibraryConfig.autoLabel}
+                              onChange={(event) => updateSelectedLibraryConfig({ autoLabel: event.target.checked })}
+                            />
+                            <span>Auto etiqueta CircuitikZ</span>
+                          </label>
+                          <div className="field-pair">
+                            <label className="field">
+                              <span>Etiqueta</span>
+                              <input
+                                type="text"
+                                value={selectedLibraryConfig.circuitLabel}
+                                onChange={(event) => updateSelectedLibraryConfig({ circuitLabel: event.target.value })}
+                              />
+                            </label>
+                            <label className="field">
+                              <span>Valor</span>
+                              <input
+                                type="text"
+                                value={selectedLibraryConfig.circuitValue}
+                                onChange={(event) => updateSelectedLibraryConfig({ circuitValue: event.target.value })}
+                                placeholder="10 k\\Omega"
+                              />
+                            </label>
+                          </div>
+                          <div className="field-pair">
+                            <label className="field">
+                              <span>Orientacion</span>
+                              <select
+                                value={selectedLibraryConfig.circuitOrientation}
+                                onChange={(event) => updateSelectedLibraryConfig({ circuitOrientation: event.target.value })}
+                              >
+                                <option value="right">Derecha</option>
+                                <option value="left">Izquierda</option>
+                                <option value="up">Arriba</option>
+                                <option value="down">Abajo</option>
+                              </select>
+                            </label>
+                            <label className="field">
+                              <span>IEC / American</span>
+                              <select
+                                value={selectedLibraryConfig.circuitStyle}
+                                onChange={(event) => updateSelectedLibraryConfig({ circuitStyle: event.target.value })}
+                              >
+                                <option value="auto">Auto</option>
+                                <option value="iec">IEC</option>
+                                <option value="american">American</option>
+                              </select>
+                            </label>
+                          </div>
+                          <div className="field-pair">
+                            <label className="field">
+                              <span>Terminales</span>
+                              <select
+                                value={selectedLibraryConfig.terminalStyle}
+                                onChange={(event) => updateSelectedLibraryConfig({ terminalStyle: event.target.value })}
+                              >
+                                <option value="none">Sin nodos</option>
+                                <option value="filled">Rellenos</option>
+                                <option value="open">Abiertos</option>
+                                <option value="mixed">Mixto</option>
+                              </select>
+                            </label>
+                            <label className="field">
+                              <span>Longitud</span>
+                              <input
+                                type="number"
+                                min="0.55"
+                                max="5"
+                                step="0.05"
+                                value={selectedLibraryConfig.terminalLength}
+                                onChange={(event) => updateSelectedLibraryConfig({ terminalLength: Number(event.target.value) })}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      )}
                       <div className="field-pair">
                         <label className="field">
                           <span>Nodos extra</span>
@@ -4068,6 +4678,14 @@ function App() {
               <Download size={17} />
               Exportar PNG
             </button>
+            <button type="button" className="ghost-button" onClick={downloadCanvasSvg}>
+              <Download size={17} />
+              Exportar SVG
+            </button>
+            <button type="button" className="ghost-button" onClick={copyShareUrl}>
+              <Link size={17} />
+              {shareLabel}
+            </button>
             <button type="button" className="ghost-button danger-action" onClick={clearBoard} disabled={!elements.length}>
               <Trash2 size={17} />
               Limpiar tablero
@@ -4079,6 +4697,122 @@ function App() {
           </div>
         </section>
       </aside>
+
+      {contextMenu && (
+        <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu">
+          <button type="button" onClick={copySelection}>
+            <Copy size={15} />
+            Copiar seleccion
+          </button>
+          <button type="button" onClick={duplicateSelection}>
+            <CopyPlus size={15} />
+            Duplicar
+          </button>
+          <button type="button" onClick={deleteSelected}>
+            <Trash2 size={15} />
+            Eliminar
+          </button>
+          <label>
+            <span>Reemplazar</span>
+            <select value="" onChange={(event) => replaceSelectedWithPreset(event.target.value)}>
+              <option value="" disabled>
+                Preset...
+              </option>
+              {libraryPaletteItems.slice(0, 80).map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.group} - {preset.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setSettingsOpen(false)}>
+          <section className="modal-panel" role="dialog" aria-modal="true" aria-label="Ajustes" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Ajustes</h2>
+              <button type="button" className="tool-button subtle" aria-label="Cerrar ajustes" onClick={() => setSettingsOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="settings-grid">
+              <label className="toggle">
+                <input type="checkbox" checked={theme === 'dark'} onChange={(event) => setTheme(event.target.checked ? 'dark' : 'light')} />
+                <span>Modo oscuro</span>
+              </label>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={settings.terminalSnap}
+                  onChange={(event) => setSettings((state) => ({ ...state, terminalSnap: event.target.checked }))}
+                />
+                <span>Snap a terminales</span>
+              </label>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={settings.routeWires}
+                  onChange={(event) => setSettings((state) => ({ ...state, routeWires: event.target.checked }))}
+                />
+                <span>Rutar cables en angulos rectos</span>
+              </label>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={settings.exportGrid}
+                  onChange={(event) => setSettings((state) => ({ ...state, exportGrid: event.target.checked }))}
+                />
+                <span>Incluir grid/ejes en TikZ</span>
+              </label>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {helpOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setHelpOpen(false)}>
+          <section className="modal-panel help-modal" role="dialog" aria-modal="true" aria-label="Ayuda" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Ayuda y estado</h2>
+              <button type="button" className="tool-button subtle" aria-label="Cerrar ayuda" onClick={() => setHelpOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="help-tabs" role="tablist">
+              {[
+                ['tutorial', 'Tutorial'],
+                ['updates', 'Updates'],
+                ['bugs', 'Known bugs'],
+              ].map(([id, label]) => (
+                <button key={id} type="button" className={helpTab === id ? 'is-active' : ''} onClick={() => setHelpTab(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {helpTab === 'tutorial' && (
+              <div className="help-copy">
+                <p>Arrastra objetos TikZ al lienzo, usa Shift+clic para seleccionar varios, y clic repetido sobre objetos superpuestos para ciclar la seleccion.</p>
+                <p>Para circuitos, activa snap a terminales, dibuja lineas con ruteo 90 grados y edita etiqueta, valor, terminales y orientacion desde Seleccion.</p>
+                <p>El resultado se puede copiar como codigo `.TeX`, exportar como `.tex`, PNG, SVG, JSON editable o URL compartible.</p>
+              </div>
+            )}
+            {helpTab === 'updates' && (
+              <div className="help-copy">
+                <p>Ultimos cambios: panel de circuitos, modo pan independiente, dark mode, SVG export, URLs compartibles y seleccion multiple.</p>
+                <p>Los objetos TikZ ahora aceptan nodos extra, escalado, relleno, opciones TikZ y reemplazo desde menu contextual.</p>
+              </div>
+            )}
+            {helpTab === 'bugs' && (
+              <div className="help-copy">
+                <p>Limitacion conocida: el snap infiere terminales por geometria local; no valida redes electricas completas como un simulador.</p>
+                <p>Los snippets standalone como PGFPlots o tikz-cd se exportan correctamente, pero su miniatura en canvas sigue siendo aproximada.</p>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </main>
   )
 }
