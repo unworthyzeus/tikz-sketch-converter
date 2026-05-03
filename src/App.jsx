@@ -75,6 +75,14 @@ const arrowStyleOptions = [
   { value: 'none', label: 'Sin punta', tikz: '-' },
 ]
 
+const libraryNodeShapeOptions = [
+  { value: 'rounded', label: 'Redondeado' },
+  { value: 'rectangle', label: 'Rectangulo' },
+  { value: 'circle', label: 'Circulo' },
+  { value: 'ellipse', label: 'Elipse' },
+  { value: 'diamond', label: 'Rombo' },
+]
+
 const latexSymbols = latexSymbolGroups.flatMap((group) =>
   group.symbols.map((symbol) => ({
     ...symbol,
@@ -220,6 +228,7 @@ function makeLibraryElement(preset, origin = preset.origin) {
     fillOpacity: preset.fillOpacity ?? 0.18,
     scale: preset.scale ?? 1,
     tikzOptions: preset.tikzOptions ?? '',
+    config: defaultLibraryConfig(preset),
     width: preset.defaultStrokeWidth ?? 0.75,
     dashed: false,
   }
@@ -265,6 +274,67 @@ function getLibraryPreset(element) {
     libraryPaletteItems[0] ??
     libraryPresets[0]
   )
+}
+
+function defaultLibraryConfig(preset = {}) {
+  return {
+    stretchX: 1,
+    stretchY: 1,
+    label: preset.title ?? 'Object',
+    extraNodes: 0,
+    nodeSpacing: 0.85,
+    nodeDirection: 'right',
+    nodeShape: 'rounded',
+    nodeLabels: 'A, B, C',
+    connectNodes: true,
+    calloutPointerX: 0.8,
+    calloutPointerY: -0.5,
+  }
+}
+
+function getLibraryConfig(element, preset = getLibraryPreset(element)) {
+  const config = { ...defaultLibraryConfig(preset), ...(element.config ?? {}) }
+  return {
+    ...config,
+    stretchX: Math.max(0.35, Math.min(4, Number(config.stretchX) || 1)),
+    stretchY: Math.max(0.35, Math.min(4, Number(config.stretchY) || 1)),
+    extraNodes: Math.max(0, Math.min(8, Math.round(Number(config.extraNodes) || 0))),
+    nodeSpacing: Math.max(0.25, Math.min(3, Number(config.nodeSpacing) || 0.85)),
+    calloutPointerX: Number(config.calloutPointerX) || 0,
+    calloutPointerY: Number(config.calloutPointerY) || 0,
+  }
+}
+
+function splitNodeLabels(value, count) {
+  const labels = `${value ?? ''}`
+    .split(/[,;\n]/)
+    .map((label) => label.trim())
+    .filter(Boolean)
+
+  return Array.from({ length: count }, (_, index) => labels[index] ?? `${index + 1}`)
+}
+
+function libraryMetrics(element) {
+  const preset = getLibraryPreset(element)
+  const config = getLibraryConfig(element, preset)
+  const baseWidth = Math.max(0.4, preset.width * config.stretchX)
+  const baseHeight = Math.max(0.4, preset.height * config.stretchY)
+  const nodeSpan = config.extraNodes * 0.9 + Math.max(0, config.extraNodes - 1) * config.nodeSpacing
+  const gap = config.extraNodes ? config.nodeSpacing : 0
+  const extraSpan = config.extraNodes ? nodeSpan + gap : 0
+  const direction = config.nodeDirection
+
+  return {
+    preset,
+    config,
+    scale: Number(element.scale) || 1,
+    baseWidth,
+    baseHeight,
+    leftExtra: direction === 'left' ? extraSpan : 0,
+    rightExtra: direction === 'right' ? extraSpan : 0,
+    upExtra: direction === 'up' ? extraSpan : 0,
+    downExtra: direction === 'down' ? extraSpan : 0,
+  }
 }
 
 function splitList(value) {
@@ -1053,13 +1123,13 @@ function buildDiagramTikz(element, ensureColor) {
 }
 
 function libraryBounds(element) {
-  const preset = getLibraryPreset(element)
-  const scale = Number(element.scale) || 1
+  const metrics = libraryMetrics(element)
+  const scale = metrics.scale
   return {
-    minX: element.origin.x,
-    maxX: element.origin.x + preset.width * scale,
-    minY: element.origin.y - preset.height * scale,
-    maxY: element.origin.y,
+    minX: element.origin.x - metrics.leftExtra * scale,
+    maxX: element.origin.x + (metrics.baseWidth + metrics.rightExtra) * scale,
+    minY: element.origin.y - (metrics.baseHeight + metrics.downExtra) * scale,
+    maxY: element.origin.y + metrics.upExtra * scale,
   }
 }
 
@@ -1122,8 +1192,123 @@ function elementIntersectsEraser(element, point, radius = 0.24) {
   return false
 }
 
+function tikzNodeShapeOptions(shape) {
+  const shapes = {
+    circle: 'circle, minimum size=0.62cm',
+    diamond: 'diamond, aspect=1.7, inner sep=1pt',
+    ellipse: 'ellipse, minimum width=0.9cm',
+    rectangle: 'rectangle, minimum width=0.9cm, minimum height=0.45cm',
+    rounded: 'rectangle, rounded corners=2pt, minimum width=0.9cm, minimum height=0.45cm',
+  }
+
+  return shapes[shape] ?? shapes.rounded
+}
+
+function buildConfiguredLibrarySnippet(preset, element) {
+  const config = getLibraryConfig(element, preset)
+  const label = formatTikzNodeText(config.label || element.title)
+  const width = formatNumber(Math.max(0.7, 1.35 * config.stretchX))
+  const height = formatNumber(Math.max(0.35, 0.62 * config.stretchY))
+
+  if (preset.id === 'shape-callout') {
+    return [
+      `\\node[rectangle callout, callout relative pointer={(${formatNumber(config.calloutPointerX)},${formatNumber(
+        config.calloutPointerY,
+      )})}, draw=__COLOR__, __FILL_STYLE__, line width=0.6pt, minimum width=${width}cm, minimum height=${height}cm, align=center] (callout) at (0,0) {${label}};`,
+    ]
+  }
+
+  const simpleNodeShapes = {
+    'shape-process': 'rectangle',
+    'shape-rounded-module': 'rounded',
+    'shape-ellipse-node': 'ellipse',
+    'shape-cloud': 'cloud, cloud puffs=11',
+    'math-equation-node': 'rectangle',
+    'math-theorem-box': 'rectangle, align=left',
+    'annotation-callout-arrow': 'rectangle, rounded corners=2pt, align=left',
+  }
+  const shape = simpleNodeShapes[preset.id]
+  if (!shape) return null
+
+  const nodeName = preset.id === 'annotation-callout-arrow' ? 'note' : 'obj'
+  const lines = [
+    `\\node[${shape}, draw=__COLOR__, __FILL_STYLE__, line width=0.6pt, minimum width=${width}cm, minimum height=${height}cm, inner sep=4pt] (${nodeName}) at (0,0) {${label}};`,
+  ]
+
+  if (preset.id === 'annotation-callout-arrow') {
+    lines.push(`\\draw[-{Stealth}, draw=__COLOR__, line width=0.55pt] (${nodeName}.east) -- ++(${formatNumber(config.calloutPointerX)},${formatNumber(config.calloutPointerY)});`)
+  }
+
+  return lines
+}
+
+function extraNodeLocalPoint(metrics, index) {
+  const { config, baseWidth, baseHeight } = metrics
+  const step = config.nodeSpacing + 0.9
+  const offset = config.nodeSpacing + index * step
+  const centerX = baseWidth / 2
+  const centerY = -baseHeight / 2
+
+  if (config.nodeDirection === 'left') return { x: -offset, y: centerY }
+  if (config.nodeDirection === 'up') return { x: centerX, y: offset }
+  if (config.nodeDirection === 'down') return { x: centerX, y: -baseHeight - offset }
+  return { x: baseWidth + offset, y: centerY }
+}
+
+function buildExtraNodeTikz(element, color, fill, scopeStretch = { x: 1, y: 1 }) {
+  const metrics = libraryMetrics(element)
+  const { config } = metrics
+  if (!config.extraNodes) return []
+
+  const fillStyle =
+    fill === 'none'
+      ? 'fill=white'
+      : `fill=${fill}, fill opacity=${formatNumber(element.fillOpacity ?? 0.18)}, text opacity=1`
+  const labels = splitNodeLabels(config.nodeLabels, config.extraNodes)
+  const prefix = `extra${element.id.replace(/[^A-Za-z0-9]/g, '').slice(0, 8)}`
+  const shapeOptions = tikzNodeShapeOptions(config.nodeShape)
+  const lines = []
+
+  labels.forEach((label, index) => {
+    const point = extraNodeLocalPoint(metrics, index)
+    const scopedPoint = {
+      x: point.x / scopeStretch.x,
+      y: point.y / scopeStretch.y,
+    }
+    lines.push(
+      `\\node[${shapeOptions}, draw=${color}, ${fillStyle}, line width=0.55pt, align=center] (${prefix}${index}) at (${formatNumber(
+        scopedPoint.x,
+      )},${formatNumber(scopedPoint.y)}) {${formatTikzNodeText(label)}};`,
+    )
+
+    if (!config.connectNodes) return
+    if (index === 0) {
+      const anchor =
+        config.nodeDirection === 'left'
+          ? `(0,${formatNumber((-metrics.baseHeight / 2) / scopeStretch.y)})`
+          : config.nodeDirection === 'up'
+            ? `(${formatNumber((metrics.baseWidth / 2) / scopeStretch.x)},0)`
+            : config.nodeDirection === 'down'
+              ? `(${formatNumber((metrics.baseWidth / 2) / scopeStretch.x)},${formatNumber(-metrics.baseHeight / scopeStretch.y)})`
+              : `(${formatNumber(metrics.baseWidth / scopeStretch.x)},${formatNumber((-metrics.baseHeight / 2) / scopeStretch.y)})`
+      lines.push(`\\draw[-{Stealth}, draw=${color}!65, line width=0.45pt] ${anchor} -- (${prefix}${index});`)
+      return
+    }
+
+    lines.push(`\\draw[-{Stealth}, draw=${color}!65, line width=0.45pt] (${prefix}${index - 1}) -- (${prefix}${index});`)
+  })
+
+  return lines
+}
+
 function replaceLibraryTokens(line, element, color, fill) {
+  const preset = getLibraryPreset(element)
+  const config = getLibraryConfig(element, preset)
   const fillColor = fill === 'none' ? color : fill
+  const fillStyle =
+    fill === 'none'
+      ? 'fill=white'
+      : `fill=${fill}, fill opacity=${formatNumber(element.fillOpacity ?? 0.18)}, text opacity=1`
   const fillAwareLine =
     fill === 'none'
       ? line
@@ -1133,28 +1318,42 @@ function replaceLibraryTokens(line, element, color, fill) {
     .replaceAll('__COLOR__', color)
     .replaceAll('__FILL__', fillColor)
     .replaceAll('__FILL_OPACITY__', formatNumber(element.fillOpacity ?? 0.18))
+    .replaceAll('__FILL_STYLE__', fillStyle)
     .replaceAll('__OPTIONS__', element.tikzOptions?.trim() ?? '')
+    .replaceAll('__LABEL__', formatTikzNodeText(config.label))
+    .replaceAll('__OBJECT_WIDTH__', formatNumber(config.stretchX))
+    .replaceAll('__OBJECT_HEIGHT__', formatNumber(config.stretchY))
+    .replaceAll('__NODE_COUNT__', `${config.extraNodes}`)
+    .replaceAll('__NODE_SPACING__', formatNumber(config.nodeSpacing))
     .replaceAll('__TITLE__', formatTikzNodeText(element.title))
     .replaceAll('__GROUP__', formatTikzNodeText(element.group ?? 'TikZ'))
 }
 
 function buildLibraryTikz(element, ensureColor) {
   const preset = getLibraryPreset(element)
+  const config = getLibraryConfig(element, preset)
   const color = ensureColor(element.stroke)
   const fill = ensureColor(element.fill)
-  const body = preset.snippet.map((line) => replaceLibraryTokens(line, element, color, fill))
+  const configuredSnippet = buildConfiguredLibrarySnippet(preset, element)
+  const body = (configuredSnippet ?? preset.snippet).map((line) => replaceLibraryTokens(line, element, color, fill))
+  const scopeStretch = configuredSnippet ? { x: 1, y: 1 } : { x: config.stretchX, y: config.stretchY }
+  const extraNodes = buildExtraNodeTikz(element, color, fill, scopeStretch)
 
   if (preset.standalone) {
     return [
       `% Standalone ${preset.group}: ${element.title}`,
       `% Preview origin in editor: (${formatNumber(element.origin.x)}, ${formatNumber(element.origin.y)})`,
       ...body,
+      ...extraNodes,
     ]
   }
 
   const scale = Number(element.scale) || 1
   const scopeOptions = [`shift={(${formatNumber(element.origin.x)},${formatNumber(element.origin.y)})}`]
   if (scale !== 1) scopeOptions.push(`scale=${formatNumber(scale)}`)
+  if (!configuredSnippet && config.stretchX !== 1) scopeOptions.push(`xscale=${formatNumber(config.stretchX)}`)
+  if (!configuredSnippet && config.stretchY !== 1) scopeOptions.push(`yscale=${formatNumber(config.stretchY)}`)
+  if (!configuredSnippet && (config.stretchX !== 1 || config.stretchY !== 1)) scopeOptions.push('transform shape')
   if (fill !== 'none') {
     scopeOptions.push(
       `every node/.append style={fill=${fill}, fill opacity=${formatNumber(element.fillOpacity ?? 0.18)}, text opacity=1}`,
@@ -1166,6 +1365,7 @@ function buildLibraryTikz(element, ensureColor) {
     `  % ${preset.group}: ${element.title}`,
     `  \\begin{scope}[${scopeOptions.join(', ')}]`,
     ...body.map((line) => `    ${line}`),
+    ...extraNodes.map((line) => `    ${line}`),
     '  \\end{scope}',
   ]
 }
@@ -1486,6 +1686,7 @@ function App() {
   })
 
   const selectedElement = elements.find((element) => element.id === selectedId)
+  const selectedLibraryConfig = selectedElement?.type === 'library' ? getLibraryConfig(selectedElement) : null
   const activeLabelText = selectedElement?.type === 'text' ? selectedElement.text : settings.labelText
   const tikzCode = useMemo(
     () =>
@@ -1578,6 +1779,13 @@ function App() {
 
   const findEraserHits = (point, sourceElements = elements) =>
     sourceElements.filter((element) => elementIntersectsEraser(element, point)).map((element) => element.id)
+
+  const findSelectableHits = (point, sourceElements = elements) =>
+    sourceElements
+      .map((element, index) => ({ element, index }))
+      .filter(({ element }) => elementIntersectsEraser(element, point, 0.34))
+      .sort((a, b) => b.index - a.index)
+      .map(({ element }) => element)
 
   const beginErase = (event, forcedElement = null) => {
     const point = getWorldPoint(event)
@@ -1732,17 +1940,24 @@ function App() {
       return
     }
 
-    setSelectedId(element.id)
+    const point = getWorldPoint(event)
+    const hitElements = tool === 'select' ? findSelectableHits(point) : [element]
+    const selectedHitIndex = hitElements.findIndex((hit) => hit.id === selectedId)
+    const targetElement =
+      tool === 'select' && hitElements.length > 1 && selectedHitIndex >= 0
+        ? hitElements[(selectedHitIndex + 1) % hitElements.length]
+        : hitElements[0] ?? element
+
+    setSelectedId(targetElement.id)
 
     if (tool !== 'select') return
 
-    const point = getWorldPoint(event)
     svgRef.current?.setPointerCapture?.(event.pointerId)
     setInteraction({
       mode: 'move',
-      id: element.id,
+      id: targetElement.id,
       origin: point,
-      original: element,
+      original: targetElement,
       snapshot: elements,
       moved: false,
     })
@@ -1753,6 +1968,11 @@ function App() {
     setElements((current) =>
       current.map((element) => (element.id === selectedElement.id ? { ...element, ...patch } : element)),
     )
+  }
+
+  const updateSelectedLibraryConfig = (patch) => {
+    if (selectedElement?.type !== 'library') return
+    updateSelected({ config: { ...getLibraryConfig(selectedElement), ...patch } })
   }
 
   const insertLatexSymbol = (symbol) => {
@@ -2279,12 +2499,19 @@ function App() {
   }
 
   const renderLibraryShape = (element, halo = false) => {
-    const preset = getLibraryPreset(element)
+    const metrics = libraryMetrics(element)
+    const { preset, config } = metrics
     const bounds = libraryBounds(element)
     const topLeft = worldToScreen({ x: bounds.minX, y: bounds.maxY })
     const bottomRight = worldToScreen({ x: bounds.maxX, y: bounds.minY })
     const width = bottomRight.x - topLeft.x
     const height = bottomRight.y - topLeft.y
+    const totalWidth = metrics.leftExtra + metrics.baseWidth + metrics.rightExtra
+    const totalHeight = metrics.upExtra + metrics.baseHeight + metrics.downExtra
+    const baseLeft = topLeft.x + (metrics.leftExtra / totalWidth) * width
+    const baseTop = topLeft.y + (metrics.upExtra / totalHeight) * height
+    const baseWidth = (metrics.baseWidth / totalWidth) * width
+    const baseHeight = (metrics.baseHeight / totalHeight) * height
 
     if (halo) {
       return (
@@ -2304,8 +2531,12 @@ function App() {
       )
     }
 
-    const sx = (x) => topLeft.x + x * width
-    const sy = (y) => topLeft.y + y * height
+    const sx = (x) => baseLeft + x * baseWidth
+    const sy = (y) => baseTop + y * baseHeight
+    const localToScreen = (point) => ({
+      x: baseLeft + (point.x / metrics.baseWidth) * baseWidth,
+      y: baseTop + (-point.y / metrics.baseHeight) * baseHeight,
+    })
     const previewStroke = element.stroke
     const previewFill = element.fill && element.fill !== 'none' ? element.fill : '#ffffff'
     const previewFillOpacity = element.fill && element.fill !== 'none' ? element.fillOpacity ?? 0.18 : 1
@@ -2352,7 +2583,7 @@ function App() {
       if (preset.preview === 'inductor') {
         const coils = Array.from({ length: 4 }, (_, index) => {
           const x = 0.32 + index * 0.09
-          return <path key={index} {...shapeCommon} d={`M ${sx(x)} ${sy(0.5)} q ${width * 0.045} ${-height * 0.28} ${width * 0.09} 0`} />
+          return <path key={index} {...shapeCommon} d={`M ${sx(x)} ${sy(0.5)} q ${baseWidth * 0.045} ${-baseHeight * 0.28} ${baseWidth * 0.09} 0`} />
         })
         return (
           <g>
@@ -2409,7 +2640,7 @@ function App() {
       if (preset.preview === 'gate') {
         return (
           <g>
-            <rect {...filledShapeCommon} x={sx(0.32)} y={sy(0.28)} width={width * 0.34} height={height * 0.44} />
+            <rect {...filledShapeCommon} x={sx(0.32)} y={sy(0.28)} width={baseWidth * 0.34} height={baseHeight * 0.44} />
             <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.4)} x2={sx(0.32)} y2={sy(0.4)} />
             <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.6)} x2={sx(0.32)} y2={sy(0.6)} />
             <line {...shapeCommon} x1={sx(0.66)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
@@ -2440,8 +2671,8 @@ function App() {
                   key={`${row}-${col}`}
                   x={sx(0.18 + col * 0.2)}
                   y={sy(0.34 + row * 0.16)}
-                  width={width * 0.13}
-                  height={height * 0.11}
+                  width={baseWidth * 0.13}
+                  height={baseHeight * 0.11}
                   rx="3"
                   fill={previewFill}
                   fillOpacity={previewFillOpacity}
@@ -2495,8 +2726,8 @@ function App() {
       if (preset.preview === 'cube') {
         return (
           <g>
-            <rect {...filledShapeCommon} x={sx(0.28)} y={sy(0.38)} width={width * 0.28} height={height * 0.24} />
-            <rect {...filledShapeCommon} x={sx(0.42)} y={sy(0.24)} width={width * 0.28} height={height * 0.24} opacity="0.75" />
+            <rect {...filledShapeCommon} x={sx(0.28)} y={sy(0.38)} width={baseWidth * 0.28} height={baseHeight * 0.24} />
+            <rect {...filledShapeCommon} x={sx(0.42)} y={sy(0.24)} width={baseWidth * 0.28} height={baseHeight * 0.24} opacity="0.75" />
             <line {...shapeCommon} x1={sx(0.28)} y1={sy(0.38)} x2={sx(0.42)} y2={sy(0.24)} />
             <line {...shapeCommon} x1={sx(0.56)} y1={sy(0.38)} x2={sx(0.7)} y2={sy(0.24)} />
             <line {...shapeCommon} x1={sx(0.56)} y1={sy(0.62)} x2={sx(0.7)} y2={sy(0.48)} />
@@ -2506,16 +2737,115 @@ function App() {
 
       return (
         <g>
-          <rect {...filledShapeCommon} x={sx(0.18)} y={sy(0.36)} width={width * 0.18} height={height * 0.18} rx="4" />
-          <rect {...filledShapeCommon} x={sx(0.44)} y={sy(0.36)} width={width * 0.18} height={height * 0.18} rx="4" />
-          <rect {...filledShapeCommon} x={sx(0.7)} y={sy(0.36)} width={width * 0.18} height={height * 0.18} rx="4" />
+          <rect {...filledShapeCommon} x={sx(0.18)} y={sy(0.36)} width={baseWidth * 0.18} height={baseHeight * 0.18} rx="4" />
+          <rect {...filledShapeCommon} x={sx(0.44)} y={sy(0.36)} width={baseWidth * 0.18} height={baseHeight * 0.18} rx="4" />
+          <rect {...filledShapeCommon} x={sx(0.7)} y={sy(0.36)} width={baseWidth * 0.18} height={baseHeight * 0.18} rx="4" />
           <line {...shapeCommon} x1={sx(0.36)} y1={sy(0.45)} x2={sx(0.44)} y2={sy(0.45)} />
           <line {...shapeCommon} x1={sx(0.62)} y1={sy(0.45)} x2={sx(0.7)} y2={sy(0.45)} />
         </g>
       )
     }
 
-    return <g>{renderPreview()}</g>
+    const renderExtraNodePreview = () => {
+      if (!config.extraNodes) return null
+
+      const labels = splitNodeLabels(config.nodeLabels, config.extraNodes)
+      const nodeWidth = Math.max(30, Math.min(74, baseWidth * 0.23))
+      const nodeHeight = Math.max(22, Math.min(42, baseHeight * 0.25))
+      const anchor =
+        config.nodeDirection === 'left'
+          ? localToScreen({ x: 0, y: -metrics.baseHeight / 2 })
+          : config.nodeDirection === 'up'
+            ? localToScreen({ x: metrics.baseWidth / 2, y: 0 })
+            : config.nodeDirection === 'down'
+              ? localToScreen({ x: metrics.baseWidth / 2, y: -metrics.baseHeight })
+              : localToScreen({ x: metrics.baseWidth, y: -metrics.baseHeight / 2 })
+      const nodes = labels.map((label, index) => ({
+        label,
+        point: localToScreen(extraNodeLocalPoint(metrics, index)),
+      }))
+
+      const renderNodeBody = (node, index) => {
+        const commonNodeProps = {
+          fill: previewFill,
+          fillOpacity: previewFillOpacity,
+          stroke: previewStroke,
+          strokeWidth: 1,
+          vectorEffect: 'non-scaling-stroke',
+        }
+
+        if (config.nodeShape === 'circle') {
+          return <circle key={`node-${index}`} {...commonNodeProps} cx={node.point.x} cy={node.point.y} r={Math.min(nodeWidth, nodeHeight) / 2} />
+        }
+
+        if (config.nodeShape === 'ellipse') {
+          return <ellipse key={`node-${index}`} {...commonNodeProps} cx={node.point.x} cy={node.point.y} rx={nodeWidth / 2} ry={nodeHeight / 2} />
+        }
+
+        if (config.nodeShape === 'diamond') {
+          return (
+            <path
+              key={`node-${index}`}
+              {...commonNodeProps}
+              d={`M ${node.point.x} ${node.point.y - nodeHeight / 2} L ${node.point.x + nodeWidth / 2} ${node.point.y} L ${node.point.x} ${node.point.y + nodeHeight / 2} L ${node.point.x - nodeWidth / 2} ${node.point.y} Z`}
+            />
+          )
+        }
+
+        return (
+          <rect
+            key={`node-${index}`}
+            {...commonNodeProps}
+            x={node.point.x - nodeWidth / 2}
+            y={node.point.y - nodeHeight / 2}
+            width={nodeWidth}
+            height={nodeHeight}
+            rx={config.nodeShape === 'rounded' ? 5 : 0}
+          />
+        )
+      }
+
+      return (
+        <g>
+          {config.connectNodes &&
+            nodes.map((node, index) => {
+              const from = index === 0 ? anchor : nodes[index - 1].point
+              return (
+                <line
+                  key={`link-${index}`}
+                  {...shapeCommon}
+                  x1={from.x}
+                  y1={from.y}
+                  x2={node.point.x}
+                  y2={node.point.y}
+                  opacity="0.55"
+                />
+              )
+            })}
+          {nodes.map(renderNodeBody)}
+          {nodes.map((node, index) => (
+            <text
+              key={`label-${index}`}
+              x={node.point.x}
+              y={node.point.y + 4}
+              fill="#111111"
+              fontSize="11"
+              fontFamily='"Times New Roman", Georgia, serif'
+              textAnchor="middle"
+            >
+              {node.label}
+            </text>
+          ))}
+        </g>
+      )
+    }
+
+    return (
+      <g>
+        {renderPreview()}
+        {renderExtraNodePreview()}
+      </g>
+    )
   }
 
   const renderArrowHead = (tip, tail, style, stroke, halo = false) => {
@@ -2556,6 +2886,108 @@ function App() {
         opacity={halo ? 0.3 : 1}
       />
     )
+  }
+
+  const renderElementHitTarget = (element) => {
+    const hitProps = {
+      className: 'canvas-hit-target',
+      fill: 'transparent',
+      stroke: 'transparent',
+      pointerEvents: 'all',
+      vectorEffect: 'non-scaling-stroke',
+    }
+
+    if (element.type === 'line' || element.type === 'arrow') {
+      const start = worldToScreen(element.start)
+      const end = worldToScreen(element.end)
+      return <line {...hitProps} x1={start.x} y1={start.y} x2={end.x} y2={end.y} strokeWidth="18" />
+    }
+
+    if (element.type === 'path') {
+      const points = element.points.map(worldToScreen).map((point) => `${point.x},${point.y}`).join(' ')
+      return <polyline {...hitProps} points={points} strokeWidth="18" />
+    }
+
+    if (element.type === 'function') {
+      const segments = splitDrawableSegments(
+        sampleFunction(element).map((point) =>
+          point ? { x: point.x, y: point.y + (Number(element.yOffset) || 0) } : null,
+        ),
+      )
+      return (
+        <g>
+          {segments.map((segment, index) => (
+            <polyline
+              key={`${element.id}-hit-${index}`}
+              {...hitProps}
+              points={segment.map(worldToScreen).map((point) => `${point.x},${point.y}`).join(' ')}
+              strokeWidth="18"
+            />
+          ))}
+        </g>
+      )
+    }
+
+    if (element.type === 'rect') {
+      const start = worldToScreen(element.start)
+      const end = worldToScreen(element.end)
+      return (
+        <rect
+          {...hitProps}
+          x={Math.min(start.x, end.x) - 8}
+          y={Math.min(start.y, end.y) - 8}
+          width={Math.abs(end.x - start.x) + 16}
+          height={Math.abs(end.y - start.y) + 16}
+        />
+      )
+    }
+
+    if (element.type === 'ellipse') {
+      const center = worldToScreen({
+        x: (element.start.x + element.end.x) / 2,
+        y: (element.start.y + element.end.y) / 2,
+      })
+      return (
+        <ellipse
+          {...hitProps}
+          cx={center.x}
+          cy={center.y}
+          rx={(Math.abs(element.end.x - element.start.x) * CANVAS.scale) / 2 + 8}
+          ry={(Math.abs(element.end.y - element.start.y) * CANVAS.scale) / 2 + 8}
+        />
+      )
+    }
+
+    if (element.type === 'text') {
+      const position = worldToScreen(element.position)
+      const box = labelBoxForText(element.text)
+      return (
+        <rect
+          {...hitProps}
+          x={position.x - box.width / 2 - 8}
+          y={position.y - box.height / 2 - 8}
+          width={box.width + 16}
+          height={box.height + 16}
+        />
+      )
+    }
+
+    if (element.type === 'diagram' || element.type === 'library') {
+      const bounds = element.type === 'diagram' ? diagramBounds(element) : libraryBounds(element)
+      const topLeft = worldToScreen({ x: bounds.minX, y: bounds.maxY })
+      const bottomRight = worldToScreen({ x: bounds.maxX, y: bounds.minY })
+      return (
+        <rect
+          {...hitProps}
+          x={topLeft.x - 10}
+          y={topLeft.y - 10}
+          width={bottomRight.x - topLeft.x + 20}
+          height={bottomRight.y - topLeft.y + 20}
+        />
+      )
+    }
+
+    return null
   }
 
   const renderElementShape = (element, halo = false) => {
@@ -2847,6 +3279,7 @@ function App() {
                     className={`canvas-element ${selectedId === element.id ? 'is-selected' : ''}`}
                     onPointerDown={(event) => handleElementPointerDown(event, element)}
                   >
+                    {renderElementHitTarget(element)}
                     {selectedId === element.id && renderElementShape(element, true)}
                     {renderElementShape(element)}
                   </g>
@@ -3421,6 +3854,131 @@ function App() {
                       onChange={(event) => updateSelected({ scale: Number(event.target.value) })}
                     />
                   </label>
+                  {selectedLibraryConfig && (
+                    <div className="object-config">
+                      <div className="field-pair">
+                        <label className="field">
+                          <span>Ancho</span>
+                          <input
+                            type="number"
+                            min="0.35"
+                            max="4"
+                            step="0.05"
+                            value={selectedLibraryConfig.stretchX}
+                            onChange={(event) => updateSelectedLibraryConfig({ stretchX: Number(event.target.value) })}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Alto</span>
+                          <input
+                            type="number"
+                            min="0.35"
+                            max="4"
+                            step="0.05"
+                            value={selectedLibraryConfig.stretchY}
+                            onChange={(event) => updateSelectedLibraryConfig({ stretchY: Number(event.target.value) })}
+                          />
+                        </label>
+                      </div>
+                      <label className="field">
+                        <span>Etiqueta interna</span>
+                        <input
+                          type="text"
+                          value={selectedLibraryConfig.label}
+                          onChange={(event) => updateSelectedLibraryConfig({ label: event.target.value })}
+                        />
+                      </label>
+                      <div className="field-pair">
+                        <label className="field">
+                          <span>Nodos extra</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="8"
+                            step="1"
+                            value={selectedLibraryConfig.extraNodes}
+                            onChange={(event) => updateSelectedLibraryConfig({ extraNodes: Number(event.target.value) })}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Separacion</span>
+                          <input
+                            type="number"
+                            min="0.25"
+                            max="3"
+                            step="0.05"
+                            value={selectedLibraryConfig.nodeSpacing}
+                            onChange={(event) => updateSelectedLibraryConfig({ nodeSpacing: Number(event.target.value) })}
+                          />
+                        </label>
+                      </div>
+                      <div className="field-pair">
+                        <label className="field">
+                          <span>Direccion</span>
+                          <select
+                            value={selectedLibraryConfig.nodeDirection}
+                            onChange={(event) => updateSelectedLibraryConfig({ nodeDirection: event.target.value })}
+                          >
+                            <option value="right">Derecha</option>
+                            <option value="left">Izquierda</option>
+                            <option value="down">Abajo</option>
+                            <option value="up">Arriba</option>
+                          </select>
+                        </label>
+                        <label className="field">
+                          <span>Forma nodo</span>
+                          <select
+                            value={selectedLibraryConfig.nodeShape}
+                            onChange={(event) => updateSelectedLibraryConfig({ nodeShape: event.target.value })}
+                          >
+                            {libraryNodeShapeOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <label className="field">
+                        <span>Textos nodos</span>
+                        <input
+                          type="text"
+                          value={selectedLibraryConfig.nodeLabels}
+                          onChange={(event) => updateSelectedLibraryConfig({ nodeLabels: event.target.value })}
+                        />
+                      </label>
+                      <label className="toggle">
+                        <input
+                          type="checkbox"
+                          checked={selectedLibraryConfig.connectNodes}
+                          onChange={(event) => updateSelectedLibraryConfig({ connectNodes: event.target.checked })}
+                        />
+                        <span>Conectar nodos extra</span>
+                      </label>
+                      {getLibraryPreset(selectedElement).id.includes('callout') && (
+                        <div className="field-pair">
+                          <label className="field">
+                            <span>Puntero x</span>
+                            <input
+                              type="number"
+                              step="0.05"
+                              value={selectedLibraryConfig.calloutPointerX}
+                              onChange={(event) => updateSelectedLibraryConfig({ calloutPointerX: Number(event.target.value) })}
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Puntero y</span>
+                            <input
+                              type="number"
+                              step="0.05"
+                              value={selectedLibraryConfig.calloutPointerY}
+                              onChange={(event) => updateSelectedLibraryConfig({ calloutPointerY: Number(event.target.value) })}
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
               {selectedElement.type !== 'function' && (
