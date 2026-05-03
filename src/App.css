@@ -83,9 +83,11 @@
 .chip-button:focus-visible,
 .preset-button:focus-visible,
 .library-button:focus-visible,
+.symbol-button:focus-visible,
 .swatch:focus-visible,
 .icon-danger:focus-visible,
 input:focus-visible,
+select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid #111111;
   outline-offset: 2px;
@@ -128,6 +130,13 @@ textarea:focus-visible {
   color: #5d6675;
   font-size: 13px;
   line-height: 1.35;
+}
+
+.byline {
+  display: inline-block;
+  margin-left: 10px;
+  color: #111111;
+  font-weight: 650;
 }
 
 .topbar-actions,
@@ -292,6 +301,7 @@ textarea:focus-visible {
 }
 
 .field input,
+.field select,
 .code-output {
   min-width: 0;
   border: 1px solid #c7ccd6;
@@ -302,7 +312,8 @@ textarea:focus-visible {
   box-sizing: border-box;
 }
 
-.field input {
+.field input,
+.field select {
   height: 34px;
   padding: 0 10px;
 }
@@ -490,6 +501,75 @@ textarea:focus-visible {
   color: #111111;
   font: 11px/1.45 var(--mono);
   resize: vertical;
+}
+
+.repo-link {
+  text-decoration: none;
+}
+
+.symbol-section {
+  max-height: 420px;
+}
+
+.symbol-picker {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+}
+
+.symbol-count {
+  color: #5d6675;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.symbol-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.symbol-button {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 6px;
+  border: 1px solid #d8dce4;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #111111;
+  cursor: pointer;
+}
+
+.symbol-button:hover {
+  border-color: #111111;
+  background: #f5f6f8;
+}
+
+.symbol-button span,
+.symbol-button small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.symbol-button span {
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.symbol-button small {
+  color: #5d6675;
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.1;
 }
 
 .ghost-button,

@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import {
+  ArrowRight,
   BrainCircuit,
   CalendarDays,
   Circle,
@@ -9,6 +10,7 @@ import {
   Download,
   Eraser,
   Grid3X3,
+  GitBranch,
   Layers,
   Minus,
   MousePointer2,
@@ -23,6 +25,7 @@ import {
   Workflow,
 } from 'lucide-react'
 import './App.css'
+import { latexSymbolGroups } from './latexSymbols'
 import { libraryPresets } from './tikzLibraryPresets'
 import { libraryPaletteItems } from './tikzPaletteItems'
 
@@ -42,10 +45,53 @@ const strokeColors = [
   { label: 'Muted red', value: '#8c2f39' },
 ]
 
+const arrowStyleOptions = [
+  { value: 'stealth', label: 'Stealth', tikz: '-{Stealth}' },
+  { value: 'latex', label: 'LaTeX', tikz: '-{Latex}' },
+  { value: 'triangle', label: 'Triangle', tikz: '-{Triangle}' },
+  { value: 'plain', label: 'Simple', tikz: '->' },
+  { value: 'both', label: 'Doble', tikz: '{Stealth}-{Stealth}' },
+  { value: 'none', label: 'Sin punta', tikz: '-' },
+]
+
+const latexSymbols = latexSymbolGroups.flatMap((group) =>
+  group.symbols.map((symbol) => ({
+    ...symbol,
+    group: group.name,
+    haystack: `${group.name} ${symbol.label} ${symbol.value} ${symbol.aliases ?? ''}`.toLowerCase(),
+  })),
+)
+
+const latexPreviewMap = new Map(latexSymbols.filter((symbol) => !symbol.accent).map((symbol) => [symbol.value, symbol.label]))
+
+const latexCommandPreviewMap = new Map(
+  latexSymbols
+    .filter((symbol) => !symbol.accent && /^\\[A-Za-z]+$/.test(symbol.value))
+    .map((symbol) => [symbol.value, symbol.label]),
+)
+
+const accentPreviewMarks = {
+  hat: '\u0302',
+  widehat: '\u0302',
+  tilde: '\u0303',
+  widetilde: '\u0303',
+  bar: '\u0304',
+  overline: '\u0305',
+  vec: '\u20d7',
+  dot: '\u0307',
+  ddot: '\u0308',
+  breve: '\u0306',
+  check: '\u030c',
+  acute: '\u0301',
+  grave: '\u0300',
+  underline: '\u0332',
+}
+
 const toolMeta = [
   { id: 'select', label: 'Seleccionar', icon: MousePointer2 },
   { id: 'pen', label: 'Trazo libre', icon: PenLine },
   { id: 'line', label: 'Linea', icon: Minus },
+  { id: 'arrow', label: 'Flecha', icon: ArrowRight },
   { id: 'rect', label: 'Rectangulo', icon: Square },
   { id: 'ellipse', label: 'Circulo / elipse', icon: Circle },
   { id: 'function', label: 'Funcion', icon: Sigma },
@@ -148,6 +194,31 @@ function makeLibraryElement(preset, origin = preset.origin) {
     width: preset.defaultStrokeWidth ?? 0.75,
     dashed: false,
   }
+}
+
+function tikzArrowStyle(value) {
+  return arrowStyleOptions.find((option) => option.value === value)?.tikz ?? '-{Stealth}'
+}
+
+function mathContent(text) {
+  const trimmed = text.trim()
+  const mathMatch = trimmed.match(/^\$(.*)\$$/)
+  if (mathMatch) return mathMatch[1].trim()
+  if (!trimmed || trimmed === 'Etiqueta') return ''
+  return trimmed
+}
+
+function appendLatexSymbol(text, symbol) {
+  if (symbol.accent) {
+    const base = mathContent(text) || 'x'
+    return `$${symbol.value.replace('__BASE__', base)}$`
+  }
+
+  const value = symbol.value ?? symbol
+  const current = text.trim()
+  if (!current || current === 'Etiqueta') return `$${value}$`
+  if (/^\$.*\$$/.test(current)) return current.replace(/\$$/, ` ${value}$`)
+  return `${current} $${value}$`
 }
 
 function getLibraryPreset(element) {
@@ -418,7 +489,7 @@ function classifyPath(element) {
 function moveElement(element, deltaX, deltaY) {
   const movePoint = (point) => ({ x: point.x + deltaX, y: point.y + deltaY })
 
-  if (element.type === 'line' || element.type === 'rect' || element.type === 'ellipse') {
+  if (element.type === 'line' || element.type === 'arrow' || element.type === 'rect' || element.type === 'ellipse') {
     return {
       ...element,
       start: movePoint(element.start),
@@ -462,6 +533,7 @@ function moveElement(element, deltaX, deltaY) {
 function elementLabel(element) {
   const labels = {
     line: 'Linea',
+    arrow: 'Flecha',
     rect: 'Rectangulo',
     ellipse: 'Elipse',
     path: 'Trazo libre',
@@ -508,9 +580,25 @@ function safeLatexLabel(label) {
     .replace(/[^A-Za-z0-9:_.-]/g, '')
 }
 
+function previewLatexContent(content) {
+  const trimmed = content.trim()
+  const exact = latexPreviewMap.get(trimmed)
+  if (exact) return exact
+
+  const accentMatch = trimmed.match(/^\\([A-Za-z]+)\{(.+)\}$/)
+  if (accentMatch && accentPreviewMarks[accentMatch[1]]) {
+    return `${previewLatexContent(accentMatch[2])}${accentPreviewMarks[accentMatch[1]]}`
+  }
+
+  return trimmed
+    .replace(/\\mathbb\{([A-Z])\}/g, (_, letter) => latexPreviewMap.get(`\\mathbb{${letter}}`) ?? letter)
+    .replace(/\\mathcal\{([A-Z])\}/g, (_, letter) => latexPreviewMap.get(`\\mathcal{${letter}}`) ?? letter)
+    .replace(/\\[A-Za-z]+/g, (command) => latexCommandPreviewMap.get(command) ?? command)
+}
+
 function previewText(text) {
   const mathMatch = text.match(/^\$(.*)\$$/)
-  return mathMatch ? mathMatch[1] : text
+  return mathMatch ? previewLatexContent(mathMatch[1]) : text
 }
 
 function diagramPoint(element, point) {
@@ -717,9 +805,39 @@ function collectRequirements(elements) {
   const pgfplotsLibraries = new Set()
   const afterPreamble = new Set()
 
+  const addPackagesForText = (text = '') => {
+    if (/\\(?:operatorname|text|boldsymbol|iint|iiint|lVert|rVert|dfrac|tfrac)\b/.test(text)) {
+      packages.add('\\usepackage{amsmath}')
+    }
+
+    if (
+      /\\(?:mathbb|mathfrak|nless|ngtr|nleq|ngeq|lneq|gneq|lneqq|gneqq|nprec|nsucc|nsubseteq|nsupseteq|subsetneq|supsetneq|subsetneqq|supsetneqq|nmid|nvdash|nvDash|nVdash|nVDash|Join|Bumpeq|bumpeq|centerdot|lhd|rhd|unlhd|unrhd|boxplus|boxminus|boxtimes|boxdot|circledast|circledcirc|circleddash|ltimes|rtimes|leftthreetimes|rightthreetimes|curlywedge|curlyvee|Cap|Cup|smallsetminus|intercal|veebar|barwedge|leadsto|rightsquigarrow|leftrightsquigarrow|twoheadleftarrow|twoheadrightarrow|leftleftarrows|rightrightarrows|leftrightarrows|rightleftarrows|upuparrows|downdownarrows|dashleftarrow|dashrightarrow|leftarrowtail|rightarrowtail|looparrowleft|looparrowright|circlearrowleft|circlearrowright|Lsh|Rsh|curvearrowleft|curvearrowright|multimap)\b/.test(
+        text,
+      )
+    ) {
+      packages.add('\\usepackage{amssymb}')
+    }
+
+    if (/\\(?:textdegree|textmu)\b/.test(text)) {
+      packages.add('\\usepackage{textcomp}')
+    }
+
+    if (/\\(?:llbracket|rrbracket)\b/.test(text)) {
+      packages.add('\\usepackage{stmaryrd}')
+    }
+  }
+
   elements.forEach((element) => {
     if (element.type === 'diagram' && element.diagramKind === 'circuit') {
       packages.add('\\usepackage[american]{circuitikz}')
+    }
+
+    if (element.type === 'text') {
+      addPackagesForText(element.text)
+    }
+
+    if (element.type === 'arrow') {
+      libraries.add('arrows.meta')
     }
 
     if (element.type === 'library') {
@@ -808,6 +926,14 @@ function buildTikz(elements, exportOptions = {}) {
     if (element.type === 'line') {
       pictureLines.push(
         `  \\draw${optionsFor(element)} (${formatNumber(element.start.x)},${formatNumber(
+          element.start.y,
+        )}) -- (${formatNumber(element.end.x)},${formatNumber(element.end.y)});`,
+      )
+    }
+
+    if (element.type === 'arrow') {
+      pictureLines.push(
+        `  \\draw${optionsFor(element, [tikzArrowStyle(element.arrowStyle)])} (${formatNumber(element.start.x)},${formatNumber(
           element.start.y,
         )}) -- (${formatNumber(element.end.x)},${formatNumber(element.end.y)});`,
       )
@@ -918,6 +1044,8 @@ function App() {
     smooth: true,
     snap: true,
     grid: true,
+    arrowStyle: 'stealth',
+    labelText: 'Etiqueta',
     exportGrid: false,
     monochromeExport: true,
     wrapFigure: true,
@@ -932,6 +1060,8 @@ function App() {
   })
   const [functionError, setFunctionError] = useState('')
   const [librarySearch, setLibrarySearch] = useState('')
+  const [symbolSearch, setSymbolSearch] = useState('')
+  const [symbolsOpen, setSymbolsOpen] = useState(false)
   const [customLibrary, setCustomLibrary] = useState({
     title: 'Custom TikZ block',
     group: 'Custom',
@@ -941,6 +1071,7 @@ function App() {
   })
 
   const selectedElement = elements.find((element) => element.id === selectedId)
+  const activeLabelText = selectedElement?.type === 'text' ? selectedElement.text : settings.labelText
   const tikzCode = useMemo(
     () =>
       buildTikz(elements, {
@@ -971,6 +1102,11 @@ function App() {
         .includes(query),
     )
   }, [librarySearch])
+  const visibleLatexSymbols = useMemo(() => {
+    const query = symbolSearch.trim().toLowerCase()
+    if (!query) return latexSymbols
+    return latexSymbols.filter((symbol) => symbol.haystack.includes(query))
+  }, [symbolSearch])
 
   const commitElements = (nextElements, nextSelectedId = selectedId) => {
     setPast((items) => [...items, elements].slice(-50))
@@ -997,6 +1133,7 @@ function App() {
     width: settings.width,
     dashed: settings.dashed,
     smooth: settings.smooth,
+    arrowStyle: settings.arrowStyle,
   })
 
   const handlePointerDown = (event) => {
@@ -1017,7 +1154,7 @@ function App() {
         ...makeBaseElement(),
         type: 'text',
         position: point,
-        text: 'Etiqueta',
+        text: settings.labelText,
       }
       commitElements([...elements, nextElement], nextElement.id)
       setTool('select')
@@ -1139,6 +1276,27 @@ function App() {
     setElements((current) =>
       current.map((element) => (element.id === selectedElement.id ? { ...element, ...patch } : element)),
     )
+  }
+
+  const insertLatexSymbol = (symbol) => {
+    if (selectedElement?.type === 'text') {
+      updateSelected({ text: appendLatexSymbol(selectedElement.text, symbol) })
+      return
+    }
+
+    setSettings((state) => ({
+      ...state,
+      labelText: appendLatexSymbol(state.labelText, symbol),
+    }))
+  }
+
+  const updateLabelText = (text) => {
+    if (selectedElement?.type === 'text') {
+      updateSelected({ text })
+      return
+    }
+
+    setSettings((state) => ({ ...state, labelText: text }))
   }
 
   const deleteSelected = () => {
@@ -1715,6 +1873,46 @@ function App() {
     return <g>{renderPreview()}</g>
   }
 
+  const renderArrowHead = (tip, tail, style, stroke, halo = false) => {
+    if (style === 'none') return null
+
+    const angle = Math.atan2(tip.y - tail.y, tip.x - tail.x)
+    const length = style === 'triangle' ? 15 : 12
+    const spread = style === 'triangle' ? 0.48 : 0.38
+    const left = {
+      x: tip.x - length * Math.cos(angle - spread),
+      y: tip.y - length * Math.sin(angle - spread),
+    }
+    const right = {
+      x: tip.x - length * Math.cos(angle + spread),
+      y: tip.y - length * Math.sin(angle + spread),
+    }
+
+    if (style === 'plain' || style === 'latex') {
+      return (
+        <path
+          d={`M ${left.x} ${left.y} L ${tip.x} ${tip.y} L ${right.x} ${right.y}`}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={halo ? 3 : 1.4}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={halo ? 0.35 : 1}
+          vectorEffect="non-scaling-stroke"
+        />
+      )
+    }
+
+    return (
+      <path
+        d={`M ${tip.x} ${tip.y} L ${left.x} ${left.y} L ${right.x} ${right.y} Z`}
+        fill={stroke}
+        stroke={stroke}
+        opacity={halo ? 0.3 : 1}
+      />
+    )
+  }
+
   const renderElementShape = (element, halo = false) => {
     const stroke = halo ? '#6b7280' : element.stroke
     const strokeWidth = (halo ? element.width + 3 : element.width) * 1.05
@@ -1733,6 +1931,19 @@ function App() {
       const start = worldToScreen(element.start)
       const end = worldToScreen(element.end)
       return <line {...common} x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
+    }
+
+    if (element.type === 'arrow') {
+      const start = worldToScreen(element.start)
+      const end = worldToScreen(element.end)
+      const style = element.arrowStyle ?? settings.arrowStyle
+      return (
+        <g>
+          <line {...common} x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
+          {renderArrowHead(end, start, style, stroke, halo)}
+          {style === 'both' && renderArrowHead(start, end, style, stroke, halo)}
+        </g>
+      )
     }
 
     if (element.type === 'rect') {
@@ -1877,9 +2088,21 @@ function App() {
         <header className="topbar">
           <div>
             <h1>TikZ Figure Workbench</h1>
-            <p>Figuras sobrias para articulos, tesis y notas tecnicas.</p>
+            <p>
+              Figuras sobrias para articulos, tesis y notas tecnicas.
+              <span className="byline">Made by Guillem Moreno Garcia</span>
+            </p>
           </div>
           <div className="topbar-actions">
+            <a
+              className="ghost-button repo-link"
+              href="https://github.com/unworthyzeus/tikz-sketch-converter"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <GitBranch size={17} />
+              GitHub
+            </a>
             <button type="button" className="ghost-button" onClick={() => setSettings((state) => ({ ...state, grid: !state.grid }))}>
               <Grid3X3 size={17} />
               {settings.grid ? 'Ocultar grid' : 'Mostrar grid'}
@@ -1980,6 +2203,26 @@ function App() {
               }}
             />
           </label>
+          <label className="field">
+            <span>Tipo de flecha</span>
+            <select
+              value={selectedElement?.type === 'arrow' ? selectedElement.arrowStyle ?? settings.arrowStyle : settings.arrowStyle}
+              onChange={(event) => {
+                setSettings((state) => ({ ...state, arrowStyle: event.target.value }))
+                if (selectedElement?.type === 'arrow') updateSelected({ arrowStyle: event.target.value })
+              }}
+            >
+              {arrowStyleOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="ghost-button full" onClick={() => setTool('arrow')}>
+            <ArrowRight size={17} />
+            Anadir flecha
+          </button>
           <div className="toggle-grid">
             <label className="toggle">
               <input
@@ -2062,6 +2305,49 @@ function App() {
             <Sigma size={17} />
             Anadir funcion
           </button>
+        </section>
+
+        <section className="panel-section symbol-section">
+          <div className="panel-title">
+            <Type size={18} />
+            <h2>Etiqueta y simbolos</h2>
+          </div>
+          <label className="field">
+            <span>{selectedElement?.type === 'text' ? 'Texto seleccionado' : 'Texto para nueva etiqueta'}</span>
+            <input type="text" value={activeLabelText} onChange={(event) => updateLabelText(event.target.value)} />
+          </label>
+          <button type="button" className="ghost-button full" onClick={() => setSymbolsOpen((value) => !value)}>
+            <Sigma size={17} />
+            {symbolsOpen ? 'Cerrar simbolos LaTeX' : 'Abrir simbolos LaTeX'}
+          </button>
+          {symbolsOpen && (
+            <div className="symbol-picker">
+              <label className="field">
+                <span>Buscar simbolo</span>
+                <input
+                  type="search"
+                  value={symbolSearch}
+                  onChange={(event) => setSymbolSearch(event.target.value)}
+                  placeholder="alpha, subset, arrow, integral..."
+                />
+              </label>
+              <div className="symbol-count">{visibleLatexSymbols.length} simbolos</div>
+              <div className="symbol-grid">
+                {visibleLatexSymbols.map((symbol) => (
+                  <button
+                    key={`${symbol.group}-${symbol.value}`}
+                    type="button"
+                    className="symbol-button"
+                    title={`${symbol.label} ${symbol.value.replace('__BASE__', '□')}`}
+                    onClick={() => insertLatexSymbol(symbol)}
+                  >
+                    <span>{symbol.label}</span>
+                    <small>{symbol.value.replace('__BASE__', '□')}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="panel-section">
