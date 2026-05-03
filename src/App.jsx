@@ -1975,6 +1975,20 @@ function App() {
     clone.setAttribute('width', `${CANVAS.width}`)
     clone.setAttribute('height', `${CANVAS.height}`)
 
+    const style = document.createElementNS('http://www.w3.org/2000/svg', 'style')
+    style.textContent = Array.from(document.styleSheets)
+      .map((sheet) => {
+        try {
+          return Array.from(sheet.cssRules)
+            .map((rule) => rule.cssText)
+            .join('\n')
+        } catch {
+          return ''
+        }
+      })
+      .join('\n')
+    clone.insertBefore(style, clone.firstChild)
+
     const svgText = new XMLSerializer().serializeToString(clone)
     const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' })
     const url = URL.createObjectURL(svgBlob)
