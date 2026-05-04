@@ -36,6 +36,11 @@ test('function plots support multi-series styling and marked points', () => {
   assert.match(appSource, /parseMarkedFunctionPoints/)
   assert.match(appSource, /markedPoints/)
   assert.match(appSource, /addFunctionSeries/)
+  assert.match(appSource, /addFunctionToSelectedGraph/)
+  assert.match(appSource, /showGraphFrame/)
+  assert.match(appSource, /showGraphGrid/)
+  assert.match(appSource, /functionYScaleFor/)
+  assert.match(appSource, /axisHeight/)
   assert.match(appSource, /Mas funciones en el mismo grafico/)
 })
 

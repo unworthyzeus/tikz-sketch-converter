@@ -507,7 +507,10 @@ const defaultFunctionOptions = {
   showSamples: false,
   showTangent: false,
   showAsymptotes: false,
-  usePgfplots: false,
+  showGraphFrame: true,
+  showGraphGrid: true,
+  showGraphAxes: true,
+  usePgfplots: true,
   axisType: 'axis',
   xLabel: '$x$',
   yLabel: '$f(x)$',
@@ -528,6 +531,7 @@ const defaultFunctionOptions = {
   dataTable: '',
   markedPoints: '',
   series: [],
+  yScale: 1,
   axisOptions: '',
   plotOptions: 'line width=0.75pt',
 }
@@ -1616,15 +1620,21 @@ function functionSeriesFor(element) {
   ]
 }
 
+function functionYScaleFor(element) {
+  const value = Number(functionOptionsFor(element).yScale)
+  return Number.isFinite(value) && Math.abs(value) > 0.0001 ? value : 1
+}
+
 function sampleFunctionSeries(element, series) {
+  const yScale = functionYScaleFor(element)
   const baseYOffset = Number(element.yOffset) || 0
   const seriesYOffset = Number(series.yOffset) || 0
   const offset = baseYOffset + seriesYOffset
   const dataPoints = parsedDataTablePoints(series.dataTable)
-  if (dataPoints.length) return dataPoints.map((point) => ({ x: point.x, y: point.y + offset }))
+  if (dataPoints.length) return dataPoints.map((point) => ({ x: point.x, y: point.y * yScale + offset }))
 
   return sampleExpressionPoints(series.expression, element.domainStart, element.domainEnd, element.samples).map((point) =>
-    point ? { x: point.x, y: point.y + offset } : null,
+    point ? { x: point.x, y: point.y * yScale + offset } : null,
   )
 }
 
@@ -1641,6 +1651,36 @@ function allFunctionDisplayPoints(element) {
   return functionDisplaySeries(element).flatMap(({ points }) => points.filter(Boolean))
 }
 
+function expandFlatFunctionBounds(bounds) {
+  const center = boundsCenter(bounds)
+  const width = Math.max(0.8, bounds.maxX - bounds.minX)
+  const height = Math.max(0.8, bounds.maxY - bounds.minY)
+  return {
+    minX: center.x - width / 2,
+    maxX: center.x + width / 2,
+    minY: center.y - height / 2,
+    maxY: center.y + height / 2,
+  }
+}
+
+function niceGraphStep(range, target = 6) {
+  const rawStep = Math.max(0.001, Math.abs(range) / target)
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep))
+  const normalized = rawStep / magnitude
+  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10
+  return nice * magnitude
+}
+
+function graphTicks(min, max, target = 6) {
+  const step = niceGraphStep(max - min, target)
+  const ticks = []
+  const start = Math.ceil(min / step) * step
+  for (let value = start; value <= max + step * 0.01 && ticks.length < 32; value += step) {
+    ticks.push(Number(formatNumber(value)))
+  }
+  return ticks
+}
+
 function functionDisplayPoints(element) {
   return functionDisplaySeries(element)[0]?.points.filter(Boolean) ?? []
 }
@@ -1648,6 +1688,7 @@ function functionDisplayPoints(element) {
 function functionFeaturePoints(element) {
   const points = functionDisplayPoints(element)
   const options = functionOptionsFor(element)
+  const yScale = functionYScaleFor(element)
   const yOffset = Number(element.yOffset) || 0
   const features = {
     xIntercepts: [],
@@ -1658,7 +1699,7 @@ function functionFeaturePoints(element) {
     tangent: null,
     marked: parseMarkedFunctionPoints(options.markedPoints).map((point) => ({
       ...point,
-      y: point.y + yOffset,
+      y: point.y * yScale + yOffset,
     })),
   }
   if (!points.length) return features
@@ -1899,7 +1940,12 @@ function elementBounds(element) {
     if (!points.length) return { minX: element.domainStart, maxX: element.domainEnd, minY: -1, maxY: 1 }
     const xs = points.map((point) => point.x)
     const ys = points.map((point) => point.y)
-    return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
+    return expandFlatFunctionBounds({
+      minX: Math.min(...xs),
+      maxX: Math.max(...xs),
+      minY: Math.min(...ys),
+      maxY: Math.max(...ys),
+    })
   }
 
   if (element.type === 'text') {
@@ -1953,11 +1999,22 @@ function resizeElementToBounds(element, nextBounds) {
   if (element.type === 'path') return { ...element, points: element.points.map(mapPoint) }
   if (element.type === 'text') return { ...element, position: boundsCenter(nextBounds) }
   if (element.type === 'function') {
+    const xScale = nextWidth / currentWidth
+    const yScaleFactor = nextHeight / currentHeight
+    const currentYOffset = Number(element.yOffset) || 0
+    const nextYScale = functionYScaleFor(element) * yScaleFactor
+    const nextYOffset = nextBounds.minY + (currentYOffset - current.minY) * yScaleFactor
     return {
       ...element,
-      domainStart: nextBounds.minX,
-      domainEnd: nextBounds.maxX,
-      yOffset: (Number(element.yOffset) || 0) + (boundsCenter(nextBounds).y - boundsCenter(current).y),
+      domainStart: nextBounds.minX + (Number(element.domainStart) - current.minX) * xScale,
+      domainEnd: nextBounds.minX + (Number(element.domainEnd) - current.minX) * xScale,
+      yOffset: nextYOffset,
+      functionOptions: {
+        ...functionOptionsFor(element),
+        yScale: Number(formatNumber(nextYScale)),
+        axisWidth: `${formatNumber(nextWidth)}cm`,
+        axisHeight: `${formatNumber(nextHeight)}cm`,
+      },
     }
   }
   if (element.type === 'diagram' || element.type === 'library') {
@@ -3226,6 +3283,7 @@ function buildTikz(elements, exportOptions = {}) {
       const functionOptions = functionOptionsFor(element)
       const displaySeries = functionDisplaySeries(element)
       const hasFunctionLegend = displaySeries.some(({ series }) => series.legend)
+      const graphBounds = elementBounds(element)
       const features = functionFeaturePoints(element)
       const primaryColor = ensureColor(element.stroke)
       const featureMarks = [
@@ -3252,7 +3310,7 @@ function buildTikz(elements, exportOptions = {}) {
           functionOptions.axisType === 'semilogyaxis' || functionOptions.logY ? 'ymode=log' : '',
           `xlabel={${formatTikzNodeText(functionOptions.xLabel)}}`,
           `ylabel={${formatTikzNodeText(functionOptions.yLabel)}}`,
-          functionOptions.gridStyle !== 'none' ? `grid=${functionOptions.gridStyle}` : '',
+          functionOptions.showGraphGrid && functionOptions.gridStyle !== 'none' ? `grid=${functionOptions.gridStyle}` : '',
           functionOptions.xTicks?.trim() ? `xtick={${functionOptions.xTicks.trim()}}` : '',
           functionOptions.yTicks?.trim() ? `ytick={${functionOptions.yTicks.trim()}}` : '',
           functionOptions.tickLabelStyle?.trim() ? `tick label style={${functionOptions.tickLabelStyle.trim()}}` : '',
@@ -3310,6 +3368,35 @@ function buildTikz(elements, exportOptions = {}) {
         }
         pictureLines.push(`${linePrefix}\\end{axis}`)
       } else {
+        if (functionOptions.showGraphFrame) {
+          pictureLines.push(
+            `${linePrefix}\\draw[color=gray!45, line width=0.35pt] (${formatNumber(graphBounds.minX)},${formatNumber(graphBounds.minY)}) rectangle (${formatNumber(graphBounds.maxX)},${formatNumber(graphBounds.maxY)});`,
+          )
+        }
+        if (functionOptions.showGraphGrid) {
+          graphTicks(graphBounds.minX, graphBounds.maxX, 7).forEach((xValue) => {
+            pictureLines.push(
+              `${linePrefix}\\draw[color=gray!18, line width=0.18pt] (${formatNumber(xValue)},${formatNumber(graphBounds.minY)}) -- (${formatNumber(xValue)},${formatNumber(graphBounds.maxY)});`,
+            )
+          })
+          graphTicks(graphBounds.minY, graphBounds.maxY, 5).forEach((yValue) => {
+            pictureLines.push(
+              `${linePrefix}\\draw[color=gray!18, line width=0.18pt] (${formatNumber(graphBounds.minX)},${formatNumber(yValue)}) -- (${formatNumber(graphBounds.maxX)},${formatNumber(yValue)});`,
+            )
+          })
+        }
+        if (functionOptions.showGraphAxes) {
+          if (graphBounds.minY <= 0 && graphBounds.maxY >= 0) {
+            pictureLines.push(
+              `${linePrefix}\\draw[color=gray!60, line width=0.3pt] (${formatNumber(graphBounds.minX)},0) -- (${formatNumber(graphBounds.maxX)},0) node[right, font=\\scriptsize] {${formatTikzNodeText(functionOptions.xLabel)}};`,
+            )
+          }
+          if (graphBounds.minX <= 0 && graphBounds.maxX >= 0) {
+            pictureLines.push(
+              `${linePrefix}\\draw[color=gray!60, line width=0.3pt] (0,${formatNumber(graphBounds.minY)}) -- (0,${formatNumber(graphBounds.maxY)}) node[above, font=\\scriptsize] {${formatTikzNodeText(functionOptions.yLabel)}};`,
+            )
+          }
+        }
         displaySeries.forEach(({ series, points }, seriesIndex) => {
           const segments = splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null)))
           segments.forEach((segment, index) => {
@@ -4292,6 +4379,33 @@ function App() {
       setFunctionError('')
       commitElements([...elements, nextElement], nextElement.id)
       setTool('select')
+    } catch (error) {
+      setFunctionError(error.message)
+    }
+  }
+
+  const addFunctionToSelectedGraph = () => {
+    if (selectedElement?.type !== 'function') return
+    try {
+      compileExpression(functionDraft.expression)
+      const series = editableFunctionSeriesFor(selectedElement)
+      updateSelectedFunctionOptions({
+        series: [
+          ...series,
+          normalizeFunctionSeries(
+            {
+              id: createId(),
+              expression: functionDraft.expression,
+              color: functionDraft.color || strokeColors[(series.length + 3) % strokeColors.length].value,
+              lineStyle: functionDraft.lineStyle || 'solid',
+              legend: functionDraft.expression,
+              enabled: true,
+            },
+            series.length,
+          ),
+        ],
+      })
+      setFunctionError('')
     } catch (error) {
       setFunctionError(error.message)
     }
@@ -6655,8 +6769,20 @@ function App() {
     }
 
     if (element.type === 'function') {
+      const bounds = elementBounds(element)
+      const topLeft = worldToScreen({ x: bounds.minX, y: bounds.maxY })
+      const bottomRight = worldToScreen({ x: bounds.maxX, y: bounds.minY })
       return (
         <g>
+          {functionOptionsFor(element).showGraphFrame && (
+            <rect
+              {...hitProps}
+              x={topLeft.x - 8}
+              y={topLeft.y - 8}
+              width={bottomRight.x - topLeft.x + 16}
+              height={bottomRight.y - topLeft.y + 16}
+            />
+          )}
           {functionDisplaySeries(element).flatMap(({ points }, seriesIndex) =>
             splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null))).map(
               (segment, index) => (
@@ -6807,6 +6933,11 @@ function App() {
     if (element.type === 'function') {
       const functionOptions = functionOptionsFor(element)
       const features = functionFeaturePoints(element)
+      const bounds = elementBounds(element)
+      const topLeft = worldToScreen({ x: bounds.minX, y: bounds.maxY })
+      const bottomRight = worldToScreen({ x: bounds.maxX, y: bounds.minY })
+      const xTicks = graphTicks(bounds.minX, bounds.maxX, 7)
+      const yTicks = graphTicks(bounds.minY, bounds.maxY, 5)
       const markerPoints = [
         ...(functionOptions.showXIntercepts ? features.xIntercepts.slice(0, 8).map((point) => ({ ...point, label: '$x_0$' })) : []),
         ...(functionOptions.showYIntercept && features.yIntercept ? [{ ...features.yIntercept, label: '$y_0$' }] : []),
@@ -6843,8 +6974,103 @@ function App() {
         )
       }
 
+      const renderGraphChrome = () => {
+        if (!functionOptions.showGraphFrame && !halo) return null
+        const frameWidth = bottomRight.x - topLeft.x
+        const frameHeight = bottomRight.y - topLeft.y
+        return (
+          <g className="function-graph-chrome">
+            <rect
+              x={topLeft.x}
+              y={topLeft.y}
+              width={frameWidth}
+              height={frameHeight}
+              fill={halo ? 'none' : '#ffffff'}
+              fillOpacity={halo ? undefined : 0.94}
+              stroke={halo ? '#6b7280' : '#9aa6b8'}
+              strokeWidth={halo ? 1.4 : 0.9}
+              vectorEffect="non-scaling-stroke"
+              opacity={halo ? 0.32 : 1}
+            />
+            {!halo && functionOptions.showGraphGrid && (
+              <g>
+                {xTicks.map((xValue) => {
+                  const start = worldToScreen({ x: xValue, y: bounds.minY })
+                  const end = worldToScreen({ x: xValue, y: bounds.maxY })
+                  return (
+                    <line
+                      key={`gx-${xValue}`}
+                      x1={start.x}
+                      y1={start.y}
+                      x2={end.x}
+                      y2={end.y}
+                      stroke="#e2e8f0"
+                      strokeWidth="0.65"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )
+                })}
+                {yTicks.map((yValue) => {
+                  const start = worldToScreen({ x: bounds.minX, y: yValue })
+                  const end = worldToScreen({ x: bounds.maxX, y: yValue })
+                  return (
+                    <line
+                      key={`gy-${yValue}`}
+                      x1={start.x}
+                      y1={start.y}
+                      x2={end.x}
+                      y2={end.y}
+                      stroke="#e2e8f0"
+                      strokeWidth="0.65"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )
+                })}
+              </g>
+            )}
+            {!halo && functionOptions.showGraphAxes && (
+              <g>
+                {bounds.minY <= 0 && bounds.maxY >= 0 && (
+                  <line
+                    x1={topLeft.x}
+                    y1={worldToScreen({ x: 0, y: 0 }).y}
+                    x2={bottomRight.x}
+                    y2={worldToScreen({ x: 0, y: 0 }).y}
+                    stroke="#94a3b8"
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+                {bounds.minX <= 0 && bounds.maxX >= 0 && (
+                  <line
+                    x1={worldToScreen({ x: 0, y: 0 }).x}
+                    y1={topLeft.y}
+                    x2={worldToScreen({ x: 0, y: 0 }).x}
+                    y2={bottomRight.y}
+                    stroke="#94a3b8"
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+              </g>
+            )}
+            {!halo && functionOptions.showGraphAxes && (
+              <>
+                <foreignObject x={bottomRight.x - 38} y={bottomRight.y - 22} width="38" height="22" className="function-axis-label">
+                  <div xmlns="http://www.w3.org/1999/xhtml" dangerouslySetInnerHTML={{ __html: renderInlineLatexHtml(functionOptions.xLabel) }} />
+                </foreignObject>
+                <foreignObject x={topLeft.x + 4} y={topLeft.y + 2} width="54" height="22" className="function-axis-label">
+                  <div xmlns="http://www.w3.org/1999/xhtml" dangerouslySetInnerHTML={{ __html: renderInlineLatexHtml(functionOptions.yLabel) }} />
+                </foreignObject>
+              </>
+            )}
+          </g>
+        )
+      }
+
       return (
         <g>
+          {renderGraphChrome()}
           {functionDisplaySeries(element).flatMap(({ series, points }, seriesIndex) =>
             splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null))).map(
               (segment, index) => (
@@ -7500,7 +7726,7 @@ function App() {
         <section className="panel-section">
           <div className="panel-title">
             <Sigma size={18} />
-            <h2>Funcion</h2>
+            <h2>Funcion / grafico</h2>
           </div>
           <label className="field">
             <span>f(x)</span>
@@ -7579,8 +7805,14 @@ function App() {
           </div>
           <button type="button" className="primary-button full" onClick={addFunction}>
             <Sigma size={17} />
-            Anadir funcion
+            Anadir grafico
           </button>
+          {selectedElement?.type === 'function' && (
+            <button type="button" className="ghost-button full" onClick={addFunctionToSelectedGraph}>
+              <Sigma size={17} />
+              Anadir al grafico seleccionado
+            </button>
+          )}
         </section>
 
         <section className="panel-section symbol-section">
@@ -7958,15 +8190,27 @@ function App() {
                       />
                     </label>
                   </div>
-                  <label className="field">
-                    <span>Desplazar y</span>
-                    <input
-                      type="number"
-                      step="0.25"
-                      value={selectedElement.yOffset ?? 0}
-                      onChange={(event) => updateSelected({ yOffset: Number(event.target.value) })}
-                    />
-                  </label>
+                  <div className="field-pair">
+                    <label className="field">
+                      <span>Desplazar y</span>
+                      <input
+                        type="number"
+                        step="0.25"
+                        value={selectedElement.yOffset ?? 0}
+                        onChange={(event) => updateSelected({ yOffset: Number(event.target.value) })}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Escala Y</span>
+                      <input
+                        type="number"
+                        min="0.05"
+                        step="0.05"
+                        value={selectedFunctionOptions.yScale}
+                        onChange={(event) => updateSelectedFunctionOptions({ yScale: Math.max(0.05, Number(event.target.value) || 1) })}
+                      />
+                    </label>
+                  </div>
                   <label className="field">
                     <span>Muestras</span>
                     <input
@@ -8038,12 +8282,15 @@ function App() {
                         ['showSamples', 'Muestras'],
                         ['showTangent', 'Tangente'],
                         ['showAsymptotes', 'Asintotas'],
+                        ['showGraphFrame', 'Marco grafico'],
+                        ['showGraphAxes', 'Ejes'],
+                        ['showGraphGrid', 'Grid grafico'],
                         ['usePgfplots', 'PGFPlots'],
                       ].map(([key, label]) => (
                         <label key={key} className="toggle">
                           <input
                             type="checkbox"
-                            checked={functionOptionsFor(selectedElement)[key]}
+                            checked={selectedFunctionOptions[key]}
                             onChange={(event) => updateSelectedFunctionOptions({ [key]: event.target.checked })}
                           />
                           <span>{label}</span>
