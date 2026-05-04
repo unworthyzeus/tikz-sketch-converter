@@ -44,6 +44,15 @@ test('function plots support multi-series styling and marked points', () => {
   assert.match(appSource, /Mas funciones en el mismo grafico/)
 })
 
+test('text labels resize with persistent dimensions and export font size', () => {
+  assert.match(appSource, /labelMetricsForElement/)
+  assert.match(appSource, /labelWidth/)
+  assert.match(appSource, /labelHeight/)
+  assert.match(appSource, /Tamano fuente px/)
+  assert.match(appSource, /minimum width=\$\{formatNumber\(metrics\.widthCm\)\}cm/)
+  assert.match(appSource, /\\\\fontsize/)
+})
+
 test('telecommunications and circuit palettes include requested domains', () => {
   assert.match(paletteSource, /telecom-transmitter-chain/)
   assert.match(paletteSource, /telecom-qpsk-mod/)

@@ -1949,9 +1949,9 @@ function elementBounds(element) {
   }
 
   if (element.type === 'text') {
-    const box = labelBoxForText(element.text)
-    const halfWidth = box.width / CANVAS.scale / 2
-    const halfHeight = box.height / CANVAS.scale / 2
+    const metrics = labelMetricsForElement(element)
+    const halfWidth = metrics.widthCm / 2
+    const halfHeight = metrics.heightCm / 2
     return {
       minX: element.position.x - halfWidth,
       maxX: element.position.x + halfWidth,
@@ -1997,7 +1997,16 @@ function resizeElementToBounds(element, nextBounds) {
   }
 
   if (element.type === 'path') return { ...element, points: element.points.map(mapPoint) }
-  if (element.type === 'text') return { ...element, position: boundsCenter(nextBounds) }
+  if (element.type === 'text') {
+    const nextFontSize = Math.max(6, Math.min(96, (Number(element.fontSize) || labelMetricsForElement(element).fontSize) * (nextHeight / currentHeight)))
+    return {
+      ...element,
+      position: boundsCenter(nextBounds),
+      labelWidth: Number(formatNumber(nextWidth)),
+      labelHeight: Number(formatNumber(nextHeight)),
+      fontSize: Number(formatNumber(nextFontSize)),
+    }
+  }
   if (element.type === 'function') {
     const xScale = nextWidth / currentWidth
     const yScaleFactor = nextHeight / currentHeight
@@ -2135,6 +2144,21 @@ function labelBoxForText(text) {
   return {
     width: Math.min(760, Math.max(72, plain.length * 10 + 36)),
     height: 40,
+  }
+}
+
+function labelMetricsForElement(element) {
+  const defaultBox = labelBoxForText(element.text)
+  const widthCm = Math.max(0.25, Number(element.labelWidth) || defaultBox.width / CANVAS.scale)
+  const heightCm = Math.max(0.18, Number(element.labelHeight) || defaultBox.height / CANVAS.scale)
+  const defaultFontSize = Math.max(8, Math.min(72, heightCm * CANVAS.scale * 0.48))
+  const fontSize = Math.max(6, Math.min(96, Number(element.fontSize) || defaultFontSize))
+  return {
+    width: widthCm * CANVAS.scale,
+    height: heightCm * CANVAS.scale,
+    widthCm,
+    heightCm,
+    fontSize,
   }
 }
 
@@ -3436,7 +3460,15 @@ function buildTikz(elements, exportOptions = {}) {
 
     if (element.type === 'text') {
       const color = ensureColor(element.stroke)
+      const metrics = labelMetricsForElement(element)
+      const fontSizePt = Math.max(4, metrics.fontSize * 0.75)
       const nodeOptions = [`text=${color}`]
+      nodeOptions.push(
+        `minimum width=${formatNumber(metrics.widthCm)}cm`,
+        `minimum height=${formatNumber(metrics.heightCm)}cm`,
+        'align=center',
+        `font=\\fontsize{${formatNumber(fontSizePt)}pt}{${formatNumber(fontSizePt * 1.16)}pt}\\selectfont`,
+      )
       if (element.fill && element.fill !== 'none') {
         nodeOptions.push(
           `fill=${ensureColor(element.fill)}`,
@@ -6831,7 +6863,7 @@ function App() {
 
     if (element.type === 'text') {
       const position = worldToScreen(element.position)
-      const box = labelBoxForText(element.text)
+      const box = labelMetricsForElement(element)
       return (
         <rect
           {...hitProps}
@@ -7096,7 +7128,7 @@ function App() {
 
     if (element.type === 'text') {
       const position = worldToScreen(element.position)
-      const box = labelBoxForText(element.text)
+      const box = labelMetricsForElement(element)
       if (halo) {
         return (
           <rect
@@ -7125,6 +7157,7 @@ function App() {
             style={{
               color: element.stroke,
               background: colorWithOpacity(element.fill, element.fillOpacity ?? 0.18),
+              fontSize: `${box.fontSize}px`,
               opacity: 1,
             }}
             dangerouslySetInnerHTML={{ __html: renderInlineLatexHtml(element.text) }}
@@ -8116,6 +8149,39 @@ function App() {
                       />
                     </label>
                   </div>
+                  <div className="field-pair">
+                    <label className="field">
+                      <span>Ancho label cm</span>
+                      <input
+                        type="number"
+                        min="0.25"
+                        step="0.05"
+                        value={formatNumber(labelMetricsForElement(selectedElement).widthCm)}
+                        onChange={(event) => updateSelected({ labelWidth: Math.max(0.25, Number(event.target.value) || 0.25) })}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Alto label cm</span>
+                      <input
+                        type="number"
+                        min="0.18"
+                        step="0.05"
+                        value={formatNumber(labelMetricsForElement(selectedElement).heightCm)}
+                        onChange={(event) => updateSelected({ labelHeight: Math.max(0.18, Number(event.target.value) || 0.18) })}
+                      />
+                    </label>
+                  </div>
+                  <label className="field">
+                    <span>Tamano fuente px</span>
+                    <input
+                      type="number"
+                      min="6"
+                      max="96"
+                      step="1"
+                      value={formatNumber(labelMetricsForElement(selectedElement).fontSize)}
+                      onChange={(event) => updateSelected({ fontSize: Math.max(6, Math.min(96, Number(event.target.value) || 18)) })}
+                    />
+                  </label>
                 </>
               )}
               {['line', 'arrow', 'rect', 'ellipse'].includes(selectedElement.type) && (
