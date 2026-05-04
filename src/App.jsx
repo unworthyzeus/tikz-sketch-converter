@@ -285,7 +285,7 @@ const objectConfigSections = [
       { key: 'circuitOrientation', label: 'Orientacion', type: 'select', options: [{ value: 'right', label: 'Derecha' }, { value: 'left', label: 'Izquierda' }, { value: 'up', label: 'Arriba' }, { value: 'down', label: 'Abajo' }] },
       { key: 'circuitStyle', label: 'IEC/American', type: 'select', options: [{ value: 'auto', label: 'Auto' }, { value: 'iec', label: 'IEC' }, { value: 'american', label: 'American' }] },
       { key: 'terminalStyle', label: 'Terminales', type: 'select', options: [{ value: 'none', label: 'Sin nodos' }, { value: 'filled', label: 'Rellenos' }, { value: 'open', label: 'Abiertos' }, { value: 'mixed', label: 'Mixto' }] },
-      { key: 'terminalLength', label: 'Longitud terminal', type: 'number', min: 0.55, max: 5, step: 0.05 },
+      { key: 'terminalLength', label: 'Longitud terminal', type: 'number', min: 0.55, max: 12, step: 0.05 },
       { key: 'bipoleLength', label: 'Bipole length cm', type: 'number', min: 0, max: 5, step: 0.05 },
       { key: 'mirrorComponent', label: 'Mirror', type: 'checkbox' },
       { key: 'invertComponent', label: 'Invert', type: 'checkbox' },
@@ -758,7 +758,7 @@ function circuitTikzComponent(preset = {}, config = {}) {
 }
 
 function circuitEndPoint(config = {}) {
-  const length = Math.max(0.55, Math.min(5, Number(config.terminalLength) || 2.2))
+  const length = Math.max(0.55, Math.min(12, Number(config.terminalLength) || 2.2))
   const vectors = {
     right: { x: length, y: 0 },
     left: { x: -length, y: 0 },
@@ -919,8 +919,8 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
   const config = { ...defaultLibraryConfig(preset), ...(element.config ?? {}) }
   return {
     ...config,
-    stretchX: Math.max(0.35, Math.min(4, Number(config.stretchX) || 1)),
-    stretchY: Math.max(0.35, Math.min(4, Number(config.stretchY) || 1)),
+    stretchX: Math.max(0.1, Math.min(12, Number(config.stretchX) || 1)),
+    stretchY: Math.max(0.1, Math.min(12, Number(config.stretchY) || 1)),
     lineCap: enumValue(config.lineCap, lineCapOptions, 'butt'),
     lineJoin: enumValue(config.lineJoin, lineJoinOptions, 'miter'),
     drawOpacity: numberInRange(config.drawOpacity, 1, 0, 1),
@@ -953,7 +953,7 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
       : 'right',
     circuitStyle: ['auto', 'iec', 'american'].includes(config.circuitStyle) ? config.circuitStyle : 'auto',
     terminalStyle: ['none', 'filled', 'open', 'mixed'].includes(config.terminalStyle) ? config.terminalStyle : 'none',
-    terminalLength: Math.max(0.55, Math.min(5, Number(config.terminalLength) || 2.2)),
+    terminalLength: Math.max(0.55, Math.min(12, Number(config.terminalLength) || 2.2)),
     circuitLabelPosition: ['l', 'l_', 'a', 'a_', 'none'].includes(config.circuitLabelPosition)
       ? config.circuitLabelPosition
       : 'l',
@@ -1981,6 +1981,66 @@ function boundsCenter(bounds) {
   return { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 }
 }
 
+function moveOriginToBoundsMin(element, nextBounds) {
+  const bounds = elementBounds(element)
+  return {
+    ...element,
+    origin: {
+      x: element.origin.x + nextBounds.minX - bounds.minX,
+      y: element.origin.y + nextBounds.minY - bounds.minY,
+    },
+  }
+}
+
+function resizeOriginScaledElement(element, nextBounds, currentWidth, currentHeight, nextWidth, nextHeight) {
+  const scale = Number(element.scale) || 1
+  const ratio = Math.max(0.05, Math.min(8, Math.min(nextWidth / currentWidth, nextHeight / currentHeight)))
+  return moveOriginToBoundsMin(
+    {
+      ...element,
+      scale: Number(formatNumber(scale * ratio)),
+    },
+    nextBounds,
+  )
+}
+
+function resizeLibraryElementToBounds(element, nextBounds, currentWidth, currentHeight, nextWidth, nextHeight) {
+  const preset = getLibraryPreset(element)
+  const config = getLibraryConfig(element, preset)
+  const xRatio = nextWidth / currentWidth
+  const yRatio = nextHeight / currentHeight
+  const circuitComponent = circuitTikzComponent(preset, config)
+
+  if (circuitComponent) {
+    const horizontal = config.circuitOrientation === 'right' || config.circuitOrientation === 'left'
+    const terminalRatio = horizontal ? xRatio : yRatio
+    const scaleRatio = horizontal ? yRatio : xRatio
+    return moveOriginToBoundsMin(
+      {
+        ...element,
+        scale: Number(formatNumber(Math.max(0.05, (Number(element.scale) || 1) * scaleRatio))),
+        config: {
+          ...element.config,
+          terminalLength: Number(formatNumber(Math.max(0.55, Math.min(12, config.terminalLength * terminalRatio)))),
+        },
+      },
+      nextBounds,
+    )
+  }
+
+  return moveOriginToBoundsMin(
+    {
+      ...element,
+      config: {
+        ...element.config,
+        stretchX: Number(formatNumber(Math.max(0.1, Math.min(12, config.stretchX * xRatio)))),
+        stretchY: Number(formatNumber(Math.max(0.1, Math.min(12, config.stretchY * yRatio)))),
+      },
+    },
+    nextBounds,
+  )
+}
+
 function resizeElementToBounds(element, nextBounds) {
   const current = elementBounds(element)
   const currentWidth = Math.max(0.001, current.maxX - current.minX)
@@ -2026,11 +2086,8 @@ function resizeElementToBounds(element, nextBounds) {
       },
     }
   }
-  if (element.type === 'diagram' || element.type === 'library') {
-    const scale = Number(element.scale) || 1
-    const ratio = Math.max(0.25, Math.min(4, Math.min(nextWidth / currentWidth, nextHeight / currentHeight)))
-    return { ...element, origin: boundsCenter(nextBounds), scale: scale * ratio }
-  }
+  if (element.type === 'diagram') return resizeOriginScaledElement(element, nextBounds, currentWidth, currentHeight, nextWidth, nextHeight)
+  if (element.type === 'library') return resizeLibraryElementToBounds(element, nextBounds, currentWidth, currentHeight, nextWidth, nextHeight)
   return element
 }
 
@@ -3969,9 +4026,9 @@ function App() {
       const originalBounds = interaction.bounds
       const nextBounds = {
         minX: originalBounds.minX,
-        minY: originalBounds.minY,
+        minY: Math.min(originalBounds.maxY - 0.1, point.y),
         maxX: Math.max(originalBounds.minX + 0.1, point.x),
-        maxY: Math.max(originalBounds.minY + 0.1, point.y),
+        maxY: originalBounds.maxY,
       }
       const originals = new Map(interaction.originals.map((element) => [element.id, element]))
 
@@ -8702,8 +8759,8 @@ function App() {
                           <span>Ancho</span>
                           <input
                             type="number"
-                            min="0.35"
-                            max="4"
+                            min="0.1"
+                            max="12"
                             step="0.05"
                             value={selectedLibraryConfig.stretchX}
                             onChange={(event) => updateSelectedLibraryConfig({ stretchX: Number(event.target.value) })}
@@ -8713,8 +8770,8 @@ function App() {
                           <span>Alto</span>
                           <input
                             type="number"
-                            min="0.35"
-                            max="4"
+                            min="0.1"
+                            max="12"
                             step="0.05"
                             value={selectedLibraryConfig.stretchY}
                             onChange={(event) => updateSelectedLibraryConfig({ stretchY: Number(event.target.value) })}
@@ -8801,7 +8858,7 @@ function App() {
                               <input
                                 type="number"
                                 min="0.55"
-                                max="5"
+                                max="12"
                                 step="0.05"
                                 value={selectedLibraryConfig.terminalLength}
                                 onChange={(event) => updateSelectedLibraryConfig({ terminalLength: Number(event.target.value) })}

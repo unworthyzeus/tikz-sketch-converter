@@ -53,6 +53,16 @@ test('text labels resize with persistent dimensions and export font size', () =>
   assert.match(appSource, /\\\\fontsize/)
 })
 
+test('object resize uses the bottom-right handle without recentering', () => {
+  assert.match(appSource, /function moveOriginToBoundsMin/)
+  assert.match(appSource, /function resizeLibraryElementToBounds/)
+  assert.match(appSource, /terminalLength: Number\(formatNumber/)
+  assert.match(appSource, /stretchX: Number\(formatNumber/)
+  assert.match(appSource, /minY: Math\.min\(originalBounds\.maxY - 0\.1, point\.y\)/)
+  assert.match(appSource, /maxY: originalBounds\.maxY/)
+  assert.doesNotMatch(appSource, /origin: boundsCenter\(nextBounds\), scale: scale \* ratio/)
+})
+
 test('telecommunications and circuit palettes include requested domains', () => {
   assert.match(paletteSource, /telecom-transmitter-chain/)
   assert.match(paletteSource, /telecom-qpsk-mod/)
