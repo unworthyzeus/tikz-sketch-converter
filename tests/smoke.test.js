@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { unresolvedGenericPreviewIds } from '../src/previewKinds.js'
 import { libraryPaletteItems } from '../src/tikzPaletteItems.js'
+import { libraryPresets } from '../src/tikzLibraryPresets.js'
 
 const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const paletteSource = readFileSync(new URL('../src/tikzPaletteItems.js', import.meta.url), 'utf8')
@@ -48,6 +50,17 @@ test('circuit palette ids and previews resolve to circuit symbols', () => {
   assert.equal(libraryPaletteItems.find((item) => item.id === 'circuit-switch')?.preview, 'switch')
   assert.match(appSource, /key\.includes\('current source'\)\) return 'I'/)
   assert.match(appSource, /key\.includes\('controlled voltage'\).*return 'cV'/)
+})
+
+test('generic palette previews are semantically classified', () => {
+  assert.deepEqual(unresolvedGenericPreviewIds([...libraryPaletteItems, ...libraryPresets]), [])
+  assert.match(appSource, /renderPlotPreview/)
+  assert.match(appSource, /renderMatrixPreview/)
+  assert.match(appSource, /renderNetworkPreview/)
+  assert.match(appSource, /renderLogicPreview/)
+  assert.match(appSource, /renderFlowPreview/)
+  assert.match(appSource, /normalizeBoardElement/)
+  assert.match(appSource, /map\(normalizeBoardElement\)/)
 })
 
 test('TODO tracks the major product areas', () => {

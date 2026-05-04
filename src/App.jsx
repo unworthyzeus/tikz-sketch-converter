@@ -41,6 +41,7 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import './App.css'
 import { latexSymbolGroups } from './latexSymbols'
+import { previewKindForPreset } from './previewKinds'
 import { libraryPresets } from './tikzLibraryPresets'
 import { libraryPaletteItems } from './tikzPaletteItems'
 
@@ -327,6 +328,47 @@ function makeLibraryElement(preset, origin = preset.origin) {
   }
 }
 
+function normalizeBoardElement(element) {
+  if (!element || typeof element !== 'object' || typeof element.type !== 'string') return null
+
+  if (element.type === 'library') {
+    const preset = getLibraryPreset(element)
+    return {
+      ...element,
+      id: element.id ?? createId(),
+      type: 'library',
+      presetId: element.presetId ?? preset.id,
+      title: element.title ?? preset.title ?? 'Objeto TikZ',
+      group: element.group ?? preset.group ?? 'TikZ',
+      origin: element.origin ?? preset.origin ?? { x: 0, y: 0 },
+      stroke: element.stroke ?? preset.stroke ?? '#111111',
+      fill: element.fill ?? preset.fill ?? 'none',
+      fillOpacity: element.fillOpacity ?? preset.fillOpacity ?? 0.18,
+      scale: element.scale ?? preset.scale ?? 1,
+      tikzOptions: element.tikzOptions ?? preset.tikzOptions ?? '',
+      config: { ...defaultLibraryConfig(preset), ...(element.config ?? {}) },
+      width: element.width ?? preset.defaultStrokeWidth ?? 0.75,
+      dashed: Boolean(element.dashed),
+    }
+  }
+
+  if (element.type === 'diagram') {
+    return {
+      ...element,
+      id: element.id ?? createId(),
+      title: element.title ?? 'Diagrama',
+      origin: element.origin ?? { x: 0, y: 0 },
+      stroke: element.stroke ?? '#111111',
+      fill: element.fill ?? 'none',
+      fillOpacity: element.fillOpacity ?? 0.18,
+      width: element.width ?? 0.75,
+      scale: element.scale ?? 1,
+    }
+  }
+
+  return { ...element, id: element.id ?? createId() }
+}
+
 function tikzArrowStyle(value) {
   return arrowStyleOptions.find((option) => option.value === value)?.tikz ?? '-{Stealth}'
 }
@@ -412,35 +454,6 @@ function circuitTikzComponent(preset = {}, config = {}) {
   if (key.includes('lamp')) return 'lamp'
   if (key.includes('source')) return 'V'
   return ''
-}
-
-function circuitPreviewKind(preset = {}) {
-  if (preset.group !== 'Circuit') return ''
-  const key = `${preset.id ?? ''} ${preset.title ?? ''} ${preset.description ?? ''}`.toLowerCase()
-  if (key.includes('differential-pair') || key.includes('differential pair')) return 'differential-pair'
-  if (key.includes('nmos')) return 'nmos'
-  if (key.includes('pmos')) return 'pmos'
-  if (key.includes('pnp')) return 'pnp'
-  if (key.includes('npn') || key.includes('bjt')) return 'npn'
-  if (key.includes('op-amp') || key.includes('op amp') || key.includes('opamp')) return 'opamp'
-  if (key.includes('transformer')) return 'transformer'
-  if (key.includes('transmission') || key.includes('tline')) return 'transmission-line'
-  if (key.includes('switch')) return 'switch'
-  if (key.includes('voltmeter')) return 'voltmeter'
-  if (key.includes('ammeter')) return 'ammeter'
-  if (key.includes('differential probe')) return 'diff-probe'
-  if (key.includes('controlled') || key.includes('vcvs')) return 'controlled-source'
-  if (key.includes('current source')) return 'current-source'
-  if (key.includes('battery')) return 'battery'
-  if (key.includes('port')) return 'port'
-  if (key.includes('lamp')) return 'lamp'
-  if (key.includes('zener')) return 'zener'
-  if (key.includes('led')) return 'led'
-  if (key.includes('diode')) return 'diode'
-  if (key.includes('capacitor')) return 'capacitor'
-  if (key.includes('inductor')) return 'inductor'
-  if (key.includes('resistor')) return 'resistor'
-  return preset.preview === 'circuit' ? 'circuit' : ''
 }
 
 function circuitEndPoint(config = {}) {
@@ -758,8 +771,10 @@ function readInitialSharedBoard() {
 
   try {
     const payload = decodeBoardPayload(encoded)
-    const nextElements = Array.isArray(payload) ? payload : payload.elements
-    if (!Array.isArray(nextElements)) return null
+    const rawElements = Array.isArray(payload) ? payload : payload.elements
+    if (!Array.isArray(rawElements)) return null
+    const nextElements = rawElements.map(normalizeBoardElement).filter(Boolean)
+    if (!nextElements.length) return null
     return {
       elements: nextElements,
       settings: payload.settings && typeof payload.settings === 'object' ? payload.settings : null,
@@ -3494,11 +3509,13 @@ function App() {
 
     try {
       const payload = JSON.parse(await file.text())
-      const nextElements = Array.isArray(payload) ? payload : payload.elements
-      if (!Array.isArray(nextElements)) throw new Error('Missing elements array')
-      if (!nextElements.every((element) => element && typeof element === 'object' && typeof element.type === 'string')) {
+      const rawElements = Array.isArray(payload) ? payload : payload.elements
+      if (!Array.isArray(rawElements)) throw new Error('Missing elements array')
+      if (!rawElements.every((element) => element && typeof element === 'object' && typeof element.type === 'string')) {
         throw new Error('Invalid element payload')
       }
+      const nextElements = rawElements.map(normalizeBoardElement).filter(Boolean)
+      if (!nextElements.length) throw new Error('No valid elements found')
 
       pushHistory(elements)
       setElements(nextElements)
@@ -3983,6 +4000,55 @@ function App() {
         {text}
       </text>
     )
+    const miniText = (x, y, text, props = {}) => (
+      <text x={sx(x)} y={sy(y)} {...labelStyle} {...props}>
+        {text}
+      </text>
+    )
+    const rectNode = (x, y, w, h, text, props = {}) => (
+      <g key={props.key}>
+        <rect {...filledShapeCommon} x={sx(x)} y={sy(y)} width={baseWidth * w} height={baseHeight * h} rx={props.rx ?? 3} />
+        {text && miniText(x + w / 2, y + h / 2 + 0.035, text, { fontSize: props.fontSize ?? 10 })}
+      </g>
+    )
+    const diamondNode = (cx, cy, w, h, text) => (
+      <g>
+        <path {...filledShapeCommon} d={`M ${sx(cx)} ${sy(cy - h / 2)} L ${sx(cx + w / 2)} ${sy(cy)} L ${sx(cx)} ${sy(cy + h / 2)} L ${sx(cx - w / 2)} ${sy(cy)} Z`} />
+        {text && miniText(cx, cy + 0.035, text, { fontSize: 10 })}
+      </g>
+    )
+    const circleNode = (cx, cy, r, text, props = {}) => (
+      <g key={props.key}>
+        <circle {...filledShapeCommon} cx={sx(cx)} cy={sy(cy)} r={Math.max(5, Math.min(baseWidth, baseHeight) * r)} />
+        {text && miniText(cx, cy + 0.035, text, { fontSize: props.fontSize ?? 10 })}
+      </g>
+    )
+    const arrow = (x1, y1, x2, y2, key, props = {}) => {
+      const start = { x: sx(x1), y: sy(y1) }
+      const end = { x: sx(x2), y: sy(y2) }
+      const angle = Math.atan2(end.y - start.y, end.x - start.x)
+      const size = props.size ?? 6
+      const left = {
+        x: end.x - size * Math.cos(angle - 0.45),
+        y: end.y - size * Math.sin(angle - 0.45),
+      }
+      const right = {
+        x: end.x - size * Math.cos(angle + 0.45),
+        y: end.y - size * Math.sin(angle + 0.45),
+      }
+      return (
+        <g key={key}>
+          <line {...shapeCommon} x1={start.x} y1={start.y} x2={end.x} y2={end.y} opacity={props.opacity ?? 1} />
+          <path d={`M ${end.x} ${end.y} L ${left.x} ${left.y} L ${right.x} ${right.y}`} fill="none" stroke={previewStroke} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity={props.opacity ?? 1} />
+        </g>
+      )
+    }
+    const axisFrame = () => (
+      <g>
+        <line {...shapeCommon} x1={sx(0.14)} y1={sy(0.78)} x2={sx(0.9)} y2={sy(0.78)} opacity="0.55" />
+        <line {...shapeCommon} x1={sx(0.16)} y1={sy(0.18)} x2={sx(0.16)} y2={sy(0.82)} opacity="0.55" />
+      </g>
+    )
     const renderMosPreview = (kind) => {
       const isPmos = kind === 'pmos'
       return (
@@ -4204,10 +4270,941 @@ function App() {
 
       return null
     }
+    const renderPlotPreview = (kind) => {
+      const poly = (points, props = {}) => <polyline {...shapeCommon} points={points.map(([x, y]) => `${sx(x)},${sy(y)}`).join(' ')} {...props} />
+      const dot = (x, y, key, r = 3.5) => <circle key={key} cx={sx(x)} cy={sy(y)} r={r} fill={previewStroke} />
+
+      if (kind.includes('error-bars')) {
+        const pts = [
+          [0.28, 0.58],
+          [0.48, 0.46],
+          [0.68, 0.36],
+        ]
+        return (
+          <g>
+            {axisFrame()}
+            {poly(pts)}
+            {pts.map(([x, y], index) => (
+              <g key={index}>
+                <line {...shapeCommon} x1={sx(x)} y1={sy(y - 0.12)} x2={sx(x)} y2={sy(y + 0.12)} />
+                <line {...shapeCommon} x1={sx(x - 0.04)} y1={sy(y - 0.12)} x2={sx(x + 0.04)} y2={sy(y - 0.12)} />
+                <line {...shapeCommon} x1={sx(x - 0.04)} y1={sy(y + 0.12)} x2={sx(x + 0.04)} y2={sy(y + 0.12)} />
+                {dot(x, y, `dot-${index}`)}
+              </g>
+            ))}
+          </g>
+        )
+      }
+
+      if (kind.includes('scatter') || kind.includes('constellation')) {
+        const pts = kind.includes('constellation')
+          ? [
+              [0.32, 0.35],
+              [0.32, 0.65],
+              [0.68, 0.35],
+              [0.68, 0.65],
+            ]
+          : [
+              [0.25, 0.65],
+              [0.38, 0.48],
+              [0.53, 0.55],
+              [0.7, 0.3],
+              [0.8, 0.42],
+            ]
+        return (
+          <g>
+            {axisFrame()}
+            {pts.map(([x, y], index) => dot(x, y, index, 4))}
+          </g>
+        )
+      }
+
+      if (kind.includes('bar') || kind.includes('histogram')) {
+        const bars = [0.45, 0.3, 0.58, 0.38, 0.65]
+        return (
+          <g>
+            {axisFrame()}
+            {bars.map((bar, index) => (
+              <rect key={index} x={sx(0.25 + index * 0.12)} y={sy(0.78 - bar)} width={baseWidth * 0.075} height={baseHeight * bar} fill={previewFill} fillOpacity="0.65" stroke={previewStroke} />
+            ))}
+          </g>
+        )
+      }
+
+      if (kind.includes('heatmap') || kind.includes('spectrogram')) {
+        return (
+          <g>
+            {axisFrame()}
+            {[0, 1, 2, 3].flatMap((row) =>
+              [0, 1, 2, 3, 4].map((col) => (
+                <rect
+                  key={`${row}-${col}`}
+                  x={sx(0.24 + col * 0.12)}
+                  y={sy(0.3 + row * 0.11)}
+                  width={baseWidth * 0.1}
+                  height={baseHeight * 0.09}
+                  fill={previewStroke}
+                  opacity={0.15 + ((row + col) % 4) * 0.18}
+                />
+              )),
+            )}
+          </g>
+        )
+      }
+
+      if (kind.includes('boxplot') || kind.includes('violin')) {
+        return (
+          <g>
+            {axisFrame()}
+            {kind.includes('violin') ? (
+              <path {...filledShapeCommon} d={`M ${sx(0.5)} ${sy(0.24)} C ${sx(0.28)} ${sy(0.38)}, ${sx(0.35)} ${sy(0.62)}, ${sx(0.5)} ${sy(0.75)} C ${sx(0.65)} ${sy(0.62)}, ${sx(0.72)} ${sy(0.38)}, ${sx(0.5)} ${sy(0.24)} Z`} />
+            ) : (
+              <>
+                <line {...shapeCommon} x1={sx(0.5)} y1={sy(0.24)} x2={sx(0.5)} y2={sy(0.72)} />
+                <rect {...filledShapeCommon} x={sx(0.39)} y={sy(0.4)} width={baseWidth * 0.22} height={baseHeight * 0.2} />
+                <line {...shapeCommon} x1={sx(0.36)} y1={sy(0.32)} x2={sx(0.64)} y2={sy(0.32)} />
+                <line {...shapeCommon} x1={sx(0.36)} y1={sy(0.72)} x2={sx(0.64)} y2={sy(0.72)} />
+              </>
+            )}
+          </g>
+        )
+      }
+
+      if (kind.includes('polar')) {
+        return (
+          <g>
+            <circle {...shapeCommon} cx={sx(0.5)} cy={sy(0.5)} r={Math.min(baseWidth, baseHeight) * 0.28} opacity="0.45" />
+            <line {...shapeCommon} x1={sx(0.5)} y1={sy(0.5)} x2={sx(0.84)} y2={sy(0.5)} opacity="0.45" />
+            <path {...shapeCommon} d={`M ${sx(0.5)} ${sy(0.5)} C ${sx(0.62)} ${sy(0.18)}, ${sx(0.86)} ${sy(0.32)}, ${sx(0.68)} ${sy(0.62)} C ${sx(0.5)} ${sy(0.86)}, ${sx(0.28)} ${sy(0.62)}, ${sx(0.5)} ${sy(0.5)}`} />
+          </g>
+        )
+      }
+
+      if (kind.includes('group') || kind.includes('small-multiples')) {
+        return (
+          <g>
+            {[0.14, 0.54].map((left, index) => (
+              <g key={index}>
+                <rect {...shapeCommon} x={sx(left)} y={sy(0.28)} width={baseWidth * 0.32} height={baseHeight * 0.42} />
+                {poly([
+                  [left + 0.05, 0.62 - index * 0.16],
+                  [left + 0.16, 0.42 + index * 0.12],
+                  [left + 0.27, 0.5],
+                ])}
+              </g>
+            ))}
+          </g>
+        )
+      }
+
+      if (kind.includes('roc')) {
+        return (
+          <g>
+            {axisFrame()}
+            <line {...shapeCommon} x1={sx(0.2)} y1={sy(0.75)} x2={sx(0.82)} y2={sy(0.24)} opacity="0.35" strokeDasharray="4 3" />
+            {poly([
+              [0.2, 0.75],
+              [0.3, 0.45],
+              [0.5, 0.32],
+              [0.82, 0.22],
+            ])}
+          </g>
+        )
+      }
+
+      if (kind.includes('confidence')) {
+        return (
+          <g>
+            {axisFrame()}
+            <path d={`M ${sx(0.24)} ${sy(0.62)} C ${sx(0.42)} ${sy(0.5)}, ${sx(0.62)} ${sy(0.38)}, ${sx(0.82)} ${sy(0.3)} L ${sx(0.82)} ${sy(0.48)} C ${sx(0.62)} ${sy(0.58)}, ${sx(0.42)} ${sy(0.68)}, ${sx(0.24)} ${sy(0.76)} Z`} fill={previewStroke} opacity="0.14" />
+            {poly([
+              [0.24, 0.68],
+              [0.42, 0.58],
+              [0.62, 0.48],
+              [0.82, 0.38],
+            ])}
+          </g>
+        )
+      }
+
+      if (kind.includes('contour')) {
+        return (
+          <g>
+            {axisFrame()}
+            {[0.16, 0.25, 0.34].map((offset, index) => (
+              <ellipse key={index} {...shapeCommon} cx={sx(0.52)} cy={sy(0.5)} rx={baseWidth * (0.16 + index * 0.06)} ry={baseHeight * (0.08 + index * 0.045)} opacity={0.55 + index * 0.15} />
+            ))}
+          </g>
+        )
+      }
+
+      if (kind.includes('surface')) {
+        return (
+          <g>
+            <path {...filledShapeCommon} d={`M ${sx(0.22)} ${sy(0.66)} L ${sx(0.48)} ${sy(0.38)} L ${sx(0.82)} ${sy(0.54)} L ${sx(0.56)} ${sy(0.78)} Z`} />
+            {[0, 1, 2].map((index) => (
+              <line key={index} {...shapeCommon} x1={sx(0.26 + index * 0.18)} y1={sy(0.62 - index * 0.08)} x2={sx(0.56 + index * 0.12)} y2={sy(0.76 - index * 0.08)} opacity="0.4" />
+            ))}
+          </g>
+        )
+      }
+
+      if (kind.includes('qq')) {
+        return (
+          <g>
+            {axisFrame()}
+            <line {...shapeCommon} x1={sx(0.24)} y1={sy(0.7)} x2={sx(0.82)} y2={sy(0.28)} opacity="0.4" />
+            {[0.26, 0.38, 0.48, 0.63, 0.78].map((x, index) => dot(x, 0.72 - index * 0.1 + (index % 2) * 0.03, index, 3))}
+          </g>
+        )
+      }
+
+      if (kind.includes('ber') || kind.includes('training')) {
+        return (
+          <g>
+            {axisFrame()}
+            {poly(
+              kind.includes('training')
+                ? [
+                    [0.22, 0.28],
+                    [0.38, 0.42],
+                    [0.56, 0.58],
+                    [0.84, 0.72],
+                  ]
+                : [
+                    [0.22, 0.26],
+                    [0.38, 0.38],
+                    [0.56, 0.56],
+                    [0.84, 0.74],
+                  ],
+            )}
+          </g>
+        )
+      }
+
+      if (kind.includes('eye')) {
+        return (
+          <g>
+            {axisFrame()}
+            <path {...shapeCommon} d={`M ${sx(0.22)} ${sy(0.35)} C ${sx(0.42)} ${sy(0.72)}, ${sx(0.62)} ${sy(0.72)}, ${sx(0.82)} ${sy(0.35)}`} opacity="0.65" />
+            <path {...shapeCommon} d={`M ${sx(0.22)} ${sy(0.65)} C ${sx(0.42)} ${sy(0.28)}, ${sx(0.62)} ${sy(0.28)}, ${sx(0.82)} ${sy(0.65)}`} opacity="0.65" />
+            <path {...shapeCommon} d={`M ${sx(0.22)} ${sy(0.5)} C ${sx(0.42)} ${sy(0.24)}, ${sx(0.62)} ${sy(0.76)}, ${sx(0.82)} ${sy(0.5)}`} opacity="0.4" />
+          </g>
+        )
+      }
+
+      if (kind.includes('impulse')) {
+        const pts = [0.28, 0.44, 0.6, 0.76]
+        return (
+          <g>
+            {axisFrame()}
+            {pts.map((x, index) => (
+              <g key={index}>
+                <line {...shapeCommon} x1={sx(x)} y1={sy(0.78)} x2={sx(x)} y2={sy(0.3 + index * 0.11)} />
+                {dot(x, 0.3 + index * 0.11, index, 3)}
+              </g>
+            ))}
+          </g>
+        )
+      }
+
+      return (
+        <g>
+          {axisFrame()}
+          {poly([
+            [0.22, 0.62],
+            [0.38, 0.42],
+            [0.56, 0.36],
+            [0.82, 0.58],
+          ])}
+        </g>
+      )
+    }
+    const renderMatrixPreview = (kind) => {
+      if (kind.includes('commutative-square') || kind.includes('tikz-cd') || kind.includes('math-comm-triangle')) {
+        const points = kind.includes('triangle')
+          ? [
+              [0.5, 0.24],
+              [0.24, 0.72],
+              [0.76, 0.72],
+            ]
+          : [
+              [0.26, 0.28],
+              [0.74, 0.28],
+              [0.26, 0.72],
+              [0.74, 0.72],
+            ]
+        return (
+          <g>
+            {points.map(([x, y], index) => circleNode(x, y, 0.05, ['A', 'B', 'C', 'D'][index], { fontSize: 9 }))}
+            {kind.includes('triangle') ? (
+              <>
+                {arrow(0.5, 0.28, 0.28, 0.68, 't1')}
+                {arrow(0.5, 0.28, 0.72, 0.68, 't2')}
+                {arrow(0.28, 0.72, 0.72, 0.72, 't3')}
+              </>
+            ) : (
+              <>
+                {arrow(0.3, 0.28, 0.7, 0.28, 's1')}
+                {arrow(0.26, 0.32, 0.26, 0.68, 's2')}
+                {arrow(0.74, 0.32, 0.74, 0.68, 's3')}
+                {arrow(0.3, 0.72, 0.7, 0.72, 's4')}
+              </>
+            )}
+          </g>
+        )
+      }
+
+      if (kind.includes('link-budget')) {
+        return (
+          <g>
+            {rectNode(0.18, 0.22, 0.64, 0.56, '', { rx: 0 })}
+            {['Tx 20 dBm', 'Path -102', 'Rx -82'].map((text, index) => miniText(0.5, 0.34 + index * 0.14, text, { key: text, fontSize: 10 }))}
+          </g>
+        )
+      }
+
+      if (kind.includes('embedding')) {
+        return (
+          <g>
+            {[0, 1, 2, 3].map((index) => (
+              <rect key={index} x={sx(0.26 + index * 0.12)} y={sy(0.28 + index * 0.04)} width={baseWidth * 0.1} height={baseHeight * 0.44} fill={previewStroke} opacity={0.08 + index * 0.06} stroke={previewStroke} />
+            ))}
+            {miniText(0.5, 0.78, 'tokens', { fontSize: 8 })}
+          </g>
+        )
+      }
+      if (kind.includes('bits') || kind.includes('random-bits')) return rectNode(0.22, 0.38, 0.56, 0.22, kind.includes('random') ? '101101' : 'b_k')
+      if (kind.includes('mimo-channel')) return rectNode(0.32, 0.28, 0.36, 0.44, 'H', { fontSize: 16 })
+      if (kind.includes('sparameter')) return rectNode(0.3, 0.32, 0.4, 0.36, 'S', { fontSize: 16 })
+      if (kind.includes('uml-class')) {
+        return (
+          <g>
+            <rect {...filledShapeCommon} x={sx(0.23)} y={sy(0.22)} width={baseWidth * 0.54} height={baseHeight * 0.56} />
+            {[0.36, 0.52].map((y) => <line key={y} {...shapeCommon} x1={sx(0.23)} y1={sy(y)} x2={sx(0.77)} y2={sy(y)} />)}
+            {miniText(0.5, 0.31, 'Class')}
+          </g>
+        )
+      }
+
+      if (kind.includes('confusion')) {
+        return (
+          <g>
+            {[0, 1].flatMap((row) =>
+              [0, 1].map((col) => (
+                <rect key={`${row}-${col}`} x={sx(0.3 + col * 0.2)} y={sy(0.32 + row * 0.18)} width={baseWidth * 0.18} height={baseHeight * 0.15} fill={previewStroke} opacity={row === col ? 0.28 : 0.08} stroke={previewStroke} />
+              )),
+            )}
+          </g>
+        )
+      }
+
+      return (
+        <g>
+          <text x={sx(0.25)} y={sy(0.72)} {...labelStyle} fontSize="20">
+            [
+          </text>
+          <text x={sx(0.75)} y={sy(0.72)} {...labelStyle} fontSize="20">
+            ]
+          </text>
+          {[0, 1].flatMap((row) => [0, 1].map((col) => miniText(0.42 + col * 0.16, 0.42 + row * 0.16, row === col ? '1' : '0', { key: `${row}-${col}` })))}
+        </g>
+      )
+    }
+    const renderNetworkPreview = (kind) => {
+      if (kind.includes('automata')) {
+        return (
+          <g>
+            {circleNode(0.25, 0.52, 0.08, 'q0', { fontSize: 8 })}
+            {circleNode(0.68, 0.52, 0.08, 'q1', { fontSize: 8 })}
+            {arrow(0.33, 0.52, 0.6, 0.52, 'auto')}
+            <path {...shapeCommon} d={`M ${sx(0.68)} ${sy(0.44)} C ${sx(0.82)} ${sy(0.2)}, ${sx(0.52)} ${sy(0.2)}, ${sx(0.66)} ${sy(0.44)}`} />
+          </g>
+        )
+      }
+
+      if (kind.includes('tree')) {
+        const nodes = [
+          [0.5, 0.24],
+          [0.3, 0.58],
+          [0.5, 0.66],
+          [0.7, 0.58],
+        ]
+        return (
+          <g>
+            {nodes.slice(1).map(([x, y], index) => <line key={index} {...shapeCommon} x1={sx(0.5)} y1={sy(0.28)} x2={sx(x)} y2={sy(y - 0.05)} opacity="0.45" />)}
+            {nodes.map(([x, y], index) => circleNode(x, y, 0.045, index === 0 ? 'R' : '', { key: index, fontSize: 8 }))}
+          </g>
+        )
+      }
+
+      if (kind.includes('mindmap')) {
+        return (
+          <g>
+            {circleNode(0.5, 0.5, 0.12, 'M', { fontSize: 10 })}
+            {[0.28, 0.5, 0.72].map((y, index) => (
+              <g key={index}>
+                <line {...shapeCommon} x1={sx(0.5)} y1={sy(0.5)} x2={sx(0.72)} y2={sy(y)} opacity="0.45" />
+                {circleNode(0.78, y, 0.055, '')}
+              </g>
+            ))}
+          </g>
+        )
+      }
+
+      if (kind.includes('data-flow')) {
+        return (
+          <g>
+            {circleNode(0.22, 0.55, 0.06, 'x', { fontSize: 8 })}
+            {circleNode(0.48, 0.42, 0.06, 'z', { fontSize: 8 })}
+            {circleNode(0.74, 0.3, 0.06, 'y', { fontSize: 8 })}
+            {circleNode(0.74, 0.66, 0.06, 'l', { fontSize: 8 })}
+            {arrow(0.28, 0.52, 0.42, 0.44, 'df1')}
+            {arrow(0.54, 0.4, 0.68, 0.32, 'df2')}
+            {arrow(0.54, 0.46, 0.68, 0.62, 'df3')}
+          </g>
+        )
+      }
+
+      if (kind.includes('petri')) {
+        return (
+          <g>
+            {circleNode(0.24, 0.5, 0.08, '')}
+            {rectNode(0.45, 0.36, 0.08, 0.28, '')}
+            {circleNode(0.74, 0.5, 0.08, '')}
+            {arrow(0.32, 0.5, 0.45, 0.5, 'p1')}
+            {arrow(0.53, 0.5, 0.66, 0.5, 'p2')}
+          </g>
+        )
+      }
+
+      if (kind.includes('bipartite')) {
+        return (
+          <g>
+            {[0.3, 0.5, 0.7].map((y, index) => circleNode(0.28, y, 0.045, '', { key: `l${index}` }))}
+            {[0.38, 0.62].map((y, index) => circleNode(0.72, y, 0.045, '', { key: `r${index}` }))}
+            {[0.3, 0.5, 0.7].flatMap((y1) => [0.38, 0.62].map((y2) => <line key={`${y1}-${y2}`} {...shapeCommon} x1={sx(0.32)} y1={sy(y1)} x2={sx(0.68)} y2={sy(y2)} opacity="0.35" />))}
+          </g>
+        )
+      }
+
+      if (kind.includes('autoencoder')) {
+        return (
+          <g>
+            {[0.22, 0.34, 0.46, 0.58, 0.7].map((x, index) => (
+              <g key={x}>
+                {Array.from({ length: index === 2 ? 1 : index % 2 ? 2 : 3 }, (_, node) => circleNode(x, 0.5 + (node - 1) * 0.14, 0.035, '', { key: node }))}
+              </g>
+            ))}
+            {miniText(0.46, 0.26, 'z')}
+          </g>
+        )
+      }
+
+      if (kind.includes('unet')) {
+        return (
+          <g>
+            {[0.2, 0.34, 0.5, 0.66, 0.8].map((x, index) => rectNode(x - 0.045, 0.28 + Math.abs(index - 2) * 0.1, 0.09, 0.42 - Math.abs(index - 2) * 0.06, '', { key: x }))}
+            <path {...shapeCommon} d={`M ${sx(0.28)} ${sy(0.35)} C ${sx(0.42)} ${sy(0.18)}, ${sx(0.6)} ${sy(0.18)}, ${sx(0.72)} ${sy(0.35)}`} opacity="0.45" />
+          </g>
+        )
+      }
+
+      if (kind.includes('mimo-tx') || kind.includes('mimo-rx')) {
+        return (
+          <g>
+            {rectNode(0.18, 0.36, 0.24, 0.28, kind.includes('tx') ? 'TX' : 'EQ')}
+            {[0.26, 0.5, 0.74].map((y, index) => arrow(0.42, 0.5, 0.78, y, index))}
+          </g>
+        )
+      }
+
+      if (kind.includes('directed') || kind.includes('graphs')) {
+        return (
+          <g>
+            {circleNode(0.25, 0.5, 0.07, 'u')}
+            {circleNode(0.75, 0.5, 0.07, 'v')}
+            {arrow(0.32, 0.5, 0.68, 0.5, 'edge')}
+          </g>
+        )
+      }
+
+      return (
+        <g>
+          {[0.24, 0.5, 0.76].map((x, layer) =>
+            Array.from({ length: layer === 1 ? 4 : 3 }, (_, node) => (
+              <circle key={`${layer}-${node}`} cx={sx(x)} cy={sy(0.32 + node * (layer === 1 ? 0.12 : 0.16))} r="5" fill={previewFill} stroke={previewStroke} />
+            )),
+          )}
+          {[0.32, 0.5, 0.68].map((y) => <line key={y} {...shapeCommon} x1={sx(0.3)} y1={sy(y)} x2={sx(0.7)} y2={sy(y)} opacity="0.22" />)}
+        </g>
+      )
+    }
+    const renderLogicPreview = (kind) => {
+      if (kind.includes('not')) {
+        return (
+          <g>
+            <path {...shapeCommon} d={`M ${sx(0.34)} ${sy(0.3)} L ${sx(0.34)} ${sy(0.7)} L ${sx(0.66)} ${sy(0.5)} Z`} />
+            <circle {...shapeCommon} cx={sx(0.7)} cy={sy(0.5)} r="4" />
+            <line {...shapeCommon} x1={sx(0.12)} y1={sy(0.5)} x2={sx(0.34)} y2={sy(0.5)} />
+            <line {...shapeCommon} x1={sx(0.74)} y1={sy(0.5)} x2={sx(0.9)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+      if (kind.includes('gates-iec')) {
+        return (
+          <g>
+            {['AND', 'OR', 'NOT'].map((label, index) => (
+              <g key={label}>
+                {rectNode(0.15 + index * 0.25, 0.38, 0.18, 0.22, label, { fontSize: 7 })}
+                {index < 2 && arrow(0.33 + index * 0.25, 0.49, 0.39 + index * 0.25, 0.49, `lg-${index}`, { size: 4 })}
+              </g>
+            ))}
+          </g>
+        )
+      }
+      if (kind.includes('mux')) return rectNode(0.32, 0.24, 0.36, 0.52, 'MUX')
+      if (kind.includes('flipflop')) return rectNode(0.3, 0.24, 0.4, 0.52, 'D Q')
+      if (kind.includes('adder')) return circleNode(0.5, 0.5, 0.15, 'SUM', { fontSize: 10 })
+      const isOr = kind.includes('or') || kind.includes('xor')
+      return (
+        <g>
+          <path {...shapeCommon} d={isOr ? `M ${sx(0.32)} ${sy(0.26)} C ${sx(0.48)} ${sy(0.34)}, ${sx(0.48)} ${sy(0.66)}, ${sx(0.32)} ${sy(0.74)} C ${sx(0.56)} ${sy(0.72)}, ${sx(0.72)} ${sy(0.62)}, ${sx(0.82)} ${sy(0.5)} C ${sx(0.72)} ${sy(0.38)}, ${sx(0.56)} ${sy(0.28)}, ${sx(0.32)} ${sy(0.26)}` : `M ${sx(0.32)} ${sy(0.26)} L ${sx(0.56)} ${sy(0.26)} C ${sx(0.78)} ${sy(0.28)}, ${sx(0.78)} ${sy(0.72)}, ${sx(0.56)} ${sy(0.74)} L ${sx(0.32)} ${sy(0.74)} Z`} />
+          <line {...shapeCommon} x1={sx(0.12)} y1={sy(0.4)} x2={sx(0.34)} y2={sy(0.4)} />
+          <line {...shapeCommon} x1={sx(0.12)} y1={sy(0.6)} x2={sx(0.34)} y2={sy(0.6)} />
+          <line {...shapeCommon} x1={sx(0.78)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+          {(kind.includes('nand') || kind.includes('nor') || kind.includes('xnor')) && <circle {...shapeCommon} cx={sx(0.82)} cy={sy(0.5)} r="4" />}
+        </g>
+      )
+    }
+    const renderFlowPreview = (kind) => {
+      if (kind.includes('shape-decision') || kind.includes('flow-decision')) return diamondNode(0.5, 0.5, 0.42, 0.42, '?')
+      if (kind.includes('shapes-palette')) {
+        return (
+          <g>
+            {diamondNode(0.25, 0.5, 0.22, 0.28, '')}
+            {circleNode(0.52, 0.5, 0.09, '')}
+            {rectNode(0.66, 0.38, 0.22, 0.24, 'III', { fontSize: 8 })}
+          </g>
+        )
+      }
+      if (kind.includes('ellipse')) {
+        return (
+          <g>
+            <ellipse {...filledShapeCommon} cx={sx(0.5)} cy={sy(0.5)} rx={baseWidth * 0.24} ry={baseHeight * 0.16} />
+            {miniText(0.5, 0.53, 'x')}
+          </g>
+        )
+      }
+      if (kind.includes('cylinder')) {
+        return (
+          <g>
+            <ellipse {...filledShapeCommon} cx={sx(0.5)} cy={sy(0.28)} rx={baseWidth * 0.22} ry={baseHeight * 0.08} />
+            <rect {...filledShapeCommon} x={sx(0.28)} y={sy(0.28)} width={baseWidth * 0.44} height={baseHeight * 0.42} />
+            <ellipse {...shapeCommon} cx={sx(0.5)} cy={sy(0.7)} rx={baseWidth * 0.22} ry={baseHeight * 0.08} />
+          </g>
+        )
+      }
+      if (kind.includes('cloud')) return <path {...filledShapeCommon} d={`M ${sx(0.25)} ${sy(0.58)} C ${sx(0.15)} ${sy(0.45)}, ${sx(0.3)} ${sy(0.3)}, ${sx(0.42)} ${sy(0.38)} C ${sx(0.48)} ${sy(0.2)}, ${sx(0.72)} ${sy(0.3)}, ${sx(0.68)} ${sy(0.48)} C ${sx(0.86)} ${sy(0.48)}, ${sx(0.82)} ${sy(0.72)}, ${sx(0.62)} ${sy(0.68)} L ${sx(0.3)} ${sy(0.68)} C ${sx(0.22)} ${sy(0.68)}, ${sx(0.18)} ${sy(0.62)}, ${sx(0.25)} ${sy(0.58)} Z`} />
+      if (kind.includes('callout')) {
+        return (
+          <g>
+            {rectNode(0.25, 0.28, 0.45, 0.28, 'note')}
+            <path {...shapeCommon} d={`M ${sx(0.62)} ${sy(0.56)} L ${sx(0.84)} ${sy(0.78)}`} />
+          </g>
+        )
+      }
+      if (kind.includes('image-placeholder')) {
+        return (
+          <g>
+            <rect {...shapeCommon} x={sx(0.22)} y={sy(0.28)} width={baseWidth * 0.56} height={baseHeight * 0.42} />
+            <line {...shapeCommon} x1={sx(0.22)} y1={sy(0.28)} x2={sx(0.78)} y2={sy(0.7)} opacity="0.5" />
+            <line {...shapeCommon} x1={sx(0.78)} y1={sy(0.28)} x2={sx(0.22)} y2={sy(0.7)} opacity="0.5" />
+          </g>
+        )
+      }
+      if (kind.includes('positioning-fit') || kind.includes('fit-box') || kind.includes('background') || kind.includes('dashed-region') || kind.includes('highlight')) {
+        return (
+          <g>
+            <rect x={sx(0.18)} y={sy(0.28)} width={baseWidth * 0.64} height={baseHeight * 0.44} rx="6" fill={previewStroke} opacity="0.08" stroke={previewStroke} strokeDasharray="4 3" />
+            {[0.25, 0.47, 0.69].map((x, index) => rectNode(x, 0.44, 0.14, 0.14, String.fromCharCode(65 + index), { key: index, fontSize: 8 }))}
+            {arrow(0.39, 0.51, 0.47, 0.51, 'fit1', { size: 4 })}
+            {arrow(0.61, 0.51, 0.69, 0.51, 'fit2', { size: 4 })}
+          </g>
+        )
+      }
+      if (kind.includes('swimlane')) {
+        return (
+          <g>
+            <rect {...shapeCommon} x={sx(0.16)} y={sy(0.25)} width={baseWidth * 0.68} height={baseHeight * 0.5} />
+            <line {...shapeCommon} x1={sx(0.16)} y1={sy(0.5)} x2={sx(0.84)} y2={sy(0.5)} opacity="0.35" />
+            {rectNode(0.24, 0.32, 0.18, 0.13, 'A', { fontSize: 8 })}
+            {rectNode(0.58, 0.58, 0.18, 0.13, 'B', { fontSize: 8 })}
+            {arrow(0.42, 0.39, 0.58, 0.64, 'lane')}
+          </g>
+        )
+      }
+      if (kind.includes('er-') || kind.includes('er-diagram')) {
+        return (
+          <g>
+            {rectNode(0.14, 0.4, 0.24, 0.2, 'User', { fontSize: 8 })}
+            {diamondNode(0.5, 0.5, 0.2, 0.22, 'owns')}
+            {rectNode(0.62, 0.4, 0.24, 0.2, 'File', { fontSize: 8 })}
+            <line {...shapeCommon} x1={sx(0.38)} y1={sy(0.5)} x2={sx(0.4)} y2={sy(0.5)} />
+            <line {...shapeCommon} x1={sx(0.6)} y1={sy(0.5)} x2={sx(0.62)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+      if (kind.includes('sequence')) {
+        return (
+          <g>
+            {['A', 'B', 'C'].map((label, index) => (
+              <g key={label}>
+                {rectNode(0.18 + index * 0.26, 0.2, 0.16, 0.12, label, { fontSize: 8 })}
+                <line {...shapeCommon} x1={sx(0.26 + index * 0.26)} y1={sy(0.32)} x2={sx(0.26 + index * 0.26)} y2={sy(0.8)} opacity="0.35" strokeDasharray="3 3" />
+              </g>
+            ))}
+            {arrow(0.3, 0.45, 0.68, 0.45, 'seq1')}
+            {arrow(0.7, 0.62, 0.32, 0.62, 'seq2')}
+          </g>
+        )
+      }
+      if (kind.includes('usecase')) {
+        return (
+          <g>
+            {circleNode(0.22, 0.34, 0.045, '')}
+            <line {...shapeCommon} x1={sx(0.22)} y1={sy(0.39)} x2={sx(0.22)} y2={sy(0.6)} />
+            <line {...shapeCommon} x1={sx(0.12)} y1={sy(0.48)} x2={sx(0.32)} y2={sy(0.48)} />
+            <line {...shapeCommon} x1={sx(0.22)} y1={sy(0.6)} x2={sx(0.14)} y2={sy(0.76)} />
+            <line {...shapeCommon} x1={sx(0.22)} y1={sy(0.6)} x2={sx(0.3)} y2={sy(0.76)} />
+            <ellipse {...filledShapeCommon} cx={sx(0.62)} cy={sy(0.5)} rx={baseWidth * 0.24} ry={baseHeight * 0.13} />
+            {miniText(0.62, 0.53, 'case', { fontSize: 8 })}
+          </g>
+        )
+      }
+      if (kind.includes('table')) return renderMatrixPreview('link-budget')
+      if (kind.includes('venn')) {
+        return (
+          <g>
+            <circle {...shapeCommon} cx={sx(0.42)} cy={sy(0.5)} r={Math.min(baseWidth, baseHeight) * 0.18} />
+            <circle {...shapeCommon} cx={sx(0.58)} cy={sy(0.5)} r={Math.min(baseWidth, baseHeight) * 0.18} />
+          </g>
+        )
+      }
+      if (kind.includes('gantt')) {
+        return (
+          <g>
+            {[0.28, 0.45, 0.62].map((y, index) => (
+              <rect key={index} x={sx(0.22 + index * 0.12)} y={sy(y)} width={baseWidth * (0.42 - index * 0.05)} height={baseHeight * 0.07} fill={previewStroke} opacity={0.28 + index * 0.18} />
+            ))}
+            <line {...shapeCommon} x1={sx(0.18)} y1={sy(0.75)} x2={sx(0.86)} y2={sy(0.75)} opacity="0.45" />
+          </g>
+        )
+      }
+      if (kind.includes('pipeline') || kind.includes('transmitter') || kind.includes('receiver') || kind.includes('superhet')) {
+        const labels = kind.includes('superhet') ? ['RF', 'Mix', 'IF', 'Det'] : kind.includes('receiver') ? ['RF', 'ADC', 'DSP'] : kind.includes('pipeline') ? ['Data', 'Fit', 'Eval'] : ['Bits', 'Map', 'RF']
+        return (
+          <g>
+            {labels.map((label, index) => (
+              <g key={label}>
+                {rectNode(0.14 + index * 0.24, 0.38, 0.18, 0.22, label, { fontSize: 8 })}
+                {index < labels.length - 1 && arrow(0.32 + index * 0.24, 0.49, 0.37 + index * 0.24, 0.49, `a-${index}`, { size: 4 })}
+              </g>
+            ))}
+          </g>
+        )
+      }
+      if (kind.includes('channel')) {
+        return (
+          <g>
+            {rectNode(0.22, 0.38, 0.24, 0.24, 'h(t)')}
+            {circleNode(0.62, 0.5, 0.09, '+')}
+            {arrow(0.46, 0.5, 0.54, 0.5, 'c1')}
+            {arrow(0.62, 0.28, 0.62, 0.42, 'c2')}
+            {miniText(0.68, 0.3, 'n')}
+          </g>
+        )
+      }
+      if (kind.includes('mixer')) return circleNode(0.5, 0.5, 0.15, 'x', { fontSize: 14 })
+      if (kind.includes('antenna')) {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.5)} y1={sy(0.78)} x2={sx(0.5)} y2={sy(0.36)} />
+            <line {...shapeCommon} x1={sx(0.5)} y1={sy(0.36)} x2={sx(0.34)} y2={sy(0.18)} />
+            <line {...shapeCommon} x1={sx(0.5)} y1={sy(0.36)} x2={sx(0.66)} y2={sy(0.18)} />
+            <path {...shapeCommon} d={`M ${sx(0.28)} ${sy(0.32)} q ${baseWidth * 0.1} ${baseHeight * 0.18} 0 ${baseHeight * 0.36}`} opacity="0.45" />
+            <path {...shapeCommon} d={`M ${sx(0.72)} ${sy(0.32)} q ${-baseWidth * 0.1} ${baseHeight * 0.18} 0 ${baseHeight * 0.36}`} opacity="0.45" />
+          </g>
+        )
+      }
+      if (kind.includes('pll') || kind.includes('feedback')) {
+        return (
+          <g>
+            {rectNode(0.16, 0.38, 0.18, 0.2, kind.includes('pll') ? 'PD' : 'G')}
+            {rectNode(0.48, 0.38, 0.18, 0.2, kind.includes('pll') ? 'VCO' : 'H')}
+            {arrow(0.34, 0.48, 0.48, 0.48, 'f1')}
+            <path {...shapeCommon} d={`M ${sx(0.66)} ${sy(0.48)} L ${sx(0.78)} ${sy(0.48)} L ${sx(0.78)} ${sy(0.78)} L ${sx(0.16)} ${sy(0.78)} L ${sx(0.16)} ${sy(0.58)}`} />
+          </g>
+        )
+      }
+      if (kind.includes('amplifier')) {
+        return (
+          <g>
+            <path {...filledShapeCommon} d={`M ${sx(0.34)} ${sy(0.28)} L ${sx(0.34)} ${sy(0.72)} L ${sx(0.72)} ${sy(0.5)} Z`} />
+            {arrow(0.12, 0.5, 0.34, 0.5, 'in')}
+            {arrow(0.72, 0.5, 0.9, 0.5, 'out')}
+            {miniText(0.48, 0.52, 'G')}
+          </g>
+        )
+      }
+      if (kind.includes('coupler')) {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.14)} y1={sy(0.42)} x2={sx(0.86)} y2={sy(0.42)} />
+            <line {...shapeCommon} x1={sx(0.22)} y1={sy(0.62)} x2={sx(0.78)} y2={sy(0.62)} />
+            {arrow(0.48, 0.5, 0.66, 0.58, 'couple')}
+          </g>
+        )
+      }
+      if (kind.includes('splitter') || kind.includes('combiner')) {
+        return (
+          <g>
+            {circleNode(0.5, 0.5, 0.12, 'S')}
+            {kind.includes('combiner') ? (
+              <>
+                {arrow(0.16, 0.32, 0.42, 0.46, 'i1')}
+                {arrow(0.16, 0.68, 0.42, 0.54, 'i2')}
+                {arrow(0.58, 0.5, 0.86, 0.5, 'o')}
+              </>
+            ) : (
+              <>
+                {arrow(0.16, 0.5, 0.42, 0.5, 'i')}
+                {arrow(0.58, 0.46, 0.86, 0.32, 'o1')}
+                {arrow(0.58, 0.54, 0.86, 0.68, 'o2')}
+              </>
+            )}
+          </g>
+        )
+      }
+      if (kind.includes('waveguide')) return rectNode(0.18, 0.36, 0.64, 0.28, 'WG')
+      if (kind.includes('circulator')) return circleNode(0.5, 0.5, 0.18, 'cw', { fontSize: 11 })
+      if (kind.includes('isolator')) return rectNode(0.32, 0.38, 0.36, 0.22, 'ISO')
+      if (kind.includes('delay')) return rectNode(0.32, 0.38, 0.36, 0.22, 'z^-1')
+      if (kind.includes('transfer')) return rectNode(0.32, 0.38, 0.36, 0.22, 'H(z)')
+      if (kind.includes('filter')) return rectNode(0.32, 0.38, 0.36, 0.22, 'BPF')
+      if (kind.includes('qpsk')) return rectNode(0.27, 0.36, 0.46, 0.26, 'QPSK')
+      if (kind.includes('ifft') || kind.includes('fft') || kind.includes('cp')) return rectNode(0.34, 0.38, 0.32, 0.22, kind.includes('ifft') ? 'IFFT' : kind.includes('fft') ? 'FFT' : 'CP')
+      if (kind.includes('transformer') || kind.includes('attention')) {
+        return (
+          <g>
+            {rectNode(0.18, 0.3, 0.24, 0.18, 'QK', { fontSize: 8 })}
+            {rectNode(0.58, 0.3, 0.24, 0.18, 'V', { fontSize: 8 })}
+            {circleNode(0.5, 0.62, 0.08, 'soft', { fontSize: 7 })}
+            {arrow(0.42, 0.39, 0.5, 0.56, 'att1', { size: 4 })}
+            {arrow(0.58, 0.39, 0.5, 0.56, 'att2', { size: 4 })}
+          </g>
+        )
+      }
+      if (kind.includes('residual')) {
+        return (
+          <g>
+            {rectNode(0.38, 0.38, 0.24, 0.2, 'F(x)', { fontSize: 8 })}
+            {arrow(0.12, 0.48, 0.38, 0.48, 'res1')}
+            {arrow(0.62, 0.48, 0.86, 0.48, 'res2')}
+            <path {...shapeCommon} d={`M ${sx(0.2)} ${sy(0.48)} V ${sy(0.76)} H ${sx(0.78)} V ${sy(0.52)}`} opacity="0.55" />
+          </g>
+        )
+      }
+      if (kind.includes('rnn')) {
+        return (
+          <g>
+            {rectNode(0.34, 0.34, 0.32, 0.26, 'h_t', { fontSize: 10 })}
+            <path {...shapeCommon} d={`M ${sx(0.48)} ${sy(0.34)} C ${sx(0.26)} ${sy(0.12)}, ${sx(0.74)} ${sy(0.12)}, ${sx(0.52)} ${sy(0.34)}`} />
+            {arrow(0.18, 0.47, 0.34, 0.47, 'rnn1')}
+            {arrow(0.66, 0.47, 0.84, 0.47, 'rnn2')}
+          </g>
+        )
+      }
+      if (kind.includes('gan')) {
+        return (
+          <g>
+            {rectNode(0.14, 0.38, 0.22, 0.22, 'G', { fontSize: 11 })}
+            {rectNode(0.62, 0.38, 0.22, 0.22, 'D', { fontSize: 11 })}
+            {arrow(0.36, 0.49, 0.62, 0.49, 'gan')}
+            {miniText(0.5, 0.32, 'fake/real', { fontSize: 8 })}
+          </g>
+        )
+      }
+      if (kind.includes('cnn-stack')) {
+        return (
+          <g>
+            {[0.2, 0.36, 0.54, 0.72].map((x, index) => (
+              <rect key={index} x={sx(x)} y={sy(0.28 + index * 0.05)} width={baseWidth * (0.12 - index * 0.01)} height={baseHeight * (0.48 - index * 0.07)} fill={previewStroke} opacity={0.08 + index * 0.06} stroke={previewStroke} />
+            ))}
+            {miniText(0.5, 0.78, 'conv', { fontSize: 8 })}
+          </g>
+        )
+      }
+      if (kind.includes('polygon')) {
+        return (
+          <g>
+            <path {...filledShapeCommon} d={`M ${sx(0.25)} ${sy(0.65)} L ${sx(0.42)} ${sy(0.26)} L ${sx(0.78)} ${sy(0.38)} L ${sx(0.68)} ${sy(0.72)} Z`} />
+            <line {...shapeCommon} x1={sx(0.25)} y1={sy(0.65)} x2={sx(0.78)} y2={sy(0.38)} opacity="0.35" />
+          </g>
+        )
+      }
+      if (kind.includes('bezier') || kind.includes('calc-intersections')) {
+        return (
+          <g>
+            <path {...shapeCommon} d={`M ${sx(0.18)} ${sy(0.68)} C ${sx(0.34)} ${sy(0.18)}, ${sx(0.66)} ${sy(0.82)}, ${sx(0.84)} ${sy(0.32)}`} />
+            <line {...shapeCommon} x1={sx(0.2)} y1={sy(0.32)} x2={sx(0.82)} y2={sy(0.72)} opacity="0.35" />
+            {circleNode(0.52, 0.5, 0.035, 'p', { fontSize: 7 })}
+          </g>
+        )
+      }
+      if (kind.includes('coordinate-grid') || kind.includes('basis') || kind.includes('vector')) {
+        return (
+          <g>
+            {axisFrame()}
+            {arrow(0.18, 0.78, 0.74, kind.includes('vector') ? 0.32 : 0.78, 'v')}
+            {kind.includes('basis') && arrow(0.18, 0.78, 0.18, 0.28, 'basis')}
+          </g>
+        )
+      }
+      if (kind.includes('decorations')) {
+        return (
+          <g>
+            <path {...shapeCommon} d={`M ${sx(0.18)} ${sy(0.35)} q ${baseWidth * 0.06} ${-baseHeight * 0.12} ${baseWidth * 0.12} 0 t ${baseWidth * 0.12} 0 t ${baseWidth * 0.12} 0 t ${baseWidth * 0.12} 0`} />
+            <path {...shapeCommon} d={`M ${sx(0.22)} ${sy(0.68)} C ${sx(0.12)} ${sy(0.62)}, ${sx(0.24)} ${sy(0.5)}, ${sx(0.14)} ${sy(0.5)} C ${sx(0.24)} ${sy(0.5)}, ${sx(0.12)} ${sy(0.38)}, ${sx(0.22)} ${sy(0.32)}`} />
+          </g>
+        )
+      }
+      if (kind.includes('patterns') || kind.includes('fills')) {
+        return (
+          <g>
+            <rect {...filledShapeCommon} x={sx(0.2)} y={sy(0.3)} width={baseWidth * 0.22} height={baseHeight * 0.36} />
+            {[0, 1, 2, 3].map((index) => <line key={index} {...shapeCommon} x1={sx(0.2 + index * 0.055)} y1={sy(0.66)} x2={sx(0.34 + index * 0.055)} y2={sy(0.3)} opacity="0.35" />)}
+            <circle cx={sx(0.66)} cy={sy(0.48)} r={Math.min(baseWidth, baseHeight) * 0.13} fill={previewStroke} opacity="0.12" stroke={previewStroke} />
+          </g>
+        )
+      }
+      if (kind.includes('spy')) {
+        return (
+          <g>
+            {axisFrame()}
+            <path {...shapeCommon} d={`M ${sx(0.18)} ${sy(0.62)} C ${sx(0.34)} ${sy(0.28)}, ${sx(0.5)} ${sy(0.76)}, ${sx(0.7)} ${sy(0.42)}`} />
+            <circle {...shapeCommon} cx={sx(0.42)} cy={sy(0.52)} r={Math.min(baseWidth, baseHeight) * 0.08} />
+            <circle {...shapeCommon} cx={sx(0.78)} cy={sy(0.28)} r={Math.min(baseWidth, baseHeight) * 0.12} />
+            <line {...shapeCommon} x1={sx(0.48)} y1={sy(0.48)} x2={sx(0.7)} y2={sy(0.32)} opacity="0.4" />
+          </g>
+        )
+      }
+      if (kind.includes('multi-panel')) {
+        return (
+          <g>
+            {[0, 1, 2, 3].map((index) => (
+              <rect key={index} {...shapeCommon} x={sx(0.22 + (index % 2) * 0.3)} y={sy(0.28 + Math.floor(index / 2) * 0.25)} width={baseWidth * 0.22} height={baseHeight * 0.17} />
+            ))}
+          </g>
+        )
+      }
+      if (kind.includes('right-angle')) {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.26)} y1={sy(0.72)} x2={sx(0.74)} y2={sy(0.72)} />
+            <line {...shapeCommon} x1={sx(0.74)} y1={sy(0.72)} x2={sx(0.74)} y2={sy(0.26)} />
+            <path {...shapeCommon} d={`M ${sx(0.62)} ${sy(0.72)} V ${sy(0.6)} H ${sx(0.74)}`} />
+          </g>
+        )
+      }
+      if (kind.includes('angle')) {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.28)} y1={sy(0.72)} x2={sx(0.78)} y2={sy(0.72)} />
+            <line {...shapeCommon} x1={sx(0.28)} y1={sy(0.72)} x2={sx(0.68)} y2={sy(0.32)} />
+            <path {...shapeCommon} d={`M ${sx(0.42)} ${sy(0.72)} A ${baseWidth * 0.16} ${baseHeight * 0.16} 0 0 1 ${sx(0.4)} ${sy(0.58)}`} />
+          </g>
+        )
+      }
+      if (kind.includes('brace') || kind.includes('bracket')) {
+        return (
+          <g>
+            <path {...shapeCommon} d={`M ${sx(0.25)} ${sy(0.32)} C ${sx(0.14)} ${sy(0.36)}, ${sx(0.22)} ${sy(0.5)}, ${sx(0.12)} ${sy(0.5)} C ${sx(0.22)} ${sy(0.5)}, ${sx(0.14)} ${sy(0.64)}, ${sx(0.25)} ${sy(0.68)}`} />
+            {miniText(0.5, 0.52, 'label')}
+          </g>
+        )
+      }
+      if (kind.includes('dimension')) {
+        return (
+          <g>
+            {arrow(0.18, 0.55, 0.82, 0.55, 'dim')}
+            <line {...shapeCommon} x1={sx(0.18)} y1={sy(0.42)} x2={sx(0.18)} y2={sy(0.68)} />
+            <line {...shapeCommon} x1={sx(0.82)} y1={sy(0.42)} x2={sx(0.82)} y2={sy(0.68)} />
+          </g>
+        )
+      }
+      if (kind.includes('venn')) return null
+      if (kind.includes('process') || kind.includes('module') || kind.includes('equation') || kind.includes('theorem')) return rectNode(0.22, 0.36, 0.56, 0.24, kind.includes('equation') ? 'f(x)' : kind.includes('theorem') ? 'Thm' : 'Block')
+      return rectNode(0.24, 0.38, 0.52, 0.24, preset.title.slice(0, 8), { fontSize: 9 })
+    }
+    const renderSpecificPreview = (kind) => {
+      if (kind.startsWith('plot-') || kind.startsWith('stats-') || kind.startsWith('pgfplots') || kind === 'ml-roc' || kind === 'ml-training-curve') return renderPlotPreview(kind)
+      if (kind.startsWith('matrix-') || kind.includes('commutative') || kind.includes('tikz-cd') || kind.includes('confusion') || kind.includes('uml-class') || kind.includes('embedding') || kind.includes('bits') || kind.includes('mimo-channel') || kind.includes('link-budget') || kind.includes('sparameter')) return renderMatrixPreview(kind)
+      if (
+        kind === 'dl-layer' ||
+        kind === 'dl-autoencoder' ||
+        kind === 'dl-unet' ||
+        kind.startsWith('graph-') ||
+        kind.startsWith('petri-') ||
+        kind.includes('automata') ||
+        kind.includes('tree') ||
+        kind.includes('mindmap') ||
+        kind.includes('graphs') ||
+        kind.includes('data-flow') ||
+        kind.includes('mimo-tx') ||
+        kind.includes('mimo-rx') ||
+        kind.includes('math-comm-triangle')
+      )
+        return renderNetworkPreview(kind)
+      if (kind.startsWith('logic-')) return renderLogicPreview(kind)
+      if (
+        kind.startsWith('telecom-') ||
+        kind.startsWith('rf-') ||
+        kind.startsWith('shape-') ||
+        kind.startsWith('flow-') ||
+        kind.startsWith('er-') ||
+        kind.startsWith('uml-') ||
+        kind.startsWith('geom-') ||
+        kind.startsWith('geometry-') ||
+        kind.startsWith('annot') ||
+        kind.startsWith('annotation-') ||
+        kind.startsWith('math-') ||
+        kind.startsWith('paper-') ||
+        kind.startsWith('dl-') ||
+        kind === 'gantt-paper' ||
+        kind.includes('gantt') ||
+        kind === 'angle-marker' ||
+        kind === 'brace-annotation' ||
+        kind === 'ml-pipeline' ||
+        kind === 'positioning-fit' ||
+        kind === 'background-layers' ||
+        kind === 'calc-intersections' ||
+        kind === 'angles-quotes' ||
+        kind === 'shapes-palette' ||
+        kind === 'decorations' ||
+        kind === 'patterns-fadings-shadows' ||
+        kind === 'spy-library'
+      )
+        return renderFlowPreview(kind)
+      return null
+    }
 
     const renderPreview = () => {
-      const circuitPreview = renderCircuitPreview(circuitPreviewKind(preset))
+      const previewKind = previewKindForPreset(preset)
+      const circuitPreview = renderCircuitPreview(previewKind)
       if (circuitPreview) return circuitPreview
+      const specificPreview = renderSpecificPreview(previewKind)
+      if (specificPreview) return specificPreview
 
       if (preset.preview === 'resistor') {
         return (
