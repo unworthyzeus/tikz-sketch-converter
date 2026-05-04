@@ -39,10 +39,25 @@ import {
 } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 import './App.css'
+import { writeClipboardText } from './clipboard'
+import { createEditorKeydownHandler } from './editorKeyboard'
+import { curveMarkerPoints, functionLegendEntries, markerGlyphParts } from './functionPreview'
 import { latexSymbolGroups } from './latexSymbols'
+import { objectPreviewBadges, terminalPreviewLabels } from './objectPreview'
+import {
+  buildPaperChecklist,
+  buildPaperGuide,
+  buildPaperWrapperPreview,
+  figureWrapperControlsState,
+  paperTargets,
+  resolvePaperComposer,
+  subfigureLayouts,
+} from './paperComposer'
 import { previewKindForPreset } from './previewKinds'
+import { rasterSafeSvgText } from './svgRasterExport'
 import { libraryPresets } from './tikzLibraryPresets'
 import { libraryPaletteItems } from './tikzPaletteItems'
+import { clampCanvasZoom, initialCanvasZoom } from './viewportDefaults'
 
 let katexRenderer = null
 let katexLoadPromise = null
@@ -494,6 +509,13 @@ const defaultEditorSettings = {
   exportCrop: false,
   exportMargin: 24,
   paperSize: 'content',
+  paperTarget: 'content',
+  paperWidthCm: '',
+  paperHeightCm: '',
+  paperMarginCm: 0.3,
+  showPaperGuides: true,
+  subfigureLayout: 'single',
+  subfigureLabels: '(a), (b), (c), (d)',
   journalStyle: 'ieee',
   routeMode: 'manhattan',
   autosave: true,
@@ -3609,12 +3631,16 @@ function buildTikz(elements, exportOptions = {}) {
 
 function App() {
   const [initialSharedBoard] = useState(readInitialSharedBoard)
+  const [initialZoom] = useState(() =>
+    initialCanvasZoom(initialSharedBoard?.viewport?.zoom, typeof window === 'undefined' ? undefined : window.innerWidth),
+  )
   const initialElements = initialSharedBoard?.elements ?? seedElements
   const initialSelectedId = initialElements[0]?.id ?? null
   const svgRef = useRef(null)
   const importInputRef = useRef(null)
+  const keyboardActionsRef = useRef({})
   const [tool, setTool] = useState('select')
-  const [zoom, setZoom] = useState(initialSharedBoard?.viewport?.zoom ?? 1)
+  const [zoom, setZoom] = useState(initialZoom)
   const [canvasPan, setCanvasPan] = useState(initialSharedBoard?.viewport?.canvasPan ?? { x: 0, y: 0 })
   const [elements, setElements] = useState(initialElements)
   const [selectedId, setSelectedId] = useState(initialSelectedId)
@@ -3744,6 +3770,14 @@ function App() {
     })
     return warnings.slice(0, 5)
   }, [elements, settings.warnMissingLibraries])
+  const paperComposer = useMemo(() => resolvePaperComposer(settings), [settings])
+  const paperGuide = useMemo(() => buildPaperGuide(paperComposer), [paperComposer])
+  const paperChecklist = useMemo(
+    () => buildPaperChecklist({ settings, elements, tikzWarnings }),
+    [elements, settings, tikzWarnings],
+  )
+  const paperWrapperPreview = useMemo(() => buildPaperWrapperPreview(settings), [settings])
+  const figureWrapperControls = useMemo(() => figureWrapperControlsState(settings), [settings])
   const inferredNets = useMemo(() => inferCircuitNets(elements.filter((element) => !element.hidden)), [elements])
   const paletteGroups = useMemo(() => ['All', ...Array.from(new Set(libraryPaletteItems.map((preset) => preset.group))).sort()], [])
   const visiblePaletteItems = useMemo(() => {
@@ -3786,8 +3820,22 @@ function App() {
   )
 
   const setCanvasZoom = (nextZoom) => {
-    const value = Number(nextZoom)
-    setZoom(Math.min(2.25, Math.max(0.55, Number.isFinite(value) ? value : 1)))
+    setZoom(clampCanvasZoom(nextZoom))
+  }
+
+  const applyPaperTarget = (targetId) => {
+    const target = paperTargets.find((item) => item.id === targetId) ?? paperTargets[0]
+    const fixedTarget = target.id !== 'content'
+    setSettings((state) => ({
+      ...state,
+      paperTarget: target.id,
+      paperSize: target.id,
+      paperWidthCm: fixedTarget ? target.widthCm : '',
+      paperHeightCm: fixedTarget ? target.heightCm : '',
+      paperMarginCm: target.marginCm,
+      journalStyle: target.journalStyle ?? state.journalStyle,
+      exportPreset: target.exportPreset ?? state.exportPreset,
+    }))
   }
 
   const pushHistory = (snapshot = elements) => {
@@ -4668,8 +4716,8 @@ function App() {
   }
 
   const copyTikz = async () => {
-    await navigator.clipboard.writeText(tikzCode)
-    setCopyLabel('Copiado')
+    const copied = await writeClipboardText(tikzCode)
+    setCopyLabel(copied ? 'Copiado' : 'No se pudo copiar')
     window.setTimeout(() => setCopyLabel('Copy .TeX code'), 1200)
   }
 
@@ -4680,7 +4728,7 @@ function App() {
   const copySelection = async () => {
     if (!selectedElements.length) return
     setClipboardElements(selectedElements)
-    await navigator.clipboard.writeText(JSON.stringify({ version: 1, elements: selectedElements }, null, 2))
+    await writeClipboardText(JSON.stringify({ version: 1, elements: selectedElements }, null, 2))
   }
 
   const pasteSelection = (sourceElements = clipboardElements) => {
@@ -4795,9 +4843,9 @@ function App() {
     const payload = currentBoardPayload()
     const encoded = encodeBoardPayload(payload)
     const nextUrl = `${window.location.origin}${window.location.pathname}${window.location.search}#board=${encoded}`
-    await navigator.clipboard.writeText(nextUrl)
+    const copied = await writeClipboardText(nextUrl)
     window.history.replaceState(null, '', nextUrl)
-    setShareLabel('URL copiada')
+    setShareLabel(copied ? 'URL copiada' : 'URL generada')
     window.setTimeout(() => setShareLabel('Copiar URL'), 1400)
   }
 
@@ -4885,7 +4933,7 @@ function App() {
   }
 
   const downloadCanvasPng = async () => {
-    const svgText = serializeCanvasSvg()
+    const svgText = rasterSafeSvgText(serializeCanvasSvg())
     if (!svgText) return
     const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' })
     const url = URL.createObjectURL(svgBlob)
@@ -4910,67 +4958,51 @@ function App() {
       context.scale(pixelRatio, pixelRatio)
       context.drawImage(image, 0, 0, CANVAS.width, CANVAS.height)
 
-      const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 1))
+      const pngBlob = await new Promise((resolve, reject) => {
+        try {
+          canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No se pudo generar el PNG.'))), 'image/png', 1)
+        } catch (error) {
+          reject(error)
+        }
+      })
       if (pngBlob) downloadBlob(pngBlob, 'tikz-sketch-board.png')
+    } catch (error) {
+      console.error('No pude exportar el PNG.', error)
+      window.alert('No pude exportar el PNG. Prueba el SVG si el navegador bloquea el rasterizado.')
     } finally {
       URL.revokeObjectURL(url)
     }
   }
 
+  // Refresh shortcut actions after every render while keeping one stable window listener.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return
-      const key = event.key.toLowerCase()
-      const modifier = event.ctrlKey || event.metaKey
-
-      if (modifier && key === 'z') {
-        event.preventDefault()
-        if (event.shiftKey) redo()
-        else undo()
-      } else if (modifier && key === 'y') {
-        event.preventDefault()
-        redo()
-      } else if (modifier && key === 'c') {
-        event.preventDefault()
-        copySelection()
-      } else if (modifier && key === 'v') {
-        event.preventDefault()
-        pasteSelection()
-      } else if (modifier && key === 'd') {
-        event.preventDefault()
-        duplicateSelection()
-      } else if (modifier && key === 'e') {
-        event.preventDefault()
-        downloadTikz()
-      } else if (key === 'delete' || key === 'backspace') {
-        event.preventDefault()
-        deleteSelected()
-      } else if (key === 'v') {
-        setTool('select')
-      } else if (key === 'h') {
-        setTool('pan')
-      } else if (key === 'l') {
-        setTool('line')
-      } else if (key === 'a') {
-        setTool('arrow')
-      } else if (key === 'p') {
-        setTool('pen')
-      } else if (key === 'g') {
-        setSettings((state) => ({ ...state, snap: !state.snap }))
-      } else if (key === 't') {
-        setSettings((state) => ({ ...state, terminalSnap: !state.terminalSnap }))
-      } else if (key === '+') {
-        setCanvasZoom(zoom + 0.1)
-      } else if (key === '-') {
-        setCanvasZoom(zoom - 0.1)
-      }
+    keyboardActionsRef.current = {
+      undo,
+      redo,
+      copySelection,
+      pasteSelection,
+      duplicateSelection,
+      downloadTikz,
+      deleteSelected,
+      setTool,
+      toggleSnap: () => setSettings((state) => ({ ...state, snap: !state.snap })),
+      toggleTerminalSnap: () => setSettings((state) => ({ ...state, terminalSnap: !state.terminalSnap })),
+      zoomIn: () => setCanvasZoom(zoom + 0.1),
+      zoomOut: () => setCanvasZoom(zoom - 0.1),
+      closeModal: () => {
+        setSettingsOpen(false)
+        setHelpOpen(false)
+      },
     }
+  })
+
+  useEffect(() => {
+    const handleKeyDown = createEditorKeydownHandler(keyboardActionsRef)
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-    // Keyboard bindings intentionally track the latest render state; keeping this local avoids a wide useCallback refactor.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom])
+  }, [])
 
   const renderPolyline = (points, className, element, halo = false) => {
     const screenPoints = points.map(worldToScreen).map((point) => `${point.x},${point.y}`).join(' ')
@@ -5246,6 +5278,7 @@ function App() {
     const baseTop = topLeft.y + (metrics.upExtra / totalHeight) * height
     const baseWidth = (metrics.baseWidth / totalWidth) * width
     const baseHeight = (metrics.baseHeight / totalHeight) * height
+    const isSelectedObject = selectedIds.includes(element.id)
 
     if (halo) {
       return (
@@ -6789,10 +6822,59 @@ function App() {
       )
     }
 
+    const renderObjectBadges = () => {
+      if (!isSelectedObject) return null
+      const badges = objectPreviewBadges(preset, config)
+      if (!badges.length) return null
+
+      const badgeWidth = Math.min(260, Math.max(138, width + 36))
+      const badgeHeight = badges.length > 2 ? 48 : 26
+      return (
+        <foreignObject
+          x={topLeft.x}
+          y={topLeft.y - badgeHeight - 6}
+          width={badgeWidth}
+          height={badgeHeight}
+          className="object-preview-badges"
+        >
+          <div xmlns="http://www.w3.org/1999/xhtml">
+            {badges.map((badge) => (
+              <span key={badge.key}>{badge.text}</span>
+            ))}
+          </div>
+        </foreignObject>
+      )
+    }
+
+    const renderTerminalPreview = () => {
+      if (!isSelectedObject) return null
+      const terminals = terminalPointsForElement(element)
+      if (!terminals.length) return null
+
+      const labels = terminalPreviewLabels(config.terminalNames, terminals.length)
+      return (
+        <g className="object-terminal-preview">
+          {terminals.map((terminal, index) => {
+            const point = worldToScreen(terminal)
+            return (
+              <g key={`${element.id}-terminal-${index}`}>
+                <circle cx={point.x} cy={point.y} r="4.6" fill="#ffffff" stroke={previewStroke} strokeWidth="1.3" vectorEffect="non-scaling-stroke" />
+                <text x={point.x + 7} y={point.y - 7} fill={previewStroke} fontSize="10" fontWeight="760">
+                  {labels[index]}
+                </text>
+              </g>
+            )
+          })}
+        </g>
+      )
+    }
+
     return (
       <g>
         {renderPreview()}
         {renderExtraNodePreview()}
+        {renderTerminalPreview()}
+        {renderObjectBadges()}
       </g>
     )
   }
@@ -7022,11 +7104,13 @@ function App() {
     if (element.type === 'function') {
       const functionOptions = functionOptionsFor(element)
       const features = functionFeaturePoints(element)
+      const displaySeries = functionDisplaySeries(element)
       const bounds = elementBounds(element)
       const topLeft = worldToScreen({ x: bounds.minX, y: bounds.maxY })
       const bottomRight = worldToScreen({ x: bounds.maxX, y: bounds.minY })
       const xTicks = graphTicks(bounds.minX, bounds.maxX, 7)
       const yTicks = graphTicks(bounds.minY, bounds.maxY, 5)
+      const legendEntries = functionLegendEntries(displaySeries)
       const markerPoints = [
         ...(functionOptions.showXIntercepts ? features.xIntercepts.slice(0, 8).map((point) => ({ ...point, label: '$x_0$' })) : []),
         ...(functionOptions.showYIntercept && features.yIntercept ? [{ ...features.yIntercept, label: '$y_0$' }] : []),
@@ -7034,6 +7118,39 @@ function App() {
         ...(functionOptions.showSamples ? features.samples.map((point) => ({ ...point, label: '' })) : []),
         ...features.marked.map((point) => ({ ...point, label: point.label || '' })),
       ]
+
+      const renderMarkerGlyphAt = (screenPoint, markerStyle, color, key, size = 4) => {
+        const parts = markerGlyphParts(markerStyle, { ...screenPoint, size })
+        if (!parts.length) return null
+
+        return (
+          <g key={key} className="function-series-marker">
+            {parts.map((part, partIndex) => {
+              const partKey = `${key}-${partIndex}`
+              const common = {
+                stroke: color,
+                strokeWidth: 1.25,
+                vectorEffect: 'non-scaling-stroke',
+              }
+              if (part.type === 'circle') {
+                return <circle key={partKey} {...common} cx={part.cx} cy={part.cy} r={part.r} fill={part.filled ? color : '#ffffff'} />
+              }
+              if (part.type === 'rect') {
+                return <rect key={partKey} {...common} x={part.x} y={part.y} width={part.width} height={part.height} fill={part.filled ? color : '#ffffff'} />
+              }
+              if (part.type === 'path') {
+                return <path key={partKey} {...common} d={part.d} fill={part.filled ? color : '#ffffff'} strokeLinejoin="round" />
+              }
+              if (part.type === 'line') {
+                return <line key={partKey} {...common} x1={part.x1} y1={part.y1} x2={part.x2} y2={part.y2} strokeLinecap="round" />
+              }
+              return null
+            })}
+          </g>
+        )
+      }
+      const renderMarkerGlyph = (point, markerStyle, color, key, size = 4) =>
+        renderMarkerGlyphAt(worldToScreen(point), markerStyle, color, key, size)
 
       const renderMarker = (point, key) => {
         const screenPoint = worldToScreen(point)
@@ -7059,6 +7176,57 @@ function App() {
                 <div xmlns="http://www.w3.org/1999/xhtml" dangerouslySetInnerHTML={{ __html: renderInlineLatexHtml(point.label) }} />
               </foreignObject>
             )}
+          </g>
+        )
+      }
+
+      const renderFunctionLegend = () => {
+        const shouldShowLegend = !halo && legendEntries.length && (displaySeries.length > 1 || functionOptions.legend?.trim())
+        if (!shouldShowLegend) return null
+
+        const rowHeight = 18
+        const legendWidth = Math.min(164, Math.max(124, bottomRight.x - topLeft.x - 16))
+        const legendHeight = 10 + legendEntries.length * rowHeight
+        const legendX = Math.max(topLeft.x + 8, bottomRight.x - legendWidth - 8)
+        const legendY = topLeft.y + 8
+
+        return (
+          <g className="function-preview-legend">
+            <rect
+              x={legendX}
+              y={legendY}
+              width={legendWidth}
+              height={legendHeight}
+              rx="3"
+              fill="#ffffff"
+              fillOpacity="0.92"
+              stroke="#cbd5e1"
+              strokeWidth="0.8"
+              vectorEffect="non-scaling-stroke"
+            />
+            {legendEntries.map((entry, index) => {
+              const rowY = legendY + 12 + index * rowHeight
+              const swatchX = legendX + 9
+              return (
+                <g key={entry.id}>
+                  <line
+                    x1={swatchX}
+                    y1={rowY}
+                    x2={swatchX + 28}
+                    y2={rowY}
+                    stroke={entry.color}
+                    strokeWidth="2"
+                    strokeDasharray={functionLineStyleSvg(entry.lineStyle) || undefined}
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  {renderMarkerGlyphAt({ x: swatchX + 14, y: rowY }, entry.markerStyle, entry.color, `${entry.id}-legend-marker`, 3.5)}
+                  <foreignObject x={swatchX + 36} y={rowY - 9} width={legendWidth - 48} height="18" className="function-legend-label">
+                    <div xmlns="http://www.w3.org/1999/xhtml" dangerouslySetInnerHTML={{ __html: renderInlineLatexHtml(entry.label) }} />
+                  </foreignObject>
+                </g>
+              )
+            })}
           </g>
         )
       }
@@ -7160,7 +7328,7 @@ function App() {
       return (
         <g>
           {renderGraphChrome()}
-          {functionDisplaySeries(element).flatMap(({ series, points }, seriesIndex) =>
+          {displaySeries.flatMap(({ series, points }, seriesIndex) =>
             splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null))).map(
               (segment, index) => (
                 <polyline
@@ -7178,7 +7346,14 @@ function App() {
               ),
             ),
           )}
+          {!halo &&
+            displaySeries.flatMap(({ series, points }, seriesIndex) =>
+              curveMarkerPoints(points, series.markerStyle, 9).map((point, pointIndex) =>
+                renderMarkerGlyph(point, series.markerStyle, series.color, `${element.id}-series-marker-${seriesIndex}-${pointIndex}`),
+              ),
+            )}
           {!halo && markerPoints.map((point, index) => renderMarker(point, `${element.id}-marker-${index}`))}
+          {renderFunctionLegend()}
         </g>
       )
     }
@@ -7291,6 +7466,49 @@ function App() {
         <line x1={bottomRight.x} y1={topLeft.y} x2={rotatePoint.x} y2={rotatePoint.y} stroke="#111111" strokeWidth="1" />
         <circle cx={rotatePoint.x} cy={rotatePoint.y} r="6" className="rotate-handle" onPointerDown={startRotate} />
       </>
+    )
+  }
+
+  const renderPaperGuideLayer = () => {
+    if (!paperGuide) return null
+
+    const rectForBounds = (bounds) => {
+      const topLeft = worldToScreen({ x: bounds.minX, y: bounds.maxY })
+      const bottomRight = worldToScreen({ x: bounds.maxX, y: bounds.minY })
+      return {
+        x: topLeft.x,
+        y: topLeft.y,
+        width: bottomRight.x - topLeft.x,
+        height: bottomRight.y - topLeft.y,
+      }
+    }
+    const frameRect = rectForBounds(paperGuide.frame)
+    const safeRect = rectForBounds(paperGuide.safe)
+    const frameLabel = worldToScreen({ x: paperGuide.frame.minX, y: paperGuide.frame.maxY })
+    const showPanelFrames = paperGuide.panels.length > 1
+
+    return (
+      <g className="paper-guide-layer" pointerEvents="none">
+        <rect {...frameRect} className="paper-guide-frame" vectorEffect="non-scaling-stroke" />
+        <rect {...safeRect} className="paper-guide-safe" vectorEffect="non-scaling-stroke" />
+        <text className="paper-guide-size" x={frameLabel.x + 8} y={frameLabel.y - 8}>
+          {paperGuide.label} - {paperGuide.displaySize}
+        </text>
+        {paperGuide.panels.map((panel) => {
+          const panelRect = rectForBounds(panel)
+          const labelPoint = worldToScreen(panel.labelPoint)
+          return (
+            <g key={panel.id}>
+              {showPanelFrames && <rect {...panelRect} className="paper-guide-panel" vectorEffect="non-scaling-stroke" />}
+              {showPanelFrames && (
+                <text className="paper-guide-panel-label" x={labelPoint.x} y={labelPoint.y}>
+                  {panel.label}
+                </text>
+              )}
+            </g>
+          )
+        })}
+      </g>
     )
   }
 
@@ -7525,6 +7743,7 @@ function App() {
                   ))}
                 </g>
               )}
+              {renderPaperGuideLayer()}
               <g>
                 {elements
                   .filter((element) => !element.hidden)
@@ -9006,6 +9225,100 @@ function App() {
             <Code2 size={18} />
             <h2>Codigo TikZ</h2>
           </div>
+          <div className="paper-composer">
+            <div className="paper-composer-head">
+              <strong>Paper Composer</strong>
+              <span>{paperComposer.displaySize}</span>
+            </div>
+            <label className="field">
+              <span>Target paper</span>
+              <select value={paperComposer.id} onChange={(event) => applyPaperTarget(event.target.value)}>
+                {paperTargets.map((target) => (
+                  <option key={target.id} value={target.id}>
+                    {target.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="field-pair">
+              <label className="field">
+                <span>Ancho paper cm</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="0.1"
+                  value={settings.paperWidthCm}
+                  disabled={!paperComposer.hasFixedSize}
+                  onChange={(event) => setSettings((state) => ({ ...state, paperWidthCm: event.target.value }))}
+                />
+              </label>
+              <label className="field">
+                <span>Alto paper cm</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="0.1"
+                  value={settings.paperHeightCm}
+                  disabled={!paperComposer.hasFixedSize}
+                  onChange={(event) => setSettings((state) => ({ ...state, paperHeightCm: event.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="field-pair">
+              <label className="field">
+                <span>Margen seguro cm</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="3"
+                  step="0.05"
+                  value={settings.paperMarginCm}
+                  disabled={!paperComposer.hasFixedSize}
+                  onChange={(event) => setSettings((state) => ({ ...state, paperMarginCm: Number(event.target.value) }))}
+                />
+              </label>
+              <label className="field">
+                <span>Subfiguras</span>
+                <select value={settings.subfigureLayout} onChange={(event) => setSettings((state) => ({ ...state, subfigureLayout: event.target.value }))}>
+                  {subfigureLayouts.map((layout) => (
+                    <option key={layout.id} value={layout.id}>
+                      {layout.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="field">
+              <span>Labels paneles</span>
+              <input
+                type="text"
+                value={settings.subfigureLabels}
+                onChange={(event) => setSettings((state) => ({ ...state, subfigureLabels: event.target.value }))}
+                placeholder="(a), (b), (c), (d)"
+              />
+            </label>
+            <div className="paper-wrapper-preview">
+              <span>Wrapper preview</span>
+              <code>{paperWrapperPreview.join('\n')}</code>
+            </div>
+            <label className="toggle export-toggle">
+              <input
+                type="checkbox"
+                checked={settings.showPaperGuides}
+                onChange={(event) => setSettings((state) => ({ ...state, showPaperGuides: event.target.checked }))}
+              />
+              <span>Mostrar guias paper</span>
+            </label>
+            <div className="paper-checklist">
+              {paperChecklist.map((item) => (
+                <span key={item.id} className={`paper-checklist-item is-${item.level}`}>
+                  {item.text}
+                </span>
+              ))}
+            </div>
+          </div>
           <label className="toggle export-toggle">
             <input
               type="checkbox"
@@ -9022,14 +9335,16 @@ function App() {
             />
             <span>Salida monocroma</span>
           </label>
-          <label className="toggle export-toggle">
-            <input
-              type="checkbox"
-              checked={settings.wrapFigure}
-              onChange={(event) => setSettings((state) => ({ ...state, wrapFigure: event.target.checked }))}
-            />
-            <span>Envolver en figure</span>
-          </label>
+          {figureWrapperControls.showWrapToggle && (
+            <label className="toggle export-toggle">
+              <input
+                type="checkbox"
+                checked={settings.wrapFigure}
+                onChange={(event) => setSettings((state) => ({ ...state, wrapFigure: event.target.checked }))}
+              />
+              <span>Envolver en figure</span>
+            </label>
+          )}
           <div className="field-pair">
             <label className="field">
               <span>Preset export</span>
@@ -9093,7 +9408,7 @@ function App() {
               <span>Crop contenido</span>
             </label>
           </div>
-          {settings.wrapFigure && (
+          {figureWrapperControls.showMetadataFields && (
             <div className="field-pair">
               <label className="field">
                 <span>Caption</span>
@@ -9111,13 +9426,6 @@ function App() {
                   onChange={(event) => setSettings((state) => ({ ...state, label: event.target.value }))}
                 />
               </label>
-            </div>
-          )}
-          {tikzWarnings.length > 0 && (
-            <div className="warning-list">
-              {tikzWarnings.map((warning) => (
-                <span key={warning}>{warning}</span>
-              ))}
             </div>
           )}
           <textarea className="code-output" value={tikzCode} readOnly spellCheck="false" />

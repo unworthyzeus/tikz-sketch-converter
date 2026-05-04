@@ -44,6 +44,20 @@ test('function plots support multi-series styling and marked points', () => {
   assert.match(appSource, /Mas funciones en el mismo grafico/)
 })
 
+test('paper composer controls wire journal targets to canvas guides and checklist', () => {
+  assert.match(appSource, /Paper Composer/)
+  assert.match(appSource, /applyPaperTarget/)
+  assert.match(appSource, /paperTargets\.map/)
+  assert.match(appSource, /subfigureLayouts\.map/)
+  assert.match(appSource, /renderPaperGuideLayer/)
+  assert.match(appSource, /paperChecklist\.map/)
+  assert.match(appSource, /paperWrapperPreview\.join/)
+  assert.match(appSource, /Ancho paper cm/)
+  assert.match(appSource, /Alto paper cm/)
+  assert.match(appSource, /figureWrapperControls\.showWrapToggle/)
+  assert.match(appSource, /Mostrar guias paper/)
+})
+
 test('text labels resize with persistent dimensions and export font size', () => {
   assert.match(appSource, /labelMetricsForElement/)
   assert.match(appSource, /labelWidth/)
