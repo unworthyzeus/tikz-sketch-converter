@@ -78,6 +78,36 @@ const fillColors = [
   { label: 'Cyan wash', value: '#cffafe' },
 ]
 
+const functionLineStyleOptions = [
+  { value: 'solid', label: 'Continua', tikz: '', dashArray: '' },
+  { value: 'dashed', label: 'Discontinua', tikz: 'dashed', dashArray: '8 7' },
+  { value: 'densely-dashed', label: 'Dash densa', tikz: 'densely dashed', dashArray: '5 4' },
+  { value: 'dotted', label: 'Punteada', tikz: 'dotted', dashArray: '2 5' },
+  { value: 'dash-dot', label: 'Dash-dot', tikz: 'dash pattern=on 6pt off 3pt on 1pt off 3pt', dashArray: '8 4 2 4' },
+]
+
+const functionMarkerOptions = [
+  { value: 'none', label: 'Sin marcador' },
+  { value: '*', label: 'Punto' },
+  { value: 'square*', label: 'Cuadrado' },
+  { value: 'triangle*', label: 'Triangulo' },
+  { value: 'x', label: 'x' },
+  { value: '+', label: '+' },
+  { value: 'diamond*', label: 'Rombo' },
+]
+
+const functionQuickExpressions = [
+  'sin(x)',
+  'cos(2*x)',
+  '0.25*x^2 - 2',
+  'max(x, 0)',
+  'min(sin(x), 0.5)',
+  'besselj0(x)',
+  'besselj1(x)',
+  'sinc(x)',
+  'erf(x)',
+]
+
 const arrowStyleOptions = [
   { value: 'stealth', label: 'Stealth', tikz: '-{Stealth}' },
   { value: 'latex', label: 'LaTeX', tikz: '-{Latex}' },
@@ -483,6 +513,7 @@ const defaultFunctionOptions = {
   yLabel: '$f(x)$',
   legend: '',
   markerStyle: 'none',
+  lineStyle: 'solid',
   gridStyle: 'major',
   xTicks: '',
   yTicks: '',
@@ -495,6 +526,8 @@ const defaultFunctionOptions = {
   logX: false,
   logY: false,
   dataTable: '',
+  markedPoints: '',
+  series: [],
   axisOptions: '',
   plotOptions: 'line width=0.75pt',
 }
@@ -1420,17 +1453,17 @@ function compileExpression(expression) {
   return (x) => evaluator(x, mathFunctionHelpers, mathConstants)
 }
 
-function sampleFunction(element) {
+function sampleExpressionPoints(expression, domainStart, domainEnd, sampleCount) {
   let evaluator
   try {
-    evaluator = compileExpression(element.expression)
+    evaluator = compileExpression(expression)
   } catch {
     return []
   }
 
-  const start = Number(element.domainStart)
-  const end = Number(element.domainEnd)
-  const samples = Math.max(8, Math.min(400, Number(element.samples) || 120))
+  const start = Number(domainStart)
+  const end = Number(domainEnd)
+  const samples = Math.max(8, Math.min(400, Number(sampleCount) || 120))
   const points = []
 
   for (let index = 0; index <= samples; index += 1) {
@@ -1489,16 +1522,133 @@ function parsedDataTablePoints(value = '') {
     .filter(Boolean)
 }
 
-function functionDisplayPoints(element) {
-  const dataPoints = parsedDataTablePoints(functionOptionsFor(element).dataTable)
-  if (dataPoints.length) return dataPoints
-  return sampleFunction(element)
+function functionLineStyleOption(value) {
+  return functionLineStyleOptions.find((option) => option.value === value) ?? functionLineStyleOptions[0]
+}
+
+function functionLineStyleTikz(value) {
+  return functionLineStyleOption(value).tikz
+}
+
+function functionLineStyleSvg(value) {
+  return functionLineStyleOption(value).dashArray
+}
+
+function evaluateScalarExpression(value, x = 0) {
+  const trimmed = `${value}`.trim()
+  if (!trimmed) return Number.NaN
+  const numeric = Number(trimmed)
+  if (Number.isFinite(numeric)) return numeric
+  try {
+    const evaluator = compileExpression(trimmed)
+    const result = evaluator(x)
+    return Number.isFinite(result) ? result : Number.NaN
+  } catch {
+    return Number.NaN
+  }
+}
+
+function parseMarkedFunctionPoints(value = '') {
+  return `${value}`
+    .split(/\n|;/)
+    .map((line) => line.trim())
     .filter(Boolean)
-    .map((point) => ({ x: point.x, y: point.y + (Number(element.yOffset) || 0) }))
+    .map((line) => {
+      const [xValue, yValue, ...labelParts] = line.split(',').map((part) => part.trim())
+      const x = evaluateScalarExpression(xValue)
+      const y = evaluateScalarExpression(yValue, x)
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+      return {
+        x,
+        y,
+        label: labelParts.join(', ').trim(),
+      }
+    })
+    .filter(Boolean)
+}
+
+function normalizeFunctionSeries(series = {}, index = 0) {
+  return {
+    id: series.id || `series-${index + 1}`,
+    expression:
+      series.expression === undefined
+        ? functionQuickExpressions[(index + 1) % functionQuickExpressions.length]
+        : `${series.expression}`.trim(),
+    color: series.color || strokeColors[(index + 3) % strokeColors.length].value,
+    lineStyle: series.lineStyle || series.style || (index % 2 === 0 ? 'dashed' : 'dotted'),
+    width: Math.max(0.2, Math.min(4, Number(series.width) || 0.75)),
+    markerStyle: series.markerStyle || 'none',
+    legend: series.legend ?? '',
+    plotOptions: series.plotOptions ?? '',
+    dataTable: series.dataTable ?? '',
+    yOffset: Number(series.yOffset) || 0,
+    enabled: series.enabled !== false,
+  }
+}
+
+function primaryFunctionSeries(element) {
+  const options = functionOptionsFor(element)
+  return {
+    id: 'primary',
+    expression: element.expression,
+    color: element.stroke || '#111111',
+    lineStyle: options.lineStyle || (element.dashed ? 'dashed' : 'solid'),
+    width: Math.max(0.2, Math.min(4, Number(element.width) || 0.75)),
+    markerStyle: options.markerStyle || 'none',
+    legend: options.legend || '',
+    plotOptions: options.plotOptions || '',
+    dataTable: options.dataTable || '',
+    yOffset: 0,
+    enabled: true,
+    primary: true,
+  }
+}
+
+function editableFunctionSeriesFor(element) {
+  const options = functionOptionsFor(element)
+  return Array.isArray(options.series) ? options.series.map(normalizeFunctionSeries) : []
+}
+
+function functionSeriesFor(element) {
+  return [
+    primaryFunctionSeries(element),
+    ...editableFunctionSeriesFor(element).filter((series) => series.enabled && series.expression),
+  ]
+}
+
+function sampleFunctionSeries(element, series) {
+  const baseYOffset = Number(element.yOffset) || 0
+  const seriesYOffset = Number(series.yOffset) || 0
+  const offset = baseYOffset + seriesYOffset
+  const dataPoints = parsedDataTablePoints(series.dataTable)
+  if (dataPoints.length) return dataPoints.map((point) => ({ x: point.x, y: point.y + offset }))
+
+  return sampleExpressionPoints(series.expression, element.domainStart, element.domainEnd, element.samples).map((point) =>
+    point ? { x: point.x, y: point.y + offset } : null,
+  )
+}
+
+function functionDisplaySeries(element) {
+  return functionSeriesFor(element)
+    .map((series) => ({
+      series,
+      points: sampleFunctionSeries(element, series),
+    }))
+    .filter(({ points }) => points.some(Boolean))
+}
+
+function allFunctionDisplayPoints(element) {
+  return functionDisplaySeries(element).flatMap(({ points }) => points.filter(Boolean))
+}
+
+function functionDisplayPoints(element) {
+  return functionDisplaySeries(element)[0]?.points.filter(Boolean) ?? []
 }
 
 function functionFeaturePoints(element) {
   const points = functionDisplayPoints(element)
+  const options = functionOptionsFor(element)
+  const yOffset = Number(element.yOffset) || 0
   const features = {
     xIntercepts: [],
     yIntercept: null,
@@ -1506,6 +1656,10 @@ function functionFeaturePoints(element) {
     samples: [],
     asymptotes: [],
     tangent: null,
+    marked: parseMarkedFunctionPoints(options.markedPoints).map((point) => ({
+      ...point,
+      y: point.y + yOffset,
+    })),
   }
   if (!points.length) return features
 
@@ -1741,9 +1895,7 @@ function elementBounds(element) {
   }
 
   if (element.type === 'function') {
-    const points = sampleFunction(element)
-      .filter(Boolean)
-      .map((point) => ({ x: point.x, y: point.y + (Number(element.yOffset) || 0) }))
+    const points = allFunctionDisplayPoints(element)
     if (!points.length) return { minX: element.domainStart, maxX: element.domainEnd, minY: -1, maxY: 1 }
     const xs = points.map((point) => point.x)
     const ys = points.map((point) => point.y)
@@ -2366,10 +2518,7 @@ function elementIntersectsEraser(element, point, radius = 0.24) {
   }
 
   if (element.type === 'function') {
-    const points = sampleFunction(element)
-      .filter(Boolean)
-      .map((sample) => ({ x: sample.x, y: sample.y + (Number(element.yOffset) || 0) }))
-    return polylineHitsPoint(points, point, radius)
+    return functionDisplaySeries(element).some(({ points }) => polylineHitsPoint(points.filter(Boolean), point, radius))
   }
 
   if (element.type === 'text') {
@@ -2961,6 +3110,9 @@ function buildTikz(elements, exportOptions = {}) {
   drawableElements.forEach((element) => {
     ensureColor(element.stroke)
     ensureColor(element.fill)
+    if (element.type === 'function') {
+      functionSeriesFor(element).forEach((series) => ensureColor(series.color))
+    }
   })
 
   const definitions = [...usedColors.entries()].map(
@@ -3072,9 +3224,26 @@ function buildTikz(elements, exportOptions = {}) {
 
     if (element.type === 'function') {
       const functionOptions = functionOptionsFor(element)
-      const segments = splitDrawableSegments(
-        functionDisplayPoints(element).map((point) => (point ? { x: point.x, y: point.y } : null)),
-      )
+      const displaySeries = functionDisplaySeries(element)
+      const hasFunctionLegend = displaySeries.some(({ series }) => series.legend)
+      const features = functionFeaturePoints(element)
+      const primaryColor = ensureColor(element.stroke)
+      const featureMarks = [
+        ...(functionOptions.showXIntercepts ? features.xIntercepts.slice(0, 8).map((point) => ({ ...point, label: '$x_0$' })) : []),
+        ...(functionOptions.showYIntercept && features.yIntercept ? [{ ...features.yIntercept, label: '$y_0$' }] : []),
+        ...(functionOptions.showExtrema ? features.extrema.slice(0, 8).map((point) => ({ ...point, label: 'ext' })) : []),
+        ...(functionOptions.showSamples ? features.samples.map((point) => ({ ...point, label: '' })) : []),
+        ...features.marked.map((point) => ({ ...point, label: point.label || '' })),
+      ]
+      const directDrawOptions = (series, extras = []) =>
+        [
+          `draw=${ensureColor(series.color)}`,
+          `line width=${formatNumber(series.width)}pt`,
+          functionLineStyleTikz(series.lineStyle),
+          element.smooth === false ? '' : 'smooth',
+          ...extras,
+          series.plotOptions?.trim(),
+        ].filter(Boolean)
       if (functionOptions.usePgfplots) {
         const axisOptions = [
           `width=${functionOptions.axisWidth ?? '7cm'}`,
@@ -3087,52 +3256,76 @@ function buildTikz(elements, exportOptions = {}) {
           functionOptions.xTicks?.trim() ? `xtick={${functionOptions.xTicks.trim()}}` : '',
           functionOptions.yTicks?.trim() ? `ytick={${functionOptions.yTicks.trim()}}` : '',
           functionOptions.tickLabelStyle?.trim() ? `tick label style={${functionOptions.tickLabelStyle.trim()}}` : '',
-          functionOptions.legend ? `legend pos=${functionOptions.legendPos || 'north east'}` : '',
+          hasFunctionLegend ? `legend pos=${functionOptions.legendPos || 'north east'}` : '',
           functionOptions.colormap?.trim() ? `colormap/${functionOptions.colormap.trim()}` : '',
           functionOptions.clip ? 'clip=true' : 'clip=false',
           functionOptions.axisOptions?.trim() ?? '',
         ].filter(Boolean)
         pictureLines.push(`${linePrefix}\\begin{axis}[${axisOptions.join(', ')}]`)
-        const makeAddplotOptions = () =>
+        const makeAddplotOptions = (series) =>
           [
-            `draw=${ensureColor(element.stroke)}`,
-            functionOptions.markerStyle === 'none' ? 'no markers' : `mark=${functionOptions.markerStyle}`,
+            `draw=${ensureColor(series.color)}`,
+            functionLineStyleTikz(series.lineStyle),
+            (series.markerStyle || 'none') === 'none' ? 'no markers' : `mark=${series.markerStyle}`,
             functionOptions.errorBars ? functionOptions.errorBarOptions || '/pgfplots/error bars/y dir=both, /pgfplots/error bars/y explicit' : '',
             functionOptions.plotOptions,
+            `line width=${formatNumber(series.width)}pt`,
+            series.plotOptions,
           ].filter(Boolean)
-        const dataPoints = parsedDataTablePoints(functionOptions.dataTable)
-        if (dataPoints.length) {
-          const tableRows = ['x y', ...dataPoints.map((point) => `${formatNumber(point.x)} ${formatNumber(point.y)}`)]
-          const legend = functionOptions.legend ? `\n${linePrefix}  \\addlegendentry{${formatTikzNodeText(functionOptions.legend)}}` : ''
-          pictureLines.push(`${linePrefix}  \\addplot[${makeAddplotOptions().join(', ')}] table[row sep=\\\\] {`)
-          tableRows.forEach((row) => pictureLines.push(`${linePrefix}    ${row}\\\\`))
-          pictureLines.push(`${linePrefix}  };${legend}`)
-        } else {
+        displaySeries.forEach(({ series, points }) => {
+          const dataPoints = parsedDataTablePoints(series.dataTable)
+          if (dataPoints.length) {
+            const tableRows = ['x y', ...points.filter(Boolean).map((point) => `${formatNumber(point.x)} ${formatNumber(point.y)}`)]
+            const legend = series.legend ? `\n${linePrefix}  \\addlegendentry{${formatTikzNodeText(series.legend)}}` : ''
+            pictureLines.push(`${linePrefix}  \\addplot[${makeAddplotOptions(series).join(', ')}] table[row sep=\\\\] {`)
+            tableRows.forEach((row) => pictureLines.push(`${linePrefix}    ${row}\\\\`))
+            pictureLines.push(`${linePrefix}  };${legend}`)
+            return
+          }
+
+          const segments = splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null)))
           segments.forEach((segment, index) => {
             const coords = segment.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
-            const legend = functionOptions.legend && index === 0 ? `\n${linePrefix}  \\addlegendentry{${formatTikzNodeText(functionOptions.legend)}}` : ''
-            pictureLines.push(`${linePrefix}  \\addplot[${makeAddplotOptions().join(', ')}] coordinates { ${coords} };${legend}`)
+            const legend = series.legend && index === 0 ? `\n${linePrefix}  \\addlegendentry{${formatTikzNodeText(series.legend)}}` : ''
+            pictureLines.push(`${linePrefix}  \\addplot[${makeAddplotOptions(series).join(', ')}] coordinates { ${coords} };${legend}`)
+          })
+        })
+        featureMarks.forEach((point) => {
+          pictureLines.push(
+            `${linePrefix}  \\addplot[only marks, mark=*, draw=${primaryColor}, fill=white, line width=0.45pt] coordinates { (${formatNumber(point.x)},${formatNumber(point.y)}) };`,
+          )
+          if (point.label) {
+            pictureLines.push(`${linePrefix}  \\node[above right, font=\\scriptsize] at (axis cs:${formatNumber(point.x)},${formatNumber(point.y)}) {${formatTikzNodeText(point.label)}};`)
+          }
+        })
+        if (functionOptions.showTangent && features.tangent) {
+          pictureLines.push(
+            `${linePrefix}  \\addplot[dashed, draw=${primaryColor}!65, line width=0.4pt] coordinates { (${formatNumber(features.tangent.start.x)},${formatNumber(features.tangent.start.y)}) (${formatNumber(features.tangent.end.x)},${formatNumber(features.tangent.end.y)}) };`,
+          )
+        }
+        if (functionOptions.showAsymptotes) {
+          features.asymptotes.slice(0, 6).forEach((point) => {
+            pictureLines.push(`${linePrefix}  \\draw[densely dashed, color=gray!55] (axis cs:${formatNumber(point.x)},${formatNumber(worldBounds.minY)}) -- (axis cs:${formatNumber(point.x)},${formatNumber(worldBounds.maxY)});`)
           })
         }
         pictureLines.push(`${linePrefix}\\end{axis}`)
       } else {
-        segments.forEach((segment, index) => {
-          const coords = segment.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
-          const comment = index === 0 ? ` % f(x) = ${element.expression}` : ''
-          pictureLines.push(`${linePrefix}\\draw${optionsFor(element, element.smooth === false ? [] : ['smooth'])} plot coordinates { ${coords} };${comment}`)
+        displaySeries.forEach(({ series, points }, seriesIndex) => {
+          const segments = splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null)))
+          segments.forEach((segment, index) => {
+            const coords = segment.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
+            const comment = seriesIndex === 0 && index === 0 ? ` % f(x) = ${element.expression}` : ''
+            pictureLines.push(`${linePrefix}\\draw[${directDrawOptions(series).join(', ')}] plot coordinates { ${coords} };${comment}`)
+          })
         })
-        const features = functionFeaturePoints(element)
         const markPoint = (point, label) =>
-          `${linePrefix}\\filldraw[fill=white, draw=${ensureColor(element.stroke)}, line width=0.45pt] (${formatNumber(point.x)},${formatNumber(
+          `${linePrefix}\\filldraw[fill=white, draw=${primaryColor}, line width=0.45pt] (${formatNumber(point.x)},${formatNumber(
             point.y,
-          )}) circle (1.7pt) node[above right, font=\\scriptsize] {${label}};`
-        if (functionOptions.showXIntercepts) features.xIntercepts.slice(0, 8).forEach((point) => pictureLines.push(markPoint(point, '$x_0$')))
-        if (functionOptions.showYIntercept && features.yIntercept) pictureLines.push(markPoint(features.yIntercept, '$y_0$'))
-        if (functionOptions.showExtrema) features.extrema.slice(0, 8).forEach((point) => pictureLines.push(markPoint(point, 'ext')))
-        if (functionOptions.showSamples) features.samples.forEach((point) => pictureLines.push(markPoint(point, '')))
+          )}) circle (1.7pt)${label ? ` node[above right, font=\\scriptsize] {${formatTikzNodeText(label)}}` : ''};`
+        featureMarks.forEach((point) => pictureLines.push(markPoint(point, point.label)))
         if (functionOptions.showTangent && features.tangent) {
           pictureLines.push(
-            `${linePrefix}\\draw[dashed, draw=${ensureColor(element.stroke)}!65, line width=0.4pt] (${formatNumber(features.tangent.start.x)},${formatNumber(
+            `${linePrefix}\\draw[dashed, draw=${primaryColor}!65, line width=0.4pt] (${formatNumber(features.tangent.start.x)},${formatNumber(
               features.tangent.start.y,
             )}) -- (${formatNumber(features.tangent.end.x)},${formatNumber(features.tangent.end.y)});`,
           )
@@ -3142,9 +3335,14 @@ function buildTikz(elements, exportOptions = {}) {
             pictureLines.push(`${linePrefix}\\draw[densely dashed, color=gray!55] (${formatNumber(point.x)},${formatNumber(worldBounds.minY)}) -- (${formatNumber(point.x)},${formatNumber(worldBounds.maxY)});`)
           })
         }
-        if (functionOptions.legend) {
+        const legends = displaySeries.map(({ series }) => series.legend).filter(Boolean)
+        if (legends.length) {
           const bounds = elementBounds(element)
-          pictureLines.push(`${linePrefix}\\node[anchor=west, font=\\scriptsize] at (${formatNumber(bounds.maxX + 0.2)},${formatNumber(bounds.maxY)}) {${formatTikzNodeText(functionOptions.legend)}};`)
+          legends.forEach((legend, legendIndex) => {
+            pictureLines.push(
+              `${linePrefix}\\node[anchor=west, font=\\scriptsize] at (${formatNumber(bounds.maxX + 0.2)},${formatNumber(bounds.maxY - legendIndex * 0.35)}) {${formatTikzNodeText(legend)}};`,
+            )
+          })
         }
       }
     }
@@ -3273,6 +3471,8 @@ function App() {
     domainStart: -6,
     domainEnd: 6,
     samples: 120,
+    color: '#1f4e79',
+    lineStyle: 'solid',
   })
   const [functionError, setFunctionError] = useState('')
   const [librarySearch, setLibrarySearch] = useState('')
@@ -3321,6 +3521,8 @@ function App() {
 
   const selectedElement = elements.find((element) => element.id === selectedId)
   const selectedElements = elements.filter((element) => selectedIds.includes(element.id))
+  const selectedFunctionOptions = selectedElement?.type === 'function' ? functionOptionsFor(selectedElement) : defaultFunctionOptions
+  const selectedFunctionSeries = selectedElement?.type === 'function' ? editableFunctionSeriesFor(selectedElement) : []
   const selectedLibraryConfig = selectedElement?.type === 'library' ? getLibraryConfig(selectedElement) : null
   const selectedLibraryPreset = selectedElement?.type === 'library' ? getLibraryPreset(selectedElement) : null
   const selectedLibraryConfigSections = selectedLibraryPreset ? libraryConfigSectionsForPreset(selectedLibraryPreset) : []
@@ -3860,6 +4062,42 @@ function App() {
     updateSelected({ functionOptions: { ...functionOptionsFor(selectedElement), ...patch } })
   }
 
+  const addFunctionSeries = () => {
+    if (selectedElement?.type !== 'function') return
+    const series = editableFunctionSeriesFor(selectedElement)
+    const index = series.length
+    updateSelectedFunctionOptions({
+      series: [
+        ...series,
+        normalizeFunctionSeries(
+          {
+            id: createId(),
+            expression: functionQuickExpressions[(index + 1) % functionQuickExpressions.length],
+            color: strokeColors[(index + 3) % strokeColors.length].value,
+            lineStyle: index % 2 === 0 ? 'dashed' : 'dotted',
+            legend: `serie ${index + 2}`,
+            enabled: true,
+          },
+          index,
+        ),
+      ],
+    })
+  }
+
+  const updateFunctionSeries = (index, patch) => {
+    if (selectedElement?.type !== 'function') return
+    const series = editableFunctionSeriesFor(selectedElement)
+    series[index] = { ...series[index], ...patch }
+    updateSelectedFunctionOptions({ series })
+  }
+
+  const removeFunctionSeries = (index) => {
+    if (selectedElement?.type !== 'function') return
+    updateSelectedFunctionOptions({
+      series: editableFunctionSeriesFor(selectedElement).filter((_, itemIndex) => itemIndex !== index),
+    })
+  }
+
   const updateElementById = (id, patch) => {
     setElements((current) => current.map((element) => (element.id === id ? { ...element, ...patch } : element)))
   }
@@ -4047,9 +4285,9 @@ function App() {
         domainEnd: Number(functionDraft.domainEnd),
         samples: Number(functionDraft.samples),
         yOffset: 0,
-        stroke: settings.stroke,
+        stroke: functionDraft.color || settings.stroke,
         smooth: true,
-        functionOptions: { ...defaultFunctionOptions },
+        functionOptions: { ...defaultFunctionOptions, lineStyle: functionDraft.lineStyle },
       }
       setFunctionError('')
       commitElements([...elements, nextElement], nextElement.id)
@@ -6417,21 +6655,20 @@ function App() {
     }
 
     if (element.type === 'function') {
-      const segments = splitDrawableSegments(
-        sampleFunction(element).map((point) =>
-          point ? { x: point.x, y: point.y + (Number(element.yOffset) || 0) } : null,
-        ),
-      )
       return (
         <g>
-          {segments.map((segment, index) => (
-            <polyline
-              key={`${element.id}-hit-${index}`}
-              {...hitProps}
-              points={segment.map(worldToScreen).map((point) => `${point.x},${point.y}`).join(' ')}
-              strokeWidth="18"
-            />
-          ))}
+          {functionDisplaySeries(element).flatMap(({ points }, seriesIndex) =>
+            splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null))).map(
+              (segment, index) => (
+                <polyline
+                  key={`${element.id}-hit-${seriesIndex}-${index}`}
+                  {...hitProps}
+                  points={segment.map(worldToScreen).map((point) => `${point.x},${point.y}`).join(' ')}
+                  strokeWidth="18"
+                />
+              ),
+            ),
+          )}
         </g>
       )
     }
@@ -6568,27 +6805,65 @@ function App() {
     }
 
     if (element.type === 'function') {
-      const segments = splitDrawableSegments(
-        sampleFunction(element).map((point) =>
-          point ? { x: point.x, y: point.y + (Number(element.yOffset) || 0) } : null,
-        ),
-      )
+      const functionOptions = functionOptionsFor(element)
+      const features = functionFeaturePoints(element)
+      const markerPoints = [
+        ...(functionOptions.showXIntercepts ? features.xIntercepts.slice(0, 8).map((point) => ({ ...point, label: '$x_0$' })) : []),
+        ...(functionOptions.showYIntercept && features.yIntercept ? [{ ...features.yIntercept, label: '$y_0$' }] : []),
+        ...(functionOptions.showExtrema ? features.extrema.slice(0, 8).map((point) => ({ ...point, label: 'ext' })) : []),
+        ...(functionOptions.showSamples ? features.samples.map((point) => ({ ...point, label: '' })) : []),
+        ...features.marked.map((point) => ({ ...point, label: point.label || '' })),
+      ]
+
+      const renderMarker = (point, key) => {
+        const screenPoint = worldToScreen(point)
+        return (
+          <g key={key} className="function-marker">
+            <circle
+              cx={screenPoint.x}
+              cy={screenPoint.y}
+              r="5"
+              fill="#ffffff"
+              stroke={element.stroke}
+              strokeWidth="1.2"
+              vectorEffect="non-scaling-stroke"
+            />
+            {point.label && (
+              <foreignObject
+                x={screenPoint.x + 8}
+                y={screenPoint.y - 26}
+                width="88"
+                height="28"
+                className="function-marker-label"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml" dangerouslySetInnerHTML={{ __html: renderInlineLatexHtml(point.label) }} />
+              </foreignObject>
+            )}
+          </g>
+        )
+      }
 
       return (
         <g>
-          {segments.map((segment, index) => (
-            <polyline
-              key={`${element.id}-segment-${index}`}
-              points={segment.map(worldToScreen).map((point) => `${point.x},${point.y}`).join(' ')}
-              fill="none"
-              stroke={stroke}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity={halo ? 0.26 : 1}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
+          {functionDisplaySeries(element).flatMap(({ series, points }, seriesIndex) =>
+            splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null))).map(
+              (segment, index) => (
+                <polyline
+                  key={`${element.id}-segment-${seriesIndex}-${index}`}
+                  points={segment.map(worldToScreen).map((point) => `${point.x},${point.y}`).join(' ')}
+                  fill="none"
+                  stroke={halo ? stroke : series.color}
+                  strokeWidth={(halo ? series.width + 3 : series.width) * 1.05}
+                  strokeDasharray={!halo ? functionLineStyleSvg(series.lineStyle) || undefined : undefined}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity={halo ? 0.26 : 1}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ),
+            ),
+          )}
+          {!halo && markerPoints.map((point, index) => renderMarker(point, `${element.id}-marker-${index}`))}
         </g>
       )
     }
@@ -7264,9 +7539,34 @@ function App() {
               onChange={(event) => setFunctionDraft((state) => ({ ...state, samples: event.target.value }))}
             />
           </label>
+          <label className="field">
+            <span>Estilo de curva</span>
+            <select
+              value={functionDraft.lineStyle}
+              onChange={(event) => setFunctionDraft((state) => ({ ...state, lineStyle: event.target.value }))}
+            >
+              {functionLineStyleOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="function-swatch-row" aria-label="Color de funcion">
+            {strokeColors.slice(0, 8).map((color) => (
+              <button
+                key={color.value}
+                type="button"
+                className={`mini-swatch ${functionDraft.color === color.value ? 'is-active' : ''}`}
+                title={color.label}
+                style={{ '--swatch': color.value }}
+                onClick={() => setFunctionDraft((state) => ({ ...state, color: color.value }))}
+              />
+            ))}
+          </div>
           {functionError && <p className="form-error">{functionError}</p>}
           <div className="example-row">
-            {['sin(x)', 'max(x, 0)', 'min(sin(x), 0.5)', 'besselj0(x)', 'sinc(x)', 'erf(x)'].map((expression) => (
+            {functionQuickExpressions.map((expression) => (
               <button
                 key={expression}
                 type="button"
@@ -7685,6 +7985,50 @@ function App() {
                     />
                     <span>Suavizar curva</span>
                   </label>
+                  <div className="function-series-card primary-series">
+                    <div className="series-card-head">
+                      <strong>Curva principal</strong>
+                      <small>{selectedElement.expression}</small>
+                    </div>
+                    <div className="function-swatch-row" aria-label="Color de la curva principal">
+                      {strokeColors.slice(0, 8).map((color) => (
+                        <button
+                          key={color.value}
+                          type="button"
+                          className={`mini-swatch ${selectedElement.stroke === color.value ? 'is-active' : ''}`}
+                          title={color.label}
+                          style={{ '--swatch': color.value }}
+                          onClick={() => updateSelected({ stroke: color.value })}
+                        />
+                      ))}
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>Trazo</span>
+                        <select
+                          value={selectedFunctionOptions.lineStyle}
+                          onChange={(event) => updateSelectedFunctionOptions({ lineStyle: event.target.value })}
+                        >
+                          {functionLineStyleOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Grosor pt</span>
+                        <input
+                          type="number"
+                          min="0.2"
+                          max="4"
+                          step="0.05"
+                          value={selectedElement.width ?? 0.75}
+                          onChange={(event) => updateSelected({ width: Number(event.target.value) })}
+                        />
+                      </label>
+                    </div>
+                  </div>
                   <div className="object-config">
                     <div className="toggle-grid">
                       {[
@@ -7706,11 +8050,142 @@ function App() {
                         </label>
                       ))}
                     </div>
+                    <label className="field">
+                      <span>Puntos marcados (x, y, etiqueta)</span>
+                      <textarea
+                        className="snippet-input compact"
+                        value={selectedFunctionOptions.markedPoints}
+                        onChange={(event) => updateSelectedFunctionOptions({ markedPoints: event.target.value })}
+                        placeholder={'0, 0, origen\npi, 0, $\\pi$'}
+                      />
+                    </label>
+                    <div className="function-series-list">
+                      <div className="series-list-head">
+                        <strong>Mas funciones en el mismo grafico</strong>
+                        <button type="button" className="ghost-button compact-button" onClick={addFunctionSeries}>
+                          <Sigma size={15} />
+                          Anadir serie
+                        </button>
+                      </div>
+                      {selectedFunctionSeries.map((series, index) => (
+                        <div key={series.id || index} className="function-series-card">
+                          <div className="series-card-head">
+                            <label className="toggle inline-toggle">
+                              <input
+                                type="checkbox"
+                                checked={series.enabled}
+                                onChange={(event) => updateFunctionSeries(index, { enabled: event.target.checked })}
+                              />
+                              <strong>Serie {index + 2}</strong>
+                            </label>
+                            <button
+                              type="button"
+                              className="icon-danger small"
+                              title="Eliminar serie"
+                              aria-label="Eliminar serie"
+                              onClick={() => removeFunctionSeries(index)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                          <label className="field">
+                            <span>f(x)</span>
+                            <input
+                              type="text"
+                              value={series.expression}
+                              onChange={(event) => updateFunctionSeries(index, { expression: event.target.value })}
+                              placeholder="cos(x), besselj1(x), max(x,0)..."
+                            />
+                          </label>
+                          <div className="function-swatch-row" aria-label={`Color serie ${index + 2}`}>
+                            {strokeColors.slice(0, 8).map((color) => (
+                              <button
+                                key={color.value}
+                                type="button"
+                                className={`mini-swatch ${series.color === color.value ? 'is-active' : ''}`}
+                                title={color.label}
+                                style={{ '--swatch': color.value }}
+                                onClick={() => updateFunctionSeries(index, { color: color.value })}
+                              />
+                            ))}
+                          </div>
+                          <div className="field-pair">
+                            <label className="field">
+                              <span>Trazo</span>
+                              <select
+                                value={series.lineStyle}
+                                onChange={(event) => updateFunctionSeries(index, { lineStyle: event.target.value })}
+                              >
+                                {functionLineStyleOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="field">
+                              <span>Marcador</span>
+                              <select
+                                value={series.markerStyle}
+                                onChange={(event) => updateFunctionSeries(index, { markerStyle: event.target.value })}
+                              >
+                                {functionMarkerOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                          <div className="field-pair">
+                            <label className="field">
+                              <span>Grosor pt</span>
+                              <input
+                                type="number"
+                                min="0.2"
+                                max="4"
+                                step="0.05"
+                                value={series.width}
+                                onChange={(event) => updateFunctionSeries(index, { width: Number(event.target.value) })}
+                              />
+                            </label>
+                            <label className="field">
+                              <span>Offset y</span>
+                              <input
+                                type="number"
+                                step="0.25"
+                                value={series.yOffset}
+                                onChange={(event) => updateFunctionSeries(index, { yOffset: Number(event.target.value) })}
+                              />
+                            </label>
+                          </div>
+                          <div className="field-pair">
+                            <label className="field">
+                              <span>Leyenda</span>
+                              <input
+                                type="text"
+                                value={series.legend}
+                                onChange={(event) => updateFunctionSeries(index, { legend: event.target.value })}
+                              />
+                            </label>
+                            <label className="field">
+                              <span>Opciones addplot</span>
+                              <input
+                                type="text"
+                                value={series.plotOptions}
+                                onChange={(event) => updateFunctionSeries(index, { plotOptions: event.target.value })}
+                                placeholder="forget plot, opacity=0.7..."
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                     <div className="field-pair">
                       <label className="field">
                         <span>Tipo eje</span>
                         <select
-                          value={functionOptionsFor(selectedElement).axisType}
+                          value={selectedFunctionOptions.axisType}
                           onChange={(event) => updateSelectedFunctionOptions({ axisType: event.target.value })}
                         >
                           <option value="axis">axis</option>
@@ -7721,14 +8196,14 @@ function App() {
                       <label className="field">
                         <span>Marcador</span>
                         <select
-                          value={functionOptionsFor(selectedElement).markerStyle}
+                          value={selectedFunctionOptions.markerStyle}
                           onChange={(event) => updateSelectedFunctionOptions({ markerStyle: event.target.value })}
                         >
-                          <option value="none">Sin marcador</option>
-                          <option value="*">*</option>
-                          <option value="square*">square</option>
-                          <option value="triangle*">triangle</option>
-                          <option value="x">x</option>
+                          {functionMarkerOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
                         </select>
                       </label>
                     </div>

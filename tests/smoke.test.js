@@ -27,6 +27,18 @@ test('TODO implementation hooks are present', () => {
   assert.match(appSource, /errorBars/)
 })
 
+test('function plots support multi-series styling and marked points', () => {
+  assert.match(appSource, /functionSeriesFor/)
+  assert.match(appSource, /functionDisplaySeries/)
+  assert.match(appSource, /functionLineStyleOptions/)
+  assert.match(appSource, /functionLineStyleTikz/)
+  assert.match(appSource, /functionLineStyleSvg/)
+  assert.match(appSource, /parseMarkedFunctionPoints/)
+  assert.match(appSource, /markedPoints/)
+  assert.match(appSource, /addFunctionSeries/)
+  assert.match(appSource, /Mas funciones en el mismo grafico/)
+})
+
 test('telecommunications and circuit palettes include requested domains', () => {
   assert.match(paletteSource, /telecom-transmitter-chain/)
   assert.match(paletteSource, /telecom-qpsk-mod/)

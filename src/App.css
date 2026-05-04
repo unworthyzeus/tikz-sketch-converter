@@ -86,6 +86,7 @@
 .library-button:focus-visible,
 .symbol-button:focus-visible,
 .swatch:focus-visible,
+.mini-swatch:focus-visible,
 .zoom-button:focus-visible,
 .icon-danger:focus-visible,
 input:focus-visible,
@@ -478,6 +479,98 @@ textarea:focus-visible {
   font-weight: 650;
   line-height: 1;
   cursor: pointer;
+}
+
+.function-swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.mini-swatch {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: 0 0 0 1px #cbd5e1;
+  cursor: pointer;
+}
+
+.mini-swatch.is-active {
+  box-shadow:
+    0 0 0 1px #111111,
+    0 0 0 4px #d7dce4;
+}
+
+.function-series-list {
+  display: grid;
+  gap: 9px;
+}
+
+.series-list-head,
+.series-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.series-list-head strong,
+.series-card-head strong {
+  color: #111111;
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.series-card-head small {
+  min-width: 0;
+  overflow: hidden;
+  color: #5d6675;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.function-series-card {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid #d8dce4;
+  border-radius: 4px;
+  background: #fbfbfc;
+}
+
+.primary-series {
+  margin-top: 6px;
+}
+
+.inline-toggle {
+  min-height: 24px;
+}
+
+.compact-button {
+  min-height: 28px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.icon-danger.small {
+  width: 28px;
+  height: 28px;
+}
+
+.function-marker-label > div {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 1px 4px;
+  color: #111111;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .preset-grid {
@@ -1250,6 +1343,8 @@ html[data-theme='dark'] .context-menu select,
 html[data-theme='dark'] .modal-panel,
 html[data-theme='dark'] .help-copy p,
 html[data-theme='dark'] .layer-name,
+html[data-theme='dark'] .series-list-head strong,
+html[data-theme='dark'] .series-card-head strong,
 html[data-theme='dark'] .overlap-menu button {
   color: #edf0f4;
 }
@@ -1268,6 +1363,7 @@ html[data-theme='dark'] .preset-button small,
 html[data-theme='dark'] .symbol-count,
 html[data-theme='dark'] .symbol-button small,
 html[data-theme='dark'] .layer-name small,
+html[data-theme='dark'] .series-card-head small,
 html[data-theme='dark'] .overlap-menu span,
 html[data-theme='dark'] .net-summary,
 html[data-theme='dark'] .recent-list {
@@ -1298,6 +1394,7 @@ html[data-theme='dark'] .help-tabs button,
 html[data-theme='dark'] .circuit-config,
 html[data-theme='dark'] .config-details,
 html[data-theme='dark'] .layer-row,
+html[data-theme='dark'] .function-series-card,
 html[data-theme='dark'] .layer-row > button:not(.layer-name),
 html[data-theme='dark'] .net-summary,
 html[data-theme='dark'] .recent-list {
