@@ -40,6 +40,7 @@ import {
 import 'katex/dist/katex.min.css'
 import './App.css'
 import { writeClipboardText } from './clipboard'
+import { moveElementBy } from './elementTransforms'
 import { createEditorKeydownHandler } from './editorKeyboard'
 import { curveMarkerPoints, functionLegendEntries, markerGlyphParts } from './functionPreview'
 import { latexSymbolGroups } from './latexSymbols'
@@ -588,6 +589,7 @@ const seedElements = [
     domainStart: -5,
     domainEnd: 5,
     samples: 160,
+    xOffset: 0,
     stroke: '#111111',
     width: 0.75,
     dashed: false,
@@ -686,6 +688,15 @@ function normalizeBoardElement(element) {
       fillOpacity: element.fillOpacity ?? 0.18,
       width: element.width ?? 0.75,
       scale: element.scale ?? 1,
+    }
+  }
+
+  if (element.type === 'function') {
+    return {
+      ...element,
+      id: element.id ?? createId(),
+      xOffset: Number(element.xOffset) || 0,
+      yOffset: Number(element.yOffset) || 0,
     }
   }
 
@@ -1649,14 +1660,15 @@ function functionYScaleFor(element) {
 
 function sampleFunctionSeries(element, series) {
   const yScale = functionYScaleFor(element)
+  const xOffset = Number(element.xOffset) || 0
   const baseYOffset = Number(element.yOffset) || 0
   const seriesYOffset = Number(series.yOffset) || 0
   const offset = baseYOffset + seriesYOffset
   const dataPoints = parsedDataTablePoints(series.dataTable)
-  if (dataPoints.length) return dataPoints.map((point) => ({ x: point.x, y: point.y * yScale + offset }))
+  if (dataPoints.length) return dataPoints.map((point) => ({ x: point.x + xOffset, y: point.y * yScale + offset }))
 
   return sampleExpressionPoints(series.expression, element.domainStart, element.domainEnd, element.samples).map((point) =>
-    point ? { x: point.x, y: point.y * yScale + offset } : null,
+    point ? { x: point.x + xOffset, y: point.y * yScale + offset } : null,
   )
 }
 
@@ -1711,6 +1723,7 @@ function functionFeaturePoints(element) {
   const points = functionDisplayPoints(element)
   const options = functionOptionsFor(element)
   const yScale = functionYScaleFor(element)
+  const xOffset = Number(element.xOffset) || 0
   const yOffset = Number(element.yOffset) || 0
   const features = {
     xIntercepts: [],
@@ -1721,6 +1734,7 @@ function functionFeaturePoints(element) {
     tangent: null,
     marked: parseMarkedFunctionPoints(options.markedPoints).map((point) => ({
       ...point,
+      x: point.x + xOffset,
       y: point.y * yScale + yOffset,
     })),
   }
@@ -1883,47 +1897,7 @@ function classifyPath(element) {
 }
 
 function moveElement(element, deltaX, deltaY) {
-  const movePoint = (point) => ({ x: point.x + deltaX, y: point.y + deltaY })
-
-  if (element.type === 'line' || element.type === 'arrow' || element.type === 'rect' || element.type === 'ellipse') {
-    return {
-      ...element,
-      start: movePoint(element.start),
-      end: movePoint(element.end),
-    }
-  }
-
-  if (element.type === 'path') {
-    return {
-      ...element,
-      points: element.points.map(movePoint),
-    }
-  }
-
-  if (element.type === 'text') {
-    return {
-      ...element,
-      position: movePoint(element.position),
-    }
-  }
-
-  if (element.type === 'function') {
-    return {
-      ...element,
-      domainStart: Number(element.domainStart) + deltaX,
-      domainEnd: Number(element.domainEnd) + deltaX,
-      yOffset: (Number(element.yOffset) || 0) + deltaY,
-    }
-  }
-
-  if (element.type === 'diagram' || element.type === 'library') {
-    return {
-      ...element,
-      origin: movePoint(element.origin),
-    }
-  }
-
-  return element
+  return moveElementBy(element, deltaX, deltaY)
 }
 
 function elementLabel(element) {
@@ -1959,7 +1933,8 @@ function elementBounds(element) {
 
   if (element.type === 'function') {
     const points = allFunctionDisplayPoints(element)
-    if (!points.length) return { minX: element.domainStart, maxX: element.domainEnd, minY: -1, maxY: 1 }
+    const xOffset = Number(element.xOffset) || 0
+    if (!points.length) return { minX: Number(element.domainStart) + xOffset, maxX: Number(element.domainEnd) + xOffset, minY: -1, maxY: 1 }
     const xs = points.map((point) => point.x)
     const ys = points.map((point) => point.y)
     return expandFlatFunctionBounds({
@@ -2092,13 +2067,17 @@ function resizeElementToBounds(element, nextBounds) {
   if (element.type === 'function') {
     const xScale = nextWidth / currentWidth
     const yScaleFactor = nextHeight / currentHeight
+    const currentXOffset = Number(element.xOffset) || 0
     const currentYOffset = Number(element.yOffset) || 0
     const nextYScale = functionYScaleFor(element) * yScaleFactor
     const nextYOffset = nextBounds.minY + (currentYOffset - current.minY) * yScaleFactor
+    const nextDomainStartDisplay = nextBounds.minX + (Number(element.domainStart) + currentXOffset - current.minX) * xScale
+    const nextDomainEndDisplay = nextBounds.minX + (Number(element.domainEnd) + currentXOffset - current.minX) * xScale
     return {
       ...element,
-      domainStart: nextBounds.minX + (Number(element.domainStart) - current.minX) * xScale,
-      domainEnd: nextBounds.minX + (Number(element.domainEnd) - current.minX) * xScale,
+      domainStart: nextDomainStartDisplay - currentXOffset,
+      domainEnd: nextDomainEndDisplay - currentXOffset,
+      xOffset: currentXOffset,
       yOffset: nextYOffset,
       functionOptions: {
         ...functionOptionsFor(element),
@@ -4508,6 +4487,7 @@ function App() {
         domainStart: Number(functionDraft.domainStart),
         domainEnd: Number(functionDraft.domainEnd),
         samples: Number(functionDraft.samples),
+        xOffset: 0,
         yOffset: 0,
         stroke: functionDraft.color || settings.stroke,
         smooth: true,
