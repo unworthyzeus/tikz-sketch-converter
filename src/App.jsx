@@ -37,13 +37,15 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
-import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import './App.css'
 import { latexSymbolGroups } from './latexSymbols'
 import { previewKindForPreset } from './previewKinds'
 import { libraryPresets } from './tikzLibraryPresets'
 import { libraryPaletteItems } from './tikzPaletteItems'
+
+let katexRenderer = null
+let katexLoadPromise = null
 
 const CANVAS = {
   width: 920,
@@ -92,6 +94,268 @@ const libraryNodeShapeOptions = [
   { value: 'ellipse', label: 'Elipse' },
   { value: 'diamond', label: 'Rombo' },
 ]
+
+const lineCapOptions = [
+  { value: 'butt', label: 'Butt' },
+  { value: 'round', label: 'Round' },
+  { value: 'rect', label: 'Rect' },
+]
+
+const lineJoinOptions = [
+  { value: 'miter', label: 'Miter' },
+  { value: 'round', label: 'Round' },
+  { value: 'bevel', label: 'Bevel' },
+]
+
+const fontSizeOptions = [
+  { value: '', label: 'Auto' },
+  { value: '\\scriptsize', label: 'scriptsize' },
+  { value: '\\footnotesize', label: 'footnotesize' },
+  { value: '\\small', label: 'small' },
+  { value: '\\normalsize', label: 'normalsize' },
+  { value: '\\large', label: 'large' },
+]
+
+const fontSeriesOptions = [
+  { value: '', label: 'Normal' },
+  { value: '\\bfseries', label: 'Bold' },
+  { value: '\\itshape', label: 'Italic' },
+  { value: '\\sffamily', label: 'Sans' },
+  { value: '\\ttfamily', label: 'Mono' },
+]
+
+const alignOptions = [
+  { value: 'center', label: 'Centro' },
+  { value: 'left', label: 'Izquierda' },
+  { value: 'right', label: 'Derecha' },
+]
+
+const anchorOptions = [
+  { value: 'center', label: 'Center' },
+  { value: 'north', label: 'North' },
+  { value: 'south', label: 'South' },
+  { value: 'east', label: 'East' },
+  { value: 'west', label: 'West' },
+  { value: 'north east', label: 'NE' },
+  { value: 'north west', label: 'NW' },
+  { value: 'south east', label: 'SE' },
+  { value: 'south west', label: 'SW' },
+]
+
+const axisLineOptions = [
+  { value: 'left', label: 'Left' },
+  { value: 'middle', label: 'Middle' },
+  { value: 'center', label: 'Center' },
+  { value: 'box', label: 'Box' },
+  { value: 'none', label: 'None' },
+]
+
+const gridModeOptions = [
+  { value: 'none', label: 'Sin grid' },
+  { value: 'major', label: 'Major' },
+  { value: 'both', label: 'Both' },
+]
+
+const legendPositionOptions = [
+  { value: '', label: 'Auto' },
+  { value: 'north east', label: 'NE' },
+  { value: 'north west', label: 'NW' },
+  { value: 'south east', label: 'SE' },
+  { value: 'south west', label: 'SW' },
+  { value: 'outer north east', label: 'Outer NE' },
+]
+
+const axisModeOptions = [
+  { value: 'linear', label: 'Linear' },
+  { value: 'log', label: 'Log' },
+]
+
+const markStyleOptions = [
+  { value: '', label: 'Sin marca' },
+  { value: '*', label: 'Dot' },
+  { value: 'o', label: 'Circle' },
+  { value: 'square*', label: 'Square' },
+  { value: 'triangle*', label: 'Triangle' },
+  { value: 'x', label: 'X' },
+  { value: '+', label: '+' },
+]
+
+const matrixDelimiterOptions = [
+  { value: 'none', label: 'Sin delimitador' },
+  { value: 'brackets', label: '[ ]' },
+  { value: 'parentheses', label: '( )' },
+  { value: 'braces', label: '{ }' },
+  { value: 'pipes', label: '| |' },
+]
+
+const edgeStyleOptions = [
+  { value: 'solid', label: 'Solido' },
+  { value: 'dashed', label: 'Discontinuo' },
+  { value: 'dotted', label: 'Punteado' },
+  { value: 'bend left', label: 'Bend left' },
+  { value: 'bend right', label: 'Bend right' },
+]
+
+const objectConfigSections = [
+  {
+    id: 'paperStyle',
+    title: 'Paper style',
+    domains: ['all'],
+    fields: [
+      { key: 'lineCap', label: 'Line cap', type: 'select', options: lineCapOptions },
+      { key: 'lineJoin', label: 'Line join', type: 'select', options: lineJoinOptions },
+      { key: 'drawOpacity', label: 'Opacidad trazo', type: 'number', min: 0, max: 1, step: 0.05 },
+      { key: 'textOpacity', label: 'Opacidad texto', type: 'number', min: 0, max: 1, step: 0.05 },
+      { key: 'dashPattern', label: 'Dash pattern', type: 'text', placeholder: '2pt 1pt' },
+      { key: 'roundedCorners', label: 'Rounded corners pt', type: 'number', min: 0, max: 24, step: 0.5 },
+      { key: 'shadow', label: 'Drop shadow', type: 'checkbox' },
+      { key: 'pattern', label: 'Pattern fill', type: 'text', placeholder: 'north east lines' },
+    ],
+  },
+  {
+    id: 'textNode',
+    title: 'Texto y nodo',
+    domains: ['all'],
+    fields: [
+      { key: 'align', label: 'Align', type: 'select', options: alignOptions },
+      { key: 'anchor', label: 'Anchor', type: 'select', options: anchorOptions },
+      { key: 'fontSize', label: 'Font size', type: 'select', options: fontSizeOptions },
+      { key: 'fontSeries', label: 'Font family/series', type: 'select', options: fontSeriesOptions },
+      { key: 'innerSep', label: 'Inner sep pt', type: 'number', min: 0, max: 24, step: 0.5 },
+      { key: 'outerSep', label: 'Outer sep pt', type: 'number', min: 0, max: 16, step: 0.5 },
+      { key: 'minWidth', label: 'Min width cm', type: 'number', min: 0, max: 12, step: 0.1 },
+      { key: 'minHeight', label: 'Min height cm', type: 'number', min: 0, max: 8, step: 0.1 },
+      { key: 'textWidth', label: 'Text width cm', type: 'number', min: 0, max: 12, step: 0.1 },
+    ],
+  },
+  {
+    id: 'shapeOptions',
+    title: 'Shape options',
+    domains: ['shape', 'flow', 'geometry', 'annotation', 'paper'],
+    fields: [
+      { key: 'shapeVariant', label: 'Variant', type: 'select', options: [...libraryNodeShapeOptions, { value: 'cloud', label: 'Cloud' }, { value: 'cylinder', label: 'Cylinder' }, { value: 'callout', label: 'Callout' }] },
+      { key: 'shapeAspect', label: 'Aspect', type: 'number', min: 0.2, max: 6, step: 0.05 },
+      { key: 'cloudPuffs', label: 'Cloud puffs', type: 'number', min: 4, max: 24, step: 1 },
+      { key: 'splitParts', label: 'Split parts', type: 'number', min: 1, max: 8, step: 1 },
+      { key: 'calloutPointerX', label: 'Puntero x', type: 'number', min: -4, max: 4, step: 0.05 },
+      { key: 'calloutPointerY', label: 'Puntero y', type: 'number', min: -4, max: 4, step: 0.05 },
+    ],
+  },
+  {
+    id: 'circuits',
+    title: 'CircuitikZ',
+    domains: ['circuit'],
+    fields: [
+      { key: 'autoLabel', label: 'Auto etiqueta', type: 'checkbox' },
+      { key: 'circuitLabel', label: 'Ref / etiqueta', type: 'text', placeholder: 'R_1' },
+      { key: 'circuitValue', label: 'Valor', type: 'text', placeholder: '10 k\\Omega' },
+      { key: 'circuitLabelPosition', label: 'Posicion label', type: 'select', options: [{ value: 'l', label: 'l' }, { value: 'l_', label: 'l_' }, { value: 'a', label: 'a' }, { value: 'a_', label: 'a_' }, { value: 'none', label: 'No label' }] },
+      { key: 'voltageLabel', label: 'Voltage label', type: 'text', placeholder: 'v_o' },
+      { key: 'currentLabel', label: 'Current label', type: 'text', placeholder: 'i_R' },
+      { key: 'circuitOrientation', label: 'Orientacion', type: 'select', options: [{ value: 'right', label: 'Derecha' }, { value: 'left', label: 'Izquierda' }, { value: 'up', label: 'Arriba' }, { value: 'down', label: 'Abajo' }] },
+      { key: 'circuitStyle', label: 'IEC/American', type: 'select', options: [{ value: 'auto', label: 'Auto' }, { value: 'iec', label: 'IEC' }, { value: 'american', label: 'American' }] },
+      { key: 'terminalStyle', label: 'Terminales', type: 'select', options: [{ value: 'none', label: 'Sin nodos' }, { value: 'filled', label: 'Rellenos' }, { value: 'open', label: 'Abiertos' }, { value: 'mixed', label: 'Mixto' }] },
+      { key: 'terminalLength', label: 'Longitud terminal', type: 'number', min: 0.55, max: 5, step: 0.05 },
+      { key: 'bipoleLength', label: 'Bipole length cm', type: 'number', min: 0, max: 5, step: 0.05 },
+      { key: 'mirrorComponent', label: 'Mirror', type: 'checkbox' },
+      { key: 'invertComponent', label: 'Invert', type: 'checkbox' },
+      { key: 'terminalNames', label: 'Nombres terminales', type: 'text', placeholder: 'in,out / D,G,S' },
+      { key: 'netName', label: 'Net preferida', type: 'text', placeholder: 'VDD, GND, RF_in' },
+      { key: 'spiceModel', label: 'Modelo/SPICE', type: 'text', placeholder: '2N3904, nch, D1N4148' },
+    ],
+  },
+  {
+    id: 'plots',
+    title: 'PGFPlots',
+    domains: ['plot'],
+    fields: [
+      { key: 'axisWidth', label: 'Axis width cm', type: 'number', min: 0, max: 18, step: 0.1 },
+      { key: 'axisHeight', label: 'Axis height cm', type: 'number', min: 0, max: 12, step: 0.1 },
+      { key: 'axisLines', label: 'Axis lines', type: 'select', options: axisLineOptions },
+      { key: 'gridMode', label: 'Grid', type: 'select', options: gridModeOptions },
+      { key: 'xMode', label: 'X mode', type: 'select', options: axisModeOptions },
+      { key: 'yMode', label: 'Y mode', type: 'select', options: axisModeOptions },
+      { key: 'plotDomain', label: 'Domain', type: 'text', placeholder: '-2:2' },
+      { key: 'samples', label: 'Samples', type: 'number', min: 2, max: 1000, step: 1 },
+      { key: 'xlabel', label: 'xlabel', type: 'text', placeholder: '$x$' },
+      { key: 'ylabel', label: 'ylabel', type: 'text', placeholder: '$y$' },
+      { key: 'plotTitle', label: 'Title', type: 'text' },
+      { key: 'legendPos', label: 'Legend pos', type: 'select', options: legendPositionOptions },
+      { key: 'markStyle', label: 'Mark', type: 'select', options: markStyleOptions },
+      { key: 'plotSmooth', label: 'Smooth', type: 'checkbox' },
+      { key: 'colormap', label: 'Colormap', type: 'text', placeholder: 'viridis, hot, blackwhite' },
+      { key: 'xtick', label: 'xtick', type: 'text', placeholder: '0,1,2' },
+      { key: 'ytick', label: 'ytick', type: 'text', placeholder: '-1,0,1' },
+      { key: 'axisExtraOptions', label: 'Axis extra', type: 'text', placeholder: 'minor tick num=1' },
+      { key: 'addplotExtraOptions', label: 'Addplot extra', type: 'text', placeholder: 'forget plot, thick' },
+    ],
+  },
+  {
+    id: 'matrixGraph',
+    title: 'Matrices, grafos y layout',
+    domains: ['matrix', 'graph', 'ml'],
+    fields: [
+      { key: 'matrixDelimiter', label: 'Delimiter', type: 'select', options: matrixDelimiterOptions },
+      { key: 'rowSep', label: 'Row sep cm', type: 'number', min: 0, max: 4, step: 0.05 },
+      { key: 'columnSep', label: 'Column sep cm', type: 'number', min: 0, max: 4, step: 0.05 },
+      { key: 'matrixEntries', label: 'Matrix entries', type: 'textarea', placeholder: 'a & b\\\\\nc & d' },
+      { key: 'edgeStyle', label: 'Edge style', type: 'select', options: edgeStyleOptions },
+      { key: 'edgeLabels', label: 'Edge labels', type: 'text', placeholder: 'f,g,h' },
+      { key: 'nodeDistance', label: 'Node distance cm', type: 'number', min: 0, max: 6, step: 0.05 },
+      { key: 'layerDistance', label: 'Layer distance cm', type: 'number', min: 0, max: 6, step: 0.05 },
+      { key: 'siblingDistance', label: 'Sibling distance cm', type: 'number', min: 0, max: 6, step: 0.05 },
+    ],
+  },
+  {
+    id: 'ganttTelecom',
+    title: 'Gantt / Telecom / RF',
+    domains: ['gantt', 'telecom'],
+    fields: [
+      { key: 'ganttStart', label: 'Gantt inicio', type: 'number', min: 0, max: 999, step: 1 },
+      { key: 'ganttEnd', label: 'Gantt fin', type: 'number', min: 1, max: 999, step: 1 },
+      { key: 'ganttProgress', label: 'Progress %', type: 'number', min: 0, max: 100, step: 1 },
+      { key: 'blockLabels', label: 'Labels bloques', type: 'text', placeholder: 'Bits, Map, RF' },
+      { key: 'signalLabel', label: 'Signal label', type: 'text', placeholder: 'x(t), s[n]' },
+      { key: 'carrierLabel', label: 'Carrier', type: 'text', placeholder: 'f_c' },
+      { key: 'modulation', label: 'Modulation', type: 'text', placeholder: 'QPSK, OFDM, 16-QAM' },
+      { key: 'branchCount', label: 'Ramas/antenas', type: 'number', min: 1, max: 16, step: 1 },
+      { key: 'gainDb', label: 'Gain dB', type: 'number', min: -120, max: 120, step: 0.5 },
+      { key: 'noiseLabel', label: 'Noise label', type: 'text', placeholder: 'n(t)' },
+    ],
+  },
+  {
+    id: 'metadata',
+    title: 'Metadata exportable',
+    domains: ['all'],
+    fields: [
+      { key: 'paperRole', label: 'Rol en paper', type: 'text', placeholder: 'encoder, baseline, measurement...' },
+      { key: 'datasetTag', label: 'Dataset/tag', type: 'text', placeholder: 'MNIST, channel A, Fig. 2b' },
+      { key: 'referenceName', label: 'Nombre LaTeX', type: 'text', placeholder: 'fig:encoder-node' },
+      { key: 'metadataJson', label: 'JSON metadata', type: 'textarea', placeholder: '{"units":"dB","owner":"model"}' },
+    ],
+  },
+]
+
+const quickLibraryConfigKeys = new Set([
+  'stretchX',
+  'stretchY',
+  'label',
+  'autoLabel',
+  'circuitLabel',
+  'circuitValue',
+  'circuitOrientation',
+  'circuitStyle',
+  'terminalStyle',
+  'terminalLength',
+  'extraNodes',
+  'nodeSpacing',
+  'nodeDirection',
+  'nodeShape',
+  'nodeLabels',
+  'connectNodes',
+  'calloutPointerX',
+  'calloutPointerY',
+])
 
 const latexSymbols = latexSymbolGroups.flatMap((group) =>
   group.symbols.map((symbol) => ({
@@ -496,12 +760,45 @@ function renumberCircuitLabels(elements) {
   })
 }
 
+function defaultShapeVariantForPreset(preset = {}) {
+  const key = `${preset.id ?? ''} ${preset.title ?? ''} ${preset.preview ?? ''}`.toLowerCase()
+  if (key.includes('callout')) return 'callout'
+  if (key.includes('cloud')) return 'cloud'
+  if (key.includes('cylinder')) return 'cylinder'
+  if (key.includes('diamond') || key.includes('decision')) return 'diamond'
+  if (key.includes('ellipse')) return 'ellipse'
+  if (key.includes('circle') || key.includes('state')) return 'circle'
+  if (key.includes('process') || key.includes('module') || key.includes('box')) return 'rounded'
+  return 'rounded'
+}
+
 function defaultLibraryConfig(preset = {}) {
   const circuitPrefix = circuitAutoPrefix(preset)
   return {
     stretchX: 1,
     stretchY: 1,
     label: preset.title ?? 'Object',
+    lineCap: 'butt',
+    lineJoin: 'miter',
+    drawOpacity: 1,
+    textOpacity: 1,
+    dashPattern: '',
+    roundedCorners: 0,
+    shadow: false,
+    pattern: '',
+    align: 'center',
+    anchor: 'center',
+    fontSize: '',
+    fontSeries: '',
+    innerSep: 4,
+    outerSep: 0,
+    minWidth: 0,
+    minHeight: 0,
+    textWidth: 0,
+    shapeVariant: defaultShapeVariantForPreset(preset),
+    shapeAspect: 1.7,
+    cloudPuffs: 11,
+    splitParts: 3,
     extraNodes: 0,
     nodeSpacing: 0.85,
     nodeDirection: 'right',
@@ -516,8 +813,69 @@ function defaultLibraryConfig(preset = {}) {
     circuitStyle: 'auto',
     terminalStyle: 'none',
     terminalLength: 2.2,
+    circuitLabelPosition: 'l',
+    voltageLabel: '',
+    currentLabel: '',
+    bipoleLength: 0,
+    mirrorComponent: false,
+    invertComponent: false,
+    terminalNames: '',
+    netName: '',
+    spiceModel: '',
     autoLabel: Boolean(circuitPrefix),
+    axisWidth: 0,
+    axisHeight: 0,
+    axisLines: 'left',
+    gridMode: 'none',
+    xMode: 'linear',
+    yMode: 'linear',
+    plotDomain: '',
+    samples: 120,
+    xlabel: '',
+    ylabel: '',
+    plotTitle: '',
+    legendPos: '',
+    markStyle: '',
+    plotSmooth: false,
+    colormap: '',
+    xtick: '',
+    ytick: '',
+    axisExtraOptions: '',
+    addplotExtraOptions: '',
+    matrixDelimiter: 'none',
+    rowSep: 0,
+    columnSep: 0,
+    matrixEntries: '',
+    edgeStyle: 'solid',
+    edgeLabels: '',
+    nodeDistance: 0,
+    layerDistance: 0,
+    siblingDistance: 0,
+    ganttStart: 1,
+    ganttEnd: 7,
+    ganttProgress: 0,
+    blockLabels: '',
+    signalLabel: '',
+    carrierLabel: '',
+    modulation: '',
+    branchCount: 2,
+    gainDb: 0,
+    noiseLabel: '',
+    paperRole: '',
+    datasetTag: '',
+    referenceName: '',
+    metadataJson: '',
   }
+}
+
+function enumValue(value, options, fallback) {
+  return options.some((option) => option.value === value) ? value : fallback
+}
+
+function numberInRange(value, fallback, min, max) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.max(min, Math.min(max, number))
 }
 
 function getLibraryConfig(element, preset = getLibraryPreset(element)) {
@@ -526,6 +884,29 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
     ...config,
     stretchX: Math.max(0.35, Math.min(4, Number(config.stretchX) || 1)),
     stretchY: Math.max(0.35, Math.min(4, Number(config.stretchY) || 1)),
+    lineCap: enumValue(config.lineCap, lineCapOptions, 'butt'),
+    lineJoin: enumValue(config.lineJoin, lineJoinOptions, 'miter'),
+    drawOpacity: numberInRange(config.drawOpacity, 1, 0, 1),
+    textOpacity: numberInRange(config.textOpacity, 1, 0, 1),
+    roundedCorners: numberInRange(config.roundedCorners, 0, 0, 24),
+    shadow: Boolean(config.shadow),
+    align: enumValue(config.align, alignOptions, 'center'),
+    anchor: enumValue(config.anchor, anchorOptions, 'center'),
+    fontSize: enumValue(config.fontSize, fontSizeOptions, ''),
+    fontSeries: enumValue(config.fontSeries, fontSeriesOptions, ''),
+    innerSep: numberInRange(config.innerSep, 4, 0, 24),
+    outerSep: numberInRange(config.outerSep, 0, 0, 16),
+    minWidth: numberInRange(config.minWidth, 0, 0, 12),
+    minHeight: numberInRange(config.minHeight, 0, 0, 8),
+    textWidth: numberInRange(config.textWidth, 0, 0, 12),
+    shapeVariant: enumValue(
+      config.shapeVariant,
+      [...libraryNodeShapeOptions, { value: 'cloud' }, { value: 'cylinder' }, { value: 'callout' }],
+      'rounded',
+    ),
+    shapeAspect: numberInRange(config.shapeAspect, 1.7, 0.2, 6),
+    cloudPuffs: Math.round(numberInRange(config.cloudPuffs, 11, 4, 24)),
+    splitParts: Math.round(numberInRange(config.splitParts, 3, 1, 8)),
     extraNodes: Math.max(0, Math.min(8, Math.round(Number(config.extraNodes) || 0))),
     nodeSpacing: Math.max(0.25, Math.min(3, Number(config.nodeSpacing) || 0.85)),
     calloutPointerX: Number(config.calloutPointerX) || 0,
@@ -536,8 +917,63 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
     circuitStyle: ['auto', 'iec', 'american'].includes(config.circuitStyle) ? config.circuitStyle : 'auto',
     terminalStyle: ['none', 'filled', 'open', 'mixed'].includes(config.terminalStyle) ? config.terminalStyle : 'none',
     terminalLength: Math.max(0.55, Math.min(5, Number(config.terminalLength) || 2.2)),
+    circuitLabelPosition: ['l', 'l_', 'a', 'a_', 'none'].includes(config.circuitLabelPosition)
+      ? config.circuitLabelPosition
+      : 'l',
+    bipoleLength: numberInRange(config.bipoleLength, 0, 0, 5),
+    mirrorComponent: Boolean(config.mirrorComponent),
+    invertComponent: Boolean(config.invertComponent),
     autoLabel: Boolean(config.autoLabel),
+    axisWidth: numberInRange(config.axisWidth, 0, 0, 18),
+    axisHeight: numberInRange(config.axisHeight, 0, 0, 12),
+    axisLines: enumValue(config.axisLines, axisLineOptions, 'left'),
+    gridMode: enumValue(config.gridMode, gridModeOptions, 'none'),
+    xMode: enumValue(config.xMode, axisModeOptions, 'linear'),
+    yMode: enumValue(config.yMode, axisModeOptions, 'linear'),
+    samples: Math.round(numberInRange(config.samples, 120, 2, 1000)),
+    legendPos: enumValue(config.legendPos, legendPositionOptions, ''),
+    markStyle: enumValue(config.markStyle, markStyleOptions, ''),
+    plotSmooth: Boolean(config.plotSmooth),
+    matrixDelimiter: enumValue(config.matrixDelimiter, matrixDelimiterOptions, 'none'),
+    rowSep: numberInRange(config.rowSep, 0, 0, 4),
+    columnSep: numberInRange(config.columnSep, 0, 0, 4),
+    edgeStyle: enumValue(config.edgeStyle, edgeStyleOptions, 'solid'),
+    nodeDistance: numberInRange(config.nodeDistance, 0, 0, 6),
+    layerDistance: numberInRange(config.layerDistance, 0, 0, 6),
+    siblingDistance: numberInRange(config.siblingDistance, 0, 0, 6),
+    ganttStart: Math.round(numberInRange(config.ganttStart, 1, 0, 999)),
+    ganttEnd: Math.round(numberInRange(config.ganttEnd, 7, 1, 999)),
+    ganttProgress: Math.round(numberInRange(config.ganttProgress, 0, 0, 100)),
+    branchCount: Math.round(numberInRange(config.branchCount, 2, 1, 16)),
+    gainDb: numberInRange(config.gainDb, 0, -120, 120),
   }
+}
+
+function libraryConfigDomains(preset = {}) {
+  const text = `${preset.id ?? ''} ${preset.group ?? ''} ${preset.title ?? ''} ${preset.preview ?? ''}`.toLowerCase()
+  const domains = new Set(['all'])
+  const addIf = (condition, domain) => {
+    if (condition) domains.add(domain)
+  }
+
+  addIf(text.includes('circuit') || text.includes('source') || text.includes('opamp') || text.includes('transistor'), 'circuit')
+  addIf(text.includes('plot') || text.includes('pgfplots') || text.includes('stats') || text.includes('spectrum'), 'plot')
+  addIf(text.includes('matrix') || text.includes('tikz-cd') || text.includes('commutative') || text.includes('uml-class'), 'matrix')
+  addIf(text.includes('graph') || text.includes('automata') || text.includes('petri') || text.includes('tree') || text.includes('mindmap'), 'graph')
+  addIf(text.includes('shape') || text.includes('cloud') || text.includes('callout') || text.includes('cylinder'), 'shape')
+  addIf(text.includes('flow') || text.includes('pipeline') || text.includes('module') || text.includes('decision'), 'flow')
+  addIf(text.includes('geom') || text.includes('angle') || text.includes('bezier') || text.includes('polygon'), 'geometry')
+  addIf(text.includes('annot') || text.includes('brace') || text.includes('highlight'), 'annotation')
+  addIf(text.includes('gantt') || text.includes('planning'), 'gantt')
+  addIf(text.includes('telecom') || text.includes('rf-') || text.includes('mimo') || text.includes('qpsk') || text.includes('ofdm'), 'telecom')
+  addIf(text.includes('ml') || text.includes('dl') || text.includes('cnn') || text.includes('transformer') || text.includes('attention'), 'ml')
+  addIf(text.includes('paper') || text.includes('figure') || text.includes('multi-panel'), 'paper')
+  return domains
+}
+
+function libraryConfigSectionsForPreset(preset = {}) {
+  const domains = libraryConfigDomains(preset)
+  return objectConfigSections.filter((section) => section.domains.some((domain) => domains.has(domain)))
 }
 
 function splitNodeLabels(value, count) {
@@ -1444,9 +1880,19 @@ function escapeHtml(value) {
   })
 }
 
+function loadKatexRenderer() {
+  if (katexRenderer) return Promise.resolve(katexRenderer)
+  katexLoadPromise ??= import('katex').then((module) => {
+    katexRenderer = module.default ?? module
+    return katexRenderer
+  })
+  return katexLoadPromise
+}
+
 function renderMathHtml(content) {
+  if (!katexRenderer) return `<span class="latex-fallback">${escapeHtml(previewLatexContent(content))}</span>`
   try {
-    return katex.renderToString(content, {
+    return katexRenderer.renderToString(content, {
       displayMode: false,
       output: 'html',
       throwOnError: false,
@@ -1733,6 +2179,135 @@ function inferCircuitNets(elements) {
   return nets.filter((net) => net.terminals.length > 1)
 }
 
+function wireSegmentsForElement(element) {
+  if (element.type === 'line' || element.type === 'arrow') return [[element.start, element.end]]
+  if (element.type === 'path') return element.points.slice(1).map((point, index) => [element.points[index], point])
+  return []
+}
+
+function segmentIntersection(a1, a2, b1, b2) {
+  const denominator = (a1.x - a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x - b2.x)
+  if (Math.abs(denominator) < 0.0001) return null
+  const t = ((a1.x - b1.x) * (b1.y - b2.y) - (a1.y - b1.y) * (b1.x - b2.x)) / denominator
+  const u = -((a1.x - a2.x) * (a1.y - b1.y) - (a1.y - a2.y) * (a1.x - b1.x)) / denominator
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null
+  return {
+    x: a1.x + t * (a2.x - a1.x),
+    y: a1.y + t * (a2.y - a1.y),
+  }
+}
+
+function buildNetlistMetadata(elements) {
+  const visible = elements.filter((element) => !element.hidden)
+  const terminals = visible.flatMap((element) => {
+    const preset = element.type === 'library' ? getLibraryPreset(element) : null
+    const config = element.type === 'library' ? getLibraryConfig(element, preset) : {}
+    const terminalNames = splitNodeLabels(config.terminalNames, 8)
+    return terminalPointsForElement(element).map((point, index) => ({
+      id: `${element.id}:t${index}`,
+      elementId: element.id,
+      elementTitle: elementDisplayName(element),
+      terminal: terminalNames[index] ?? `${index + 1}`,
+      preferredNet: config.netName || '',
+      point,
+      kind: element.type,
+    }))
+  })
+
+  const wireSegments = visible.flatMap((element) =>
+    wireSegmentsForElement(element).map(([start, end], index) => ({
+      id: `${element.id}:s${index}`,
+      elementId: element.id,
+      start,
+      end,
+    })),
+  )
+
+  const junctions = []
+  wireSegments.forEach((segment, index) => {
+    wireSegments.slice(index + 1).forEach((other) => {
+      const point = segmentIntersection(segment.start, segment.end, other.start, other.end)
+      if (!point) return
+      junctions.push({
+        id: `junction:${junctions.length + 1}`,
+        elementId: `${segment.elementId}+${other.elementId}`,
+        elementTitle: 'wire junction',
+        terminal: 'junction',
+        preferredNet: '',
+        point,
+        kind: 'junction',
+      })
+    })
+  })
+
+  const allTerminals = [...terminals, ...junctions]
+  const nets = []
+  allTerminals.forEach((terminal) => {
+    const match = nets.find((net) => net.terminals.some((candidate) => distance(candidate.point, terminal.point) < 0.08))
+    if (match) {
+      match.terminals.push(terminal)
+    } else {
+      nets.push({ terminals: [terminal] })
+    }
+  })
+
+  const namedNets = nets
+    .filter((net) => net.terminals.length > 1 || net.terminals.some((terminal) => terminal.preferredNet))
+    .map((net, index) => {
+      const preferred = net.terminals.find((terminal) => terminal.preferredNet)?.preferredNet
+      return {
+        name: preferred || `N${index + 1}`,
+        terminals: net.terminals.map((terminal) => ({
+          elementId: terminal.elementId,
+          elementTitle: terminal.elementTitle,
+          terminal: terminal.terminal,
+          x: Number(formatNumber(terminal.point.x)),
+          y: Number(formatNumber(terminal.point.y)),
+        })),
+      }
+    })
+
+  const components = visible
+    .filter((element) => element.type === 'library')
+    .map((element) => {
+      const preset = getLibraryPreset(element)
+      const config = getLibraryConfig(element, preset)
+      const metadata = libraryObjectMetadata(element, preset, config)
+      const componentTerminals = metadata.terminals.map((terminal) => ({
+        ...terminal,
+        net:
+          namedNets.find((net) =>
+            net.terminals.some(
+              (candidate) => candidate.elementId === element.id && candidate.x === terminal.x && candidate.y === terminal.y,
+            ),
+          )?.name ?? config.netName,
+      }))
+      const ref = config.circuitLabel || config.referenceName || element.title
+      const value = config.circuitValue || config.spiceModel || '*'
+      return {
+        ...metadata,
+        terminals: componentTerminals,
+        spiceLine:
+          componentTerminals.length >= 2
+            ? `${ref} ${componentTerminals.map((terminal) => terminal.net || 'NC').join(' ')} ${value}`.trim()
+            : '',
+      }
+    })
+
+  return {
+    generatedAt: new Date().toISOString(),
+    units: 'cm',
+    terminalSnapTolerance: 0.08,
+    nets: namedNets,
+    junctions: junctions.map((junction) => ({
+      x: Number(formatNumber(junction.point.x)),
+      y: Number(formatNumber(junction.point.y)),
+    })),
+    components,
+    spiceLike: components.map((component) => component.spiceLine).filter(Boolean),
+  }
+}
+
 function makeOrthogonalRoute(start, end) {
   if (Math.abs(start.x - end.x) < 0.001 || Math.abs(start.y - end.y) < 0.001) {
     return [start, end]
@@ -1836,6 +2411,141 @@ function tikzNodeShapeOptions(shape) {
   return shapes[shape] ?? shapes.rounded
 }
 
+function splitOptionList(value = '') {
+  return `${value}`
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function libraryCommonTikzOptions(config) {
+  const options = []
+  if (config.lineCap !== 'butt') options.push(`line cap=${config.lineCap}`)
+  if (config.lineJoin !== 'miter') options.push(`line join=${config.lineJoin}`)
+  if (config.drawOpacity !== 1) options.push(`draw opacity=${formatNumber(config.drawOpacity)}`)
+  if (config.textOpacity !== 1) options.push(`text opacity=${formatNumber(config.textOpacity)}`)
+  if (config.dashPattern.trim()) options.push(`dash pattern=on ${config.dashPattern.trim()}`)
+  if (config.roundedCorners > 0) options.push(`rounded corners=${formatNumber(config.roundedCorners)}pt`)
+  if (config.shadow) options.push('drop shadow')
+  if (config.pattern.trim()) options.push(`pattern=${config.pattern.trim()}`)
+  return options
+}
+
+function libraryNodeTikzOptions(config) {
+  const options = [
+    `align=${config.align}`,
+    `anchor=${config.anchor}`,
+    `inner sep=${formatNumber(config.innerSep)}pt`,
+    `outer sep=${formatNumber(config.outerSep)}pt`,
+  ]
+  if (config.fontSize || config.fontSeries) options.push(`font=${[config.fontSize, config.fontSeries].filter(Boolean).join(' ')}`)
+  if (config.minWidth > 0) options.push(`minimum width=${formatNumber(config.minWidth)}cm`)
+  if (config.minHeight > 0) options.push(`minimum height=${formatNumber(config.minHeight)}cm`)
+  if (config.textWidth > 0) options.push(`text width=${formatNumber(config.textWidth)}cm`)
+  return options
+}
+
+function libraryGraphTikzOptions(config) {
+  const options = []
+  if (config.nodeDistance > 0) options.push(`node distance=${formatNumber(config.nodeDistance)}cm`)
+  if (config.layerDistance > 0) options.push(`level distance=${formatNumber(config.layerDistance)}cm`)
+  if (config.siblingDistance > 0) options.push(`sibling distance=${formatNumber(config.siblingDistance)}cm`)
+  return options
+}
+
+function libraryAxisTikzOptions(config) {
+  const options = []
+  if (config.axisWidth > 0) options.push(`width=${formatNumber(config.axisWidth)}cm`)
+  if (config.axisHeight > 0) options.push(`height=${formatNumber(config.axisHeight)}cm`)
+  if (config.axisLines !== 'left') options.push(`axis lines=${config.axisLines}`)
+  if (config.gridMode !== 'none') options.push(`grid=${config.gridMode}`)
+  if (config.xMode === 'log') options.push('xmode=log')
+  if (config.yMode === 'log') options.push('ymode=log')
+  if (config.xlabel.trim()) options.push(`xlabel={${formatTikzNodeText(config.xlabel)}}`)
+  if (config.ylabel.trim()) options.push(`ylabel={${formatTikzNodeText(config.ylabel)}}`)
+  if (config.plotTitle.trim()) options.push(`title={${formatTikzNodeText(config.plotTitle)}}`)
+  if (config.legendPos) options.push(`legend pos=${config.legendPos}`)
+  if (config.xtick.trim()) options.push(`xtick={${config.xtick.trim()}}`)
+  if (config.ytick.trim()) options.push(`ytick={${config.ytick.trim()}}`)
+  if (config.colormap.trim()) options.push(`colormap/${config.colormap.trim()}`)
+  options.push(...splitOptionList(config.axisExtraOptions))
+  return options
+}
+
+function libraryAddPlotTikzOptions(config) {
+  const options = []
+  if (config.plotDomain.trim()) options.push(`domain=${config.plotDomain.trim()}`)
+  if (config.samples !== 120) options.push(`samples=${config.samples}`)
+  if (config.markStyle) options.push(`mark=${config.markStyle}`)
+  if (config.plotSmooth) options.push('smooth')
+  options.push(...splitOptionList(config.addplotExtraOptions))
+  return options
+}
+
+function libraryMatrixTikzOptions(config) {
+  const options = []
+  const delimiters = {
+    brackets: ['{[}', '{]}'],
+    parentheses: ['{(}', '{)}'],
+    braces: ['\\{', '\\}'],
+    pipes: ['|', '|'],
+  }
+  if (delimiters[config.matrixDelimiter]) {
+    options.push(`left delimiter=${delimiters[config.matrixDelimiter][0]}`)
+    options.push(`right delimiter=${delimiters[config.matrixDelimiter][1]}`)
+  }
+  if (config.rowSep > 0) options.push(`row sep=${formatNumber(config.rowSep)}cm`)
+  if (config.columnSep > 0) options.push(`column sep=${formatNumber(config.columnSep)}cm`)
+  return options
+}
+
+function libraryGanttTikzOptions(config) {
+  const options = ['hgrid', 'vgrid']
+  if (config.ganttProgress > 0) options.push(`progress=${config.ganttProgress}`)
+  return options
+}
+
+function injectTikzOptions(line, options, commands) {
+  const optionText = options.filter(Boolean).join(', ')
+  if (!optionText) return line
+  const trimmed = line.trimStart()
+  const prefix = line.slice(0, line.length - trimmed.length)
+
+  for (const command of commands) {
+    if (!trimmed.startsWith(command)) continue
+    if (trimmed.startsWith(`${command}[`)) {
+      return `${prefix}${trimmed.replace(`${command}[`, `${command}[${optionText}, `)}`
+    }
+    return `${prefix}${trimmed.replace(command, `${command}[${optionText}]`)}`
+  }
+
+  return line
+}
+
+function applyLibraryConfigToSnippet(lines, preset, element) {
+  const config = getLibraryConfig(element, preset)
+  const common = libraryCommonTikzOptions(config)
+  const nodeOptions = [...common, ...libraryNodeTikzOptions(config)]
+  const drawOptions = [...common, config.edgeStyle !== 'solid' ? config.edgeStyle : '']
+  const axisOptions = libraryAxisTikzOptions(config)
+  const addPlotOptions = libraryAddPlotTikzOptions(config)
+  const matrixOptions = libraryMatrixTikzOptions(config)
+  const graphOptions = libraryGraphTikzOptions(config)
+  const ganttOptions = libraryGanttTikzOptions(config)
+
+  return lines.map((line) => {
+    let next = line
+    next = injectTikzOptions(next, axisOptions, ['\\begin{axis}', '\\begin{polaraxis}', '\\begin{semilogyaxis}', '\\begin{groupplot}'])
+    next = injectTikzOptions(next, addPlotOptions, ['\\addplot3', '\\addplot+', '\\addplot'])
+    next = injectTikzOptions(next, matrixOptions, ['\\matrix'])
+    next = injectTikzOptions(next, ganttOptions, ['\\begin{ganttchart}'])
+    next = injectTikzOptions(next, nodeOptions, ['\\node'])
+    next = injectTikzOptions(next, drawOptions, ['\\draw', '\\path'])
+    next = injectTikzOptions(next, graphOptions, ['\\graph'])
+    return next
+  })
+}
+
 function buildConfiguredLibrarySnippet(preset, element) {
   const config = getLibraryConfig(element, preset)
   const label = formatTikzNodeText(config.label || element.title)
@@ -1851,7 +2561,14 @@ function buildConfiguredLibrarySnippet(preset, element) {
     const printedLabel = config.autoLabel ? config.circuitLabel : config.label
     const value = `${config.circuitValue ?? ''}`.trim()
     const circuitLabel = value ? `${printedLabel}=${value}` : printedLabel
-    if (circuitLabel.trim()) componentOptions.push(`l={${formatTikzNodeText(circuitLabel)}}`)
+    if (circuitLabel.trim() && config.circuitLabelPosition !== 'none') {
+      componentOptions.push(`${config.circuitLabelPosition}={${formatTikzNodeText(circuitLabel)}}`)
+    }
+    if (config.voltageLabel.trim()) componentOptions.push(`v={${formatTikzNodeText(config.voltageLabel)}}`)
+    if (config.currentLabel.trim()) componentOptions.push(`i={${formatTikzNodeText(config.currentLabel)}}`)
+    if (config.referenceName.trim()) componentOptions.push(`name=${safeLatexLabel(config.referenceName) || 'cmp'}`)
+    if (config.mirrorComponent) componentOptions.push('mirror')
+    if (config.invertComponent) componentOptions.push('invert')
 
     return [
       `\\draw[draw=__COLOR__, line width=0.65pt] (0,0) to[${componentOptions.join(',')}] (${formatNumber(
@@ -1861,11 +2578,60 @@ function buildConfiguredLibrarySnippet(preset, element) {
   }
 
   if (preset.id === 'shape-callout') {
+    const calloutShape =
+      config.shapeVariant === 'cloud'
+        ? `cloud callout, cloud puffs=${config.cloudPuffs}`
+        : 'rectangle callout'
     return [
-      `\\node[rectangle callout, callout relative pointer={(${formatNumber(config.calloutPointerX)},${formatNumber(
+      `\\node[${calloutShape}, callout relative pointer={(${formatNumber(config.calloutPointerX)},${formatNumber(
         config.calloutPointerY,
-      )})}, draw=__COLOR__, __FILL_STYLE__, line width=0.6pt, minimum width=${width}cm, minimum height=${height}cm, align=center] (callout) at (0,0) {${label}};`,
+      )})}, draw=__COLOR__, __FILL_STYLE__, line width=0.6pt, minimum width=${width}cm, minimum height=${height}cm, align=${config.align}] (callout) at (0,0) {${label}};`,
     ]
+  }
+
+  if ((preset.preview === 'matrix' || preset.id.includes('matrix')) && config.matrixEntries.trim()) {
+    const entries = config.matrixEntries
+      .split('\n')
+      .map((line) => `  ${line.trim()} \\\\`)
+      .join('\n')
+    return [
+      `\\matrix[matrix of math nodes, draw=__COLOR__, line width=0.55pt, nodes={minimum width=${formatNumber(
+        config.minWidth || 0.75,
+      )}cm, minimum height=${formatNumber(config.minHeight || 0.42)}cm}] (m) at (0,0) {`,
+      entries,
+      '};',
+    ]
+  }
+
+  if (preset.id.includes('gantt') && (config.ganttStart !== 1 || config.ganttEnd !== 7 || config.ganttProgress > 0 || config.blockLabels.trim())) {
+    const labels = splitNodeLabels(config.blockLabels || 'Task A, Task B, Task C', 3)
+    const start = Math.min(config.ganttStart, config.ganttEnd)
+    const end = Math.max(config.ganttStart + 1, config.ganttEnd)
+    return [
+      `\\begin{ganttchart}[hgrid,vgrid,bar progress label font=\\scriptsize]{${start}}{${end}}`,
+      `  \\gantttitle{${formatTikzNodeText(config.plotTitle || 'Plan')}}{${end - start + 1}} \\\\`,
+      `  \\ganttbar[progress=${config.ganttProgress}]{${formatTikzNodeText(labels[0])}}{${start}}{${Math.min(end, start + 1)}} \\\\`,
+      `  \\ganttbar[progress=${Math.max(0, config.ganttProgress - 20)}]{${formatTikzNodeText(labels[1])}}{${Math.min(end, start + 1)}}{${Math.min(end, start + 3)}} \\\\`,
+      `  \\ganttbar[progress=${Math.max(0, config.ganttProgress - 40)}]{${formatTikzNodeText(labels[2])}}{${Math.min(end, start + 3)}}{${end}}`,
+      '\\end{ganttchart}',
+    ]
+  }
+
+  if ((preset.group === 'Telecom' || preset.id.startsWith('telecom-') || preset.id.startsWith('rf-')) && config.blockLabels.trim()) {
+    const labels = splitNodeLabels(config.blockLabels, Math.max(1, config.branchCount))
+    const lines = labels.map((entry, index) => {
+      const name = `b${index}`
+      const x = index * 1.35
+      return `\\node[draw=__COLOR__, __FILL_STYLE__, rounded corners=2pt, minimum width=1.05cm, minimum height=.55cm] (${name}) at (${formatNumber(
+        x,
+      )},0) {${formatTikzNodeText(entry)}};`
+    })
+    labels.slice(1).forEach((_, index) => {
+      lines.push(`\\draw[-{Stealth}, draw=__COLOR__, line width=0.55pt] (b${index}) -- node[above] {${formatTikzNodeText(config.signalLabel)}} (b${index + 1});`)
+    })
+    if (config.noiseLabel.trim()) lines.push(`\\node at (${formatNumber(Math.floor(labels.length / 2) * 1.35)},0.55) {${formatTikzNodeText(config.noiseLabel)}};`)
+    if (config.gainDb) lines.push(`\\node at (0,-0.55) {${formatNumber(config.gainDb)} dB};`)
+    return lines
   }
 
   const simpleNodeShapes = {
@@ -1877,12 +2643,24 @@ function buildConfiguredLibrarySnippet(preset, element) {
     'math-theorem-box': 'rectangle, align=left',
     'annotation-callout-arrow': 'rectangle, rounded corners=2pt, align=left',
   }
-  const shape = simpleNodeShapes[preset.id]
+  const configuredShapeOptions = {
+    rounded: 'rectangle, rounded corners=2pt',
+    rectangle: 'rectangle',
+    circle: 'circle',
+    ellipse: 'ellipse',
+    diamond: `diamond, aspect=${formatNumber(config.shapeAspect)}, inner sep=1pt`,
+    cloud: `cloud, cloud puffs=${config.cloudPuffs}`,
+    cylinder: `cylinder, shape border rotate=90, aspect=${formatNumber(config.shapeAspect)}`,
+    callout: `rectangle callout, callout relative pointer={(${formatNumber(config.calloutPointerX)},${formatNumber(
+      config.calloutPointerY,
+    )})}`,
+  }
+  const shape = configuredShapeOptions[config.shapeVariant] ?? simpleNodeShapes[preset.id]
   if (!shape) return null
 
   const nodeName = preset.id === 'annotation-callout-arrow' ? 'note' : 'obj'
   const lines = [
-    `\\node[${shape}, draw=__COLOR__, __FILL_STYLE__, line width=0.6pt, minimum width=${width}cm, minimum height=${height}cm, inner sep=4pt] (${nodeName}) at (0,0) {${label}};`,
+    `\\node[${shape}, draw=__COLOR__, __FILL_STYLE__, line width=0.6pt, minimum width=${width}cm, minimum height=${height}cm, inner sep=${formatNumber(config.innerSep)}pt] (${nodeName}) at (0,0) {${label}};`,
   ]
 
   if (preset.id === 'annotation-callout-arrow') {
@@ -1979,20 +2757,73 @@ function replaceLibraryTokens(line, element, color, fill) {
     .replaceAll('__GROUP__', formatTikzNodeText(element.group ?? 'TikZ'))
 }
 
+function parseOptionalJson(value) {
+  const trimmed = `${value ?? ''}`.trim()
+  if (!trimmed) return null
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return { raw: trimmed, parseError: true }
+  }
+}
+
+function libraryObjectMetadata(element, preset = getLibraryPreset(element), config = getLibraryConfig(element, preset)) {
+  const terminals = terminalPointsForElement(element).map((point, index) => ({
+    name: splitNodeLabels(config.terminalNames, Math.max(index + 1, 1))[index] ?? `${index + 1}`,
+    x: Number(formatNumber(point.x)),
+    y: Number(formatNumber(point.y)),
+  }))
+
+  return {
+    id: element.id,
+    title: element.title,
+    presetId: preset.id,
+    group: preset.group,
+    role: config.paperRole || undefined,
+    datasetTag: config.datasetTag || undefined,
+    referenceName: config.referenceName || undefined,
+    netName: config.netName || undefined,
+    spiceModel: config.spiceModel || undefined,
+    value: config.circuitValue || undefined,
+    label: config.autoLabel ? config.circuitLabel : config.label,
+    terminals,
+    custom: parseOptionalJson(config.metadataJson),
+  }
+}
+
+function libraryMetadataCommentLines(element, preset = getLibraryPreset(element), config = getLibraryConfig(element, preset)) {
+  const metadata = libraryObjectMetadata(element, preset, config)
+  const entries = [
+    ['id', metadata.id],
+    ['preset', metadata.presetId],
+    ['role', metadata.role],
+    ['tag', metadata.datasetTag],
+    ['ref', metadata.referenceName],
+    ['net', metadata.netName],
+    ['spice', metadata.spiceModel],
+  ].filter(([, value]) => value)
+
+  if (!entries.length && !config.metadataJson.trim()) return []
+  return [`% metadata: ${entries.map(([key, value]) => `${key}=${String(value).replace(/\s+/g, '_')}`).join(', ')}`]
+}
+
 function buildLibraryTikz(element, ensureColor) {
   const preset = getLibraryPreset(element)
   const config = getLibraryConfig(element, preset)
   const color = ensureColor(element.stroke)
   const fill = ensureColor(element.fill)
   const configuredSnippet = buildConfiguredLibrarySnippet(preset, element)
-  const body = (configuredSnippet ?? preset.snippet).map((line) => replaceLibraryTokens(line, element, color, fill))
+  const rawBody = (configuredSnippet ?? preset.snippet).map((line) => replaceLibraryTokens(line, element, color, fill))
+  const body = applyLibraryConfigToSnippet(rawBody, preset, element)
   const scopeStretch = configuredSnippet ? { x: 1, y: 1 } : { x: config.stretchX, y: config.stretchY }
   const extraNodes = buildExtraNodeTikz(element, color, fill, scopeStretch)
+  const metadataComments = libraryMetadataCommentLines(element, preset, config)
 
   if (preset.standalone) {
     return [
       `% Standalone ${preset.group}: ${element.title}`,
       `% Preview origin in editor: (${formatNumber(element.origin.x)}, ${formatNumber(element.origin.y)})`,
+      ...metadataComments,
       ...body,
       ...extraNodes,
     ]
@@ -2004,6 +2835,8 @@ function buildLibraryTikz(element, ensureColor) {
   if (!configuredSnippet && config.stretchX !== 1) scopeOptions.push(`xscale=${formatNumber(config.stretchX)}`)
   if (!configuredSnippet && config.stretchY !== 1) scopeOptions.push(`yscale=${formatNumber(config.stretchY)}`)
   if (!configuredSnippet && (config.stretchX !== 1 || config.stretchY !== 1)) scopeOptions.push('transform shape')
+  if (config.bipoleLength > 0) scopeOptions.push(`bipoles/length=${formatNumber(config.bipoleLength)}cm`)
+  scopeOptions.push(...libraryCommonTikzOptions(config))
   if (fill !== 'none') {
     scopeOptions.push(
       `every node/.append style={fill=${fill}, fill opacity=${formatNumber(element.fillOpacity ?? 0.18)}, text opacity=1}`,
@@ -2013,6 +2846,7 @@ function buildLibraryTikz(element, ensureColor) {
 
   return [
     `  % ${preset.group}: ${element.title}`,
+    ...metadataComments.map((line) => `  ${line}`),
     `  \\begin{scope}[${scopeOptions.join(', ')}]`,
     ...body.map((line) => `    ${line}`),
     ...extraNodes.map((line) => `    ${line}`),
@@ -2445,6 +3279,7 @@ function App() {
   const [libraryGroup, setLibraryGroup] = useState('All')
   const [symbolSearch, setSymbolSearch] = useState('')
   const [symbolsOpen, setSymbolsOpen] = useState(false)
+  const [, setKatexReady] = useState(Boolean(katexRenderer))
   const [customLibrary, setCustomLibrary] = useState({
     title: 'Custom TikZ block',
     group: 'Custom',
@@ -2456,6 +3291,16 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
+
+  useEffect(() => {
+    let mounted = true
+    loadKatexRenderer().then(() => {
+      if (mounted) setKatexReady(true)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   useEffect(() => {
     if (!settings.autosave) return
@@ -2477,6 +3322,8 @@ function App() {
   const selectedElement = elements.find((element) => element.id === selectedId)
   const selectedElements = elements.filter((element) => selectedIds.includes(element.id))
   const selectedLibraryConfig = selectedElement?.type === 'library' ? getLibraryConfig(selectedElement) : null
+  const selectedLibraryPreset = selectedElement?.type === 'library' ? getLibraryPreset(selectedElement) : null
+  const selectedLibraryConfigSections = selectedLibraryPreset ? libraryConfigSectionsForPreset(selectedLibraryPreset) : []
   const activeLabelText = selectedElement?.type === 'text' ? selectedElement.text : settings.labelText
   const tikzCode = useMemo(
     () =>
@@ -3455,6 +4302,14 @@ function App() {
     settings,
     theme,
     viewport: { canvasPan, zoom },
+    metadata: {
+      generator: 'TikZ Sketch Converter',
+      author: 'Guillem Moreno Garcia',
+      objects: elements
+        .filter((element) => element.type === 'library')
+        .map((element) => libraryObjectMetadata(element)),
+      netlist: buildNetlistMetadata(elements),
+    },
   })
 
   const downloadBoardState = () => {
@@ -3482,12 +4337,14 @@ function App() {
       '',
       '- `main.tex` is a standalone compilable figure.',
       '- `board.json` keeps the editable board state for TikZ Sketch Converter.',
+      '- `metadata.json` contains object roles, tags, terminals, inferred nets, and SPICE-like component lines.',
       '',
       'Made by Guillem Moreno Garcia.',
     ].join('\n')
     const zip = createZipBlob([
       { name: 'main.tex', content: mainTex },
       { name: 'board.json', content: JSON.stringify(payload, null, 2) },
+      { name: 'metadata.json', content: JSON.stringify(payload.metadata, null, 2) },
       { name: 'README.md', content: readme },
     ])
     downloadBlob(zip, 'tikz-sketch-overleaf.zip')
@@ -5865,6 +6722,72 @@ function App() {
     return lines
   }, [])
 
+  const renderLibraryConfigField = (field) => {
+    if (!selectedLibraryConfig) return null
+    const value = selectedLibraryConfig[field.key]
+
+    if (field.type === 'checkbox') {
+      return (
+        <label key={field.key} className="toggle object-option-toggle">
+          <input
+            type="checkbox"
+            checked={Boolean(value)}
+            onChange={(event) => updateSelectedLibraryConfig({ [field.key]: event.target.checked })}
+          />
+          <span>{field.label}</span>
+        </label>
+      )
+    }
+
+    if (field.type === 'select') {
+      return (
+        <label key={field.key} className="field">
+          <span>{field.label}</span>
+          <select value={value ?? ''} onChange={(event) => updateSelectedLibraryConfig({ [field.key]: event.target.value })}>
+            {field.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label ?? option.value}
+              </option>
+            ))}
+          </select>
+        </label>
+      )
+    }
+
+    if (field.type === 'textarea') {
+      return (
+        <label key={field.key} className="field object-option-wide">
+          <span>{field.label}</span>
+          <textarea
+            className="snippet-input compact"
+            value={value ?? ''}
+            placeholder={field.placeholder}
+            onChange={(event) => updateSelectedLibraryConfig({ [field.key]: event.target.value })}
+          />
+        </label>
+      )
+    }
+
+    return (
+      <label key={field.key} className="field">
+        <span>{field.label}</span>
+        <input
+          type={field.type === 'number' ? 'number' : 'text'}
+          min={field.min}
+          max={field.max}
+          step={field.step}
+          value={value ?? ''}
+          placeholder={field.placeholder}
+          onChange={(event) =>
+            updateSelectedLibraryConfig({
+              [field.key]: field.type === 'number' ? Number(event.target.value) : event.target.value,
+            })
+          }
+        />
+      </label>
+    )
+  }
+
   return (
     <main className="app-shell">
       <aside className="tool-rail" aria-label="Herramientas de dibujo">
@@ -7192,6 +8115,22 @@ function App() {
                           </label>
                         </div>
                       )}
+                      <div className="advanced-config">
+                        <div className="advanced-config-header">
+                          <strong>Opciones avanzadas del objeto</strong>
+                          <span>{selectedLibraryConfigSections.length} grupos segun libreria/preset</span>
+                        </div>
+                        {selectedLibraryConfigSections.map((section) => {
+                          const fields = section.fields.filter((field) => !quickLibraryConfigKeys.has(field.key))
+                          if (!fields.length) return null
+                          return (
+                            <details key={section.id} className="config-details" open={section.id === 'paperStyle'}>
+                              <summary>{section.title}</summary>
+                              <div className="object-option-grid">{fields.map(renderLibraryConfigField)}</div>
+                            </details>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
                 </>
