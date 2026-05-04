@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { libraryPaletteItems } from '../src/tikzPaletteItems.js'
 
 const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const paletteSource = readFileSync(new URL('../src/tikzPaletteItems.js', import.meta.url), 'utf8')
@@ -32,6 +33,21 @@ test('telecommunications and circuit palettes include requested domains', () => 
   assert.match(paletteSource, /circuit-controlled-vsource/)
   assert.match(paletteSource, /circuit-transmission-line/)
   assert.match(paletteSource, /circuit-voltmeter/)
+})
+
+test('circuit palette ids and previews resolve to circuit symbols', () => {
+  const counts = new Map()
+  libraryPaletteItems.forEach((item) => counts.set(item.id, (counts.get(item.id) ?? 0) + 1))
+  assert.deepEqual(
+    [...counts].filter(([, count]) => count > 1),
+    [],
+  )
+  assert.equal(libraryPaletteItems.find((item) => item.id === 'circuit-nmos')?.preview, 'nmos')
+  assert.equal(libraryPaletteItems.find((item) => item.id === 'circuit-pmos')?.preview, 'pmos')
+  assert.equal(libraryPaletteItems.find((item) => item.id === 'circuit-npn')?.preview, 'npn')
+  assert.equal(libraryPaletteItems.find((item) => item.id === 'circuit-switch')?.preview, 'switch')
+  assert.match(appSource, /key\.includes\('current source'\)\) return 'I'/)
+  assert.match(appSource, /key\.includes\('controlled voltage'\).*return 'cV'/)
 })
 
 test('TODO tracks the major product areas', () => {

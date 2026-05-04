@@ -370,12 +370,20 @@ function getLibraryPreset(element) {
 }
 
 const circuitAutoPrefixes = {
+  'current source': 'I',
+  ammeter: 'A',
+  voltmeter: 'V',
   resistor: 'R',
   capacitor: 'C',
   inductor: 'L',
   diode: 'D',
+  led: 'D',
+  zener: 'D',
+  battery: 'V',
   source: 'V',
   opamp: 'U',
+  transistor: 'Q',
+  mos: 'M',
 }
 
 function circuitAutoPrefix(preset = {}) {
@@ -390,9 +398,49 @@ function circuitTikzComponent(preset = {}, config = {}) {
   if (key.includes('resistor')) return style === 'american' ? 'R' : 'R'
   if (key.includes('capacitor')) return 'C'
   if (key.includes('inductor')) return 'L'
+  if (key.includes('zener')) return 'zD'
+  if (key.includes('led')) return 'led'
   if (key.includes('diode')) return 'D'
+  if (key.includes('controlled voltage') || key.includes('vcvs')) return 'cV'
+  if (key.includes('current source')) return 'I'
+  if (key.includes('battery')) return 'battery1'
+  if (key.includes('voltmeter')) return 'voltmeter'
+  if (key.includes('ammeter')) return 'ammeter'
+  if (key.includes('switch')) return key.includes('spst') ? 'ospst' : 'normal open switch'
+  if (key.includes('transmission')) return 'tline'
+  if (key.includes('port')) return 'generic'
+  if (key.includes('lamp')) return 'lamp'
   if (key.includes('source')) return 'V'
   return ''
+}
+
+function circuitPreviewKind(preset = {}) {
+  if (preset.group !== 'Circuit') return ''
+  const key = `${preset.id ?? ''} ${preset.title ?? ''} ${preset.description ?? ''}`.toLowerCase()
+  if (key.includes('differential-pair') || key.includes('differential pair')) return 'differential-pair'
+  if (key.includes('nmos')) return 'nmos'
+  if (key.includes('pmos')) return 'pmos'
+  if (key.includes('pnp')) return 'pnp'
+  if (key.includes('npn') || key.includes('bjt')) return 'npn'
+  if (key.includes('op-amp') || key.includes('op amp') || key.includes('opamp')) return 'opamp'
+  if (key.includes('transformer')) return 'transformer'
+  if (key.includes('transmission') || key.includes('tline')) return 'transmission-line'
+  if (key.includes('switch')) return 'switch'
+  if (key.includes('voltmeter')) return 'voltmeter'
+  if (key.includes('ammeter')) return 'ammeter'
+  if (key.includes('differential probe')) return 'diff-probe'
+  if (key.includes('controlled') || key.includes('vcvs')) return 'controlled-source'
+  if (key.includes('current source')) return 'current-source'
+  if (key.includes('battery')) return 'battery'
+  if (key.includes('port')) return 'port'
+  if (key.includes('lamp')) return 'lamp'
+  if (key.includes('zener')) return 'zener'
+  if (key.includes('led')) return 'led'
+  if (key.includes('diode')) return 'diode'
+  if (key.includes('capacitor')) return 'capacitor'
+  if (key.includes('inductor')) return 'inductor'
+  if (key.includes('resistor')) return 'resistor'
+  return preset.preview === 'circuit' ? 'circuit' : ''
 }
 
 function circuitEndPoint(config = {}) {
@@ -3924,8 +3972,243 @@ function App() {
       fill: previewFill,
       fillOpacity: previewFillOpacity,
     }
+    const labelStyle = {
+      fill: previewStroke,
+      fontSize: 11,
+      fontFamily: '"Times New Roman", Georgia, serif',
+      textAnchor: 'middle',
+    }
+    const terminalLabel = (x, y, text) => (
+      <text x={sx(x)} y={sy(y)} {...labelStyle}>
+        {text}
+      </text>
+    )
+    const renderMosPreview = (kind) => {
+      const isPmos = kind === 'pmos'
+      return (
+        <g>
+          <line {...shapeCommon} x1={sx(0.18)} y1={sy(0.5)} x2={sx(0.38)} y2={sy(0.5)} />
+          <line {...shapeCommon} x1={sx(0.38)} y1={sy(0.28)} x2={sx(0.38)} y2={sy(0.72)} />
+          {isPmos && <circle {...shapeCommon} cx={sx(0.46)} cy={sy(0.5)} r={Math.max(3, Math.min(baseWidth, baseHeight) * 0.04)} />}
+          <line {...shapeCommon} x1={sx(0.52)} y1={sy(0.3)} x2={sx(0.52)} y2={sy(0.7)} />
+          <line {...shapeCommon} x1={sx(0.52)} y1={sy(0.3)} x2={sx(0.78)} y2={sy(0.16)} />
+          <line {...shapeCommon} x1={sx(0.52)} y1={sy(0.7)} x2={sx(0.78)} y2={sy(0.84)} />
+          <line {...shapeCommon} x1={sx(0.78)} y1={sy(0.16)} x2={sx(0.9)} y2={sy(0.16)} />
+          <line {...shapeCommon} x1={sx(0.78)} y1={sy(0.84)} x2={sx(0.9)} y2={sy(0.84)} />
+          <path
+            {...shapeCommon}
+            d={
+              isPmos
+                ? `M ${sx(0.64)} ${sy(0.61)} l ${baseWidth * 0.08} ${baseHeight * 0.06} m ${-baseWidth * 0.01} ${-baseHeight * 0.1} l ${baseWidth * 0.01} ${baseHeight * 0.1} l ${-baseWidth * 0.09} ${baseHeight * 0.01}`
+                : `M ${sx(0.72)} ${sy(0.61)} l ${-baseWidth * 0.08} ${-baseHeight * 0.06} m ${baseWidth * 0.01} ${baseHeight * 0.1} l ${-baseWidth * 0.01} ${-baseHeight * 0.1} l ${baseWidth * 0.09} ${-baseHeight * 0.01}`
+            }
+          />
+          {terminalLabel(0.2, 0.4, 'G')}
+          {terminalLabel(0.9, 0.11, 'D')}
+          {terminalLabel(0.9, 0.95, 'S')}
+        </g>
+      )
+    }
+    const renderBjtPreview = (kind) => {
+      const isPnp = kind === 'pnp'
+      return (
+        <g>
+          <circle {...shapeCommon} cx={sx(0.55)} cy={sy(0.5)} r={Math.max(14, Math.min(baseWidth, baseHeight) * 0.18)} />
+          <line {...shapeCommon} x1={sx(0.2)} y1={sy(0.5)} x2={sx(0.44)} y2={sy(0.5)} />
+          <line {...shapeCommon} x1={sx(0.44)} y1={sy(0.3)} x2={sx(0.44)} y2={sy(0.7)} />
+          <line {...shapeCommon} x1={sx(0.44)} y1={sy(0.36)} x2={sx(0.78)} y2={sy(0.18)} />
+          <line {...shapeCommon} x1={sx(0.44)} y1={sy(0.64)} x2={sx(0.78)} y2={sy(0.82)} />
+          <line {...shapeCommon} x1={sx(0.78)} y1={sy(0.18)} x2={sx(0.9)} y2={sy(0.18)} />
+          <line {...shapeCommon} x1={sx(0.78)} y1={sy(0.82)} x2={sx(0.9)} y2={sy(0.82)} />
+          <path
+            {...shapeCommon}
+            d={
+              isPnp
+                ? `M ${sx(0.55)} ${sy(0.58)} l ${baseWidth * 0.11} ${-baseHeight * 0.02} l ${-baseWidth * 0.06} ${-baseHeight * 0.1}`
+                : `M ${sx(0.66)} ${sy(0.73)} l ${-baseWidth * 0.1} ${-baseHeight * 0.02} l ${baseWidth * 0.05} ${baseHeight * 0.1}`
+            }
+          />
+          {terminalLabel(0.2, 0.4, 'B')}
+          {terminalLabel(0.9, 0.12, 'C')}
+          {terminalLabel(0.9, 0.96, 'E')}
+        </g>
+      )
+    }
+    const renderCircuitPreview = (kind) => {
+      if (kind === 'nmos' || kind === 'pmos') return renderMosPreview(kind)
+      if (kind === 'npn' || kind === 'pnp') return renderBjtPreview(kind)
+
+      if (kind === 'differential-pair') {
+        return (
+          <g>
+            {[0.36, 0.64].map((cx, index) => (
+              <g key={index}>
+                <circle {...shapeCommon} cx={sx(cx)} cy={sy(0.46)} r={Math.max(8, Math.min(baseWidth, baseHeight) * 0.1)} />
+                <line {...shapeCommon} x1={sx(cx - 0.18)} y1={sy(0.46)} x2={sx(cx - 0.06)} y2={sy(0.46)} />
+                <line {...shapeCommon} x1={sx(cx - 0.06)} y1={sy(0.36)} x2={sx(cx - 0.06)} y2={sy(0.58)} />
+                <line {...shapeCommon} x1={sx(cx - 0.06)} y1={sy(0.38)} x2={sx(cx + 0.1)} y2={sy(0.24)} />
+                <line {...shapeCommon} x1={sx(cx - 0.06)} y1={sy(0.56)} x2={sx(cx + 0.1)} y2={sy(0.72)} />
+              </g>
+            ))}
+            <line {...shapeCommon} x1={sx(0.46)} y1={sy(0.72)} x2={sx(0.5)} y2={sy(0.88)} />
+            <line {...shapeCommon} x1={sx(0.74)} y1={sy(0.72)} x2={sx(0.5)} y2={sy(0.88)} />
+            <line {...shapeCommon} x1={sx(0.5)} y1={sy(0.88)} x2={sx(0.5)} y2={sy(0.96)} />
+          </g>
+        )
+      }
+
+      if (kind === 'switch') {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.5)} x2={sx(0.38)} y2={sy(0.5)} />
+            <line {...shapeCommon} x1={sx(0.5)} y1={sy(0.42)} x2={sx(0.7)} y2={sy(0.26)} />
+            <circle {...shapeCommon} cx={sx(0.4)} cy={sy(0.5)} r="3" />
+            <circle {...shapeCommon} cx={sx(0.72)} cy={sy(0.5)} r="3" />
+            <line {...shapeCommon} x1={sx(0.72)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+
+      if (kind === 'transformer') {
+        return (
+          <g>
+            {[0, 1, 2].map((index) => (
+              <path key={`l-${index}`} {...shapeCommon} d={`M ${sx(0.18 + index * 0.055)} ${sy(0.32)} q ${baseWidth * 0.055} ${baseHeight * 0.18} 0 ${baseHeight * 0.36}`} />
+            ))}
+            {[0, 1, 2].map((index) => (
+              <path key={`r-${index}`} {...shapeCommon} d={`M ${sx(0.68 + index * 0.055)} ${sy(0.32)} q ${baseWidth * 0.055} ${baseHeight * 0.18} 0 ${baseHeight * 0.36}`} />
+            ))}
+            <line {...shapeCommon} x1={sx(0.48)} y1={sy(0.24)} x2={sx(0.48)} y2={sy(0.76)} opacity="0.55" />
+            <line {...shapeCommon} x1={sx(0.53)} y1={sy(0.24)} x2={sx(0.53)} y2={sy(0.76)} opacity="0.55" />
+          </g>
+        )
+      }
+
+      if (kind === 'transmission-line') {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.42)} x2={sx(0.92)} y2={sy(0.42)} />
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.58)} x2={sx(0.92)} y2={sy(0.58)} />
+            <text x={sx(0.5)} y={sy(0.24)} {...labelStyle}>
+              Z0
+            </text>
+          </g>
+        )
+      }
+
+      if (kind === 'port') {
+        return (
+          <g>
+            <circle {...shapeCommon} cx={sx(0.24)} cy={sy(0.5)} r={Math.max(8, Math.min(baseWidth, baseHeight) * 0.11)} />
+            <line {...shapeCommon} x1={sx(0.32)} y1={sy(0.5)} x2={sx(0.88)} y2={sy(0.5)} />
+            {terminalLabel(0.6, 0.32, 'Z0')}
+          </g>
+        )
+      }
+
+      if (kind === 'voltmeter' || kind === 'ammeter') {
+        const label = kind === 'voltmeter' ? 'V' : 'A'
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.5)} x2={sx(0.34)} y2={sy(0.5)} />
+            <circle {...shapeCommon} cx={sx(0.5)} cy={sy(0.5)} r={Math.max(12, Math.min(baseWidth, baseHeight) * 0.16)} />
+            <text x={sx(0.5)} y={sy(0.55)} {...labelStyle}>
+              {label}
+            </text>
+            <line {...shapeCommon} x1={sx(0.66)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+
+      if (kind === 'controlled-source') {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.5)} x2={sx(0.34)} y2={sy(0.5)} />
+            <path {...shapeCommon} d={`M ${sx(0.5)} ${sy(0.25)} L ${sx(0.68)} ${sy(0.5)} L ${sx(0.5)} ${sy(0.75)} L ${sx(0.32)} ${sy(0.5)} Z`} />
+            <text x={sx(0.5)} y={sy(0.55)} {...labelStyle}>
+              +
+            </text>
+            <line {...shapeCommon} x1={sx(0.68)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+
+      if (kind === 'current-source') {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.5)} x2={sx(0.34)} y2={sy(0.5)} />
+            <circle {...shapeCommon} cx={sx(0.5)} cy={sy(0.5)} r={Math.max(12, Math.min(baseWidth, baseHeight) * 0.16)} />
+            <line {...shapeCommon} x1={sx(0.5)} y1={sy(0.66)} x2={sx(0.5)} y2={sy(0.35)} />
+            <path {...shapeCommon} d={`M ${sx(0.5)} ${sy(0.35)} l ${-baseWidth * 0.035} ${baseHeight * 0.06} m ${baseWidth * 0.035} ${-baseHeight * 0.06} l ${baseWidth * 0.035} ${baseHeight * 0.06}`} />
+            <line {...shapeCommon} x1={sx(0.66)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+
+      if (kind === 'battery') {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.5)} x2={sx(0.4)} y2={sy(0.5)} />
+            <line {...shapeCommon} x1={sx(0.43)} y1={sy(0.32)} x2={sx(0.43)} y2={sy(0.68)} />
+            <line {...shapeCommon} x1={sx(0.55)} y1={sy(0.4)} x2={sx(0.55)} y2={sy(0.6)} />
+            <line {...shapeCommon} x1={sx(0.58)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+
+      if (kind === 'lamp') {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.5)} x2={sx(0.34)} y2={sy(0.5)} />
+            <circle {...shapeCommon} cx={sx(0.5)} cy={sy(0.5)} r={Math.max(12, Math.min(baseWidth, baseHeight) * 0.16)} />
+            <line {...shapeCommon} x1={sx(0.4)} y1={sy(0.38)} x2={sx(0.6)} y2={sy(0.62)} />
+            <line {...shapeCommon} x1={sx(0.6)} y1={sy(0.38)} x2={sx(0.4)} y2={sy(0.62)} />
+            <line {...shapeCommon} x1={sx(0.66)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+
+      if (kind === 'led' || kind === 'zener') {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.5)} x2={sx(0.34)} y2={sy(0.5)} />
+            <path {...shapeCommon} d={`M ${sx(0.34)} ${sy(0.28)} L ${sx(0.62)} ${sy(0.5)} L ${sx(0.34)} ${sy(0.72)} Z`} />
+            <path {...shapeCommon} d={kind === 'zener' ? `M ${sx(0.64)} ${sy(0.28)} l ${baseWidth * 0.04} ${baseHeight * 0.06} v ${baseHeight * 0.34} l ${-baseWidth * 0.04} ${baseHeight * 0.06}` : `M ${sx(0.64)} ${sy(0.28)} v ${baseHeight * 0.44}`} />
+            <line {...shapeCommon} x1={sx(0.64)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+            {kind === 'led' && (
+              <>
+                <line {...shapeCommon} x1={sx(0.7)} y1={sy(0.24)} x2={sx(0.84)} y2={sy(0.1)} />
+                <line {...shapeCommon} x1={sx(0.62)} y1={sy(0.2)} x2={sx(0.76)} y2={sy(0.06)} />
+              </>
+            )}
+          </g>
+        )
+      }
+
+      if (kind === 'diff-probe') {
+        return (
+          <g>
+            <line {...shapeCommon} x1={sx(0.08)} y1={sy(0.5)} x2={sx(0.32)} y2={sy(0.5)} />
+            <circle {...shapeCommon} cx={sx(0.43)} cy={sy(0.5)} r="9" />
+            <text x={sx(0.43)} y={sy(0.56)} {...labelStyle}>
+              +
+            </text>
+            <circle {...shapeCommon} cx={sx(0.61)} cy={sy(0.5)} r="9" />
+            <text x={sx(0.61)} y={sy(0.55)} {...labelStyle}>
+              -
+            </text>
+            <line {...shapeCommon} x1={sx(0.7)} y1={sy(0.5)} x2={sx(0.92)} y2={sy(0.5)} />
+          </g>
+        )
+      }
+
+      return null
+    }
 
     const renderPreview = () => {
+      const circuitPreview = renderCircuitPreview(circuitPreviewKind(preset))
+      if (circuitPreview) return circuitPreview
+
       if (preset.preview === 'resistor') {
         return (
           <g>
