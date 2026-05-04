@@ -193,7 +193,68 @@ const defaultEditorSettings = {
   wrapFigure: true,
   caption: 'Paper-ready TikZ figure.',
   label: 'fig:tikz-sketch',
+  exportPreset: 'figure',
+  exportScale: 2,
+  exportTransparent: false,
+  exportCrop: false,
+  exportMargin: 24,
+  paperSize: 'content',
+  journalStyle: 'ieee',
+  routeMode: 'manhattan',
+  autosave: true,
+  warnMissingLibraries: true,
 }
+
+const defaultFunctionOptions = {
+  showXIntercepts: false,
+  showYIntercept: false,
+  showExtrema: false,
+  showSamples: false,
+  showTangent: false,
+  showAsymptotes: false,
+  usePgfplots: false,
+  axisType: 'axis',
+  xLabel: '$x$',
+  yLabel: '$f(x)$',
+  legend: '',
+  markerStyle: 'none',
+  gridStyle: 'major',
+  xTicks: '',
+  yTicks: '',
+  tickLabelStyle: 'font=\\scriptsize',
+  legendPos: 'north east',
+  colormap: '',
+  errorBars: false,
+  errorBarOptions: '/pgfplots/error bars/y dir=both, /pgfplots/error bars/y explicit',
+  clip: true,
+  logX: false,
+  logY: false,
+  dataTable: '',
+  axisOptions: '',
+  plotOptions: 'line width=0.75pt',
+}
+
+const exportPresetOptions = [
+  { value: 'figure', label: 'Figure environment' },
+  { value: 'standalone', label: 'Standalone LaTeX' },
+  { value: 'beamer', label: 'Beamer frame' },
+  { value: 'snippet', label: 'Clipboard snippet' },
+]
+
+const journalStyleOptions = [
+  { value: 'ieee', label: 'IEEE compact' },
+  { value: 'nature', label: 'Nature monochrome' },
+  { value: 'thesis', label: 'Thesis' },
+  { value: 'slides', label: 'Slides' },
+]
+
+const routeModeOptions = [
+  { value: 'straight', label: 'Straight' },
+  { value: 'manhattan', label: 'Manhattan' },
+  { value: 'stepped', label: 'Stepped' },
+  { value: 'bus', label: 'Bus' },
+  { value: 'avoid', label: 'Avoid objects' },
+]
 
 const seedElements = [
   {
@@ -352,6 +413,26 @@ function circuitTerminalOption(style) {
     mixed: 'o-*',
   }
   return options[style] ?? ''
+}
+
+function renumberCircuitLabels(elements) {
+  const counts = new Map()
+  return elements.map((element) => {
+    if (element.type !== 'library') return element
+    const preset = getLibraryPreset(element)
+    const prefix = circuitAutoPrefix(preset)
+    const config = getLibraryConfig(element, preset)
+    if (!prefix || !config.autoLabel) return element
+    const nextCount = (counts.get(prefix) ?? 0) + 1
+    counts.set(prefix, nextCount)
+    return {
+      ...element,
+      config: {
+        ...element.config,
+        circuitLabel: `${prefix}_${nextCount}`,
+      },
+    }
+  })
 }
 
 function defaultLibraryConfig(preset = {}) {
@@ -517,6 +598,92 @@ function downloadBlob(blob, filename) {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+function crc32(bytes) {
+  let crc = 0xffffffff
+  for (const byte of bytes) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0)
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function createZipBlob(files) {
+  const encoder = new TextEncoder()
+  const chunks = []
+  const centralDirectory = []
+  let offset = 0
+  const pushNumber = (target, value, bytes) => {
+    for (let index = 0; index < bytes; index += 1) target.push((value >>> (index * 8)) & 0xff)
+  }
+  const pushBytes = (target, bytes) => {
+    bytes.forEach((byte) => target.push(byte))
+  }
+
+  files.forEach((file) => {
+    const nameBytes = encoder.encode(file.name.replace(/\\/g, '/'))
+    const contentBytes = typeof file.content === 'string' ? encoder.encode(file.content) : file.content
+    const checksum = crc32(contentBytes)
+    const localHeader = []
+    pushNumber(localHeader, 0x04034b50, 4)
+    pushNumber(localHeader, 20, 2)
+    pushNumber(localHeader, 0x0800, 2)
+    pushNumber(localHeader, 0, 2)
+    pushNumber(localHeader, 0, 2)
+    pushNumber(localHeader, 0x5a21, 2)
+    pushNumber(localHeader, checksum, 4)
+    pushNumber(localHeader, contentBytes.length, 4)
+    pushNumber(localHeader, contentBytes.length, 4)
+    pushNumber(localHeader, nameBytes.length, 2)
+    pushNumber(localHeader, 0, 2)
+    pushBytes(localHeader, nameBytes)
+
+    const centralHeader = []
+    pushNumber(centralHeader, 0x02014b50, 4)
+    pushNumber(centralHeader, 20, 2)
+    pushNumber(centralHeader, 20, 2)
+    pushNumber(centralHeader, 0x0800, 2)
+    pushNumber(centralHeader, 0, 2)
+    pushNumber(centralHeader, 0, 2)
+    pushNumber(centralHeader, 0x5a21, 2)
+    pushNumber(centralHeader, checksum, 4)
+    pushNumber(centralHeader, contentBytes.length, 4)
+    pushNumber(centralHeader, contentBytes.length, 4)
+    pushNumber(centralHeader, nameBytes.length, 2)
+    pushNumber(centralHeader, 0, 2)
+    pushNumber(centralHeader, 0, 2)
+    pushNumber(centralHeader, 0, 2)
+    pushNumber(centralHeader, 0, 2)
+    pushNumber(centralHeader, 0, 4)
+    pushNumber(centralHeader, offset, 4)
+    pushBytes(centralHeader, nameBytes)
+
+    chunks.push(Uint8Array.from(localHeader), contentBytes)
+    centralDirectory.push(Uint8Array.from(centralHeader))
+    offset += localHeader.length + contentBytes.length
+  })
+
+  const centralStart = offset
+  centralDirectory.forEach((chunk) => {
+    chunks.push(chunk)
+    offset += chunk.length
+  })
+
+  const end = []
+  pushNumber(end, 0x06054b50, 4)
+  pushNumber(end, 0, 2)
+  pushNumber(end, 0, 2)
+  pushNumber(end, files.length, 2)
+  pushNumber(end, files.length, 2)
+  pushNumber(end, offset - centralStart, 4)
+  pushNumber(end, centralStart, 4)
+  pushNumber(end, 0, 2)
+  chunks.push(Uint8Array.from(end))
+
+  return new Blob(chunks, { type: 'application/zip' })
 }
 
 function encodeBoardPayload(payload) {
@@ -807,6 +974,86 @@ function splitDrawableSegments(points) {
   return segments
 }
 
+function functionOptionsFor(element) {
+  return { ...defaultFunctionOptions, ...(element.functionOptions ?? {}) }
+}
+
+function parsedDataTablePoints(value = '') {
+  return `${value}`
+    .split(/\n|;/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [x, y] = line.split(/[,\s]+/).map(Number)
+      return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null
+    })
+    .filter(Boolean)
+}
+
+function functionDisplayPoints(element) {
+  const dataPoints = parsedDataTablePoints(functionOptionsFor(element).dataTable)
+  if (dataPoints.length) return dataPoints
+  return sampleFunction(element)
+    .filter(Boolean)
+    .map((point) => ({ x: point.x, y: point.y + (Number(element.yOffset) || 0) }))
+}
+
+function functionFeaturePoints(element) {
+  const points = functionDisplayPoints(element)
+  const features = {
+    xIntercepts: [],
+    yIntercept: null,
+    extrema: [],
+    samples: [],
+    asymptotes: [],
+    tangent: null,
+  }
+  if (!points.length) return features
+
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1]
+    const current = points[index]
+    if (previous.y === 0) features.xIntercepts.push(previous)
+    if (previous.y * current.y < 0) {
+      const t = Math.abs(previous.y) / (Math.abs(previous.y) + Math.abs(current.y))
+      features.xIntercepts.push({
+        x: previous.x + (current.x - previous.x) * t,
+        y: 0,
+      })
+    }
+    if (Math.abs(current.y - previous.y) > 8) {
+      features.asymptotes.push({ x: current.x, y: 0 })
+    }
+  }
+
+  const yCross = points.reduce((best, point) => (Math.abs(point.x) < Math.abs(best.x) ? point : best), points[0])
+  features.yIntercept = { x: 0, y: yCross.y }
+
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1]
+    const current = points[index]
+    const next = points[index + 1]
+    if ((current.y >= previous.y && current.y >= next.y) || (current.y <= previous.y && current.y <= next.y)) {
+      if (!features.extrema.some((point) => distance(point, current) < 0.35)) features.extrema.push(current)
+    }
+  }
+
+  const sampleStep = Math.max(1, Math.floor(points.length / 10))
+  features.samples = points.filter((_, index) => index % sampleStep === 0).slice(0, 12)
+  const mid = points[Math.floor(points.length / 2)]
+  const before = points[Math.max(0, Math.floor(points.length / 2) - 1)]
+  const after = points[Math.min(points.length - 1, Math.floor(points.length / 2) + 1)]
+  if (mid && before && after) {
+    const slope = (after.y - before.y) / Math.max(0.001, after.x - before.x)
+    features.tangent = {
+      start: { x: mid.x - 1, y: mid.y - slope },
+      end: { x: mid.x + 1, y: mid.y + slope },
+    }
+  }
+
+  return features
+}
+
 function perpendicularDistance(point, start, end) {
   const length = distance(start, end)
   if (length === 0) return distance(point, start)
@@ -977,6 +1224,97 @@ function elementLabel(element) {
   }
 
   return labels[element.type] ?? 'Elemento'
+}
+
+function elementDisplayName(element) {
+  return element.displayName?.trim() || element.title || element.text || element.expression || elementLabel(element)
+}
+
+function elementBounds(element) {
+  if (element.type === 'line' || element.type === 'arrow' || element.type === 'rect' || element.type === 'ellipse') {
+    return normalBounds(element.start, element.end)
+  }
+
+  if (element.type === 'path') {
+    const xs = element.points.map((point) => point.x)
+    const ys = element.points.map((point) => point.y)
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
+  }
+
+  if (element.type === 'function') {
+    const points = sampleFunction(element)
+      .filter(Boolean)
+      .map((point) => ({ x: point.x, y: point.y + (Number(element.yOffset) || 0) }))
+    if (!points.length) return { minX: element.domainStart, maxX: element.domainEnd, minY: -1, maxY: 1 }
+    const xs = points.map((point) => point.x)
+    const ys = points.map((point) => point.y)
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
+  }
+
+  if (element.type === 'text') {
+    const box = labelBoxForText(element.text)
+    const halfWidth = box.width / CANVAS.scale / 2
+    const halfHeight = box.height / CANVAS.scale / 2
+    return {
+      minX: element.position.x - halfWidth,
+      maxX: element.position.x + halfWidth,
+      minY: element.position.y - halfHeight,
+      maxY: element.position.y + halfHeight,
+    }
+  }
+
+  if (element.type === 'diagram') return diagramBounds(element)
+  if (element.type === 'library') return libraryBounds(element)
+  return { minX: 0, maxX: 0, minY: 0, maxY: 0 }
+}
+
+function mergeBounds(boundsList) {
+  return boundsList.reduce(
+    (result, bounds) => ({
+      minX: Math.min(result.minX, bounds.minX),
+      maxX: Math.max(result.maxX, bounds.maxX),
+      minY: Math.min(result.minY, bounds.minY),
+      maxY: Math.max(result.maxY, bounds.maxY),
+    }),
+    { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
+  )
+}
+
+function boundsCenter(bounds) {
+  return { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 }
+}
+
+function resizeElementToBounds(element, nextBounds) {
+  const current = elementBounds(element)
+  const currentWidth = Math.max(0.001, current.maxX - current.minX)
+  const currentHeight = Math.max(0.001, current.maxY - current.minY)
+  const nextWidth = Math.max(0.05, nextBounds.maxX - nextBounds.minX)
+  const nextHeight = Math.max(0.05, nextBounds.maxY - nextBounds.minY)
+  const mapPoint = (point) => ({
+    x: nextBounds.minX + ((point.x - current.minX) / currentWidth) * nextWidth,
+    y: nextBounds.minY + ((point.y - current.minY) / currentHeight) * nextHeight,
+  })
+
+  if (element.type === 'line' || element.type === 'arrow' || element.type === 'rect' || element.type === 'ellipse') {
+    return { ...element, start: mapPoint(element.start), end: mapPoint(element.end) }
+  }
+
+  if (element.type === 'path') return { ...element, points: element.points.map(mapPoint) }
+  if (element.type === 'text') return { ...element, position: boundsCenter(nextBounds) }
+  if (element.type === 'function') {
+    return {
+      ...element,
+      domainStart: nextBounds.minX,
+      domainEnd: nextBounds.maxX,
+      yOffset: (Number(element.yOffset) || 0) + (boundsCenter(nextBounds).y - boundsCenter(current).y),
+    }
+  }
+  if (element.type === 'diagram' || element.type === 'library') {
+    const scale = Number(element.scale) || 1
+    const ratio = Math.max(0.25, Math.min(4, Math.min(nextWidth / currentWidth, nextHeight / currentHeight)))
+    return { ...element, origin: boundsCenter(nextBounds), scale: scale * ratio }
+  }
+  return element
 }
 
 function escapeTikzText(text) {
@@ -1312,6 +1650,26 @@ function terminalPointsForElement(element) {
   return []
 }
 
+function inferCircuitNets(elements) {
+  const terminals = elements.flatMap((element) =>
+    terminalPointsForElement(element).map((point, index) => ({
+      elementId: element.id,
+      index,
+      point,
+    })),
+  )
+  const nets = []
+  terminals.forEach((terminal) => {
+    const match = nets.find((net) => net.terminals.some((candidate) => distance(candidate.point, terminal.point) < 0.08))
+    if (match) {
+      match.terminals.push(terminal)
+    } else {
+      nets.push({ name: `N${nets.length + 1}`, terminals: [terminal] })
+    }
+  })
+  return nets.filter((net) => net.terminals.length > 1)
+}
+
 function makeOrthogonalRoute(start, end) {
   if (Math.abs(start.x - end.x) < 0.001 || Math.abs(start.y - end.y) < 0.001) {
     return [start, end]
@@ -1320,6 +1678,28 @@ function makeOrthogonalRoute(start, end) {
   const horizontalFirst = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y)
   const corner = horizontalFirst ? { x: end.x, y: start.y } : { x: start.x, y: end.y }
   return [start, corner, end]
+}
+
+function makeRoutedPoints(start, end, mode = 'manhattan') {
+  if (mode === 'straight') return [start, end]
+  if (Math.abs(start.x - end.x) < 0.001 || Math.abs(start.y - end.y) < 0.001) return [start, end]
+
+  if (mode === 'stepped') {
+    const midX = (start.x + end.x) / 2
+    return [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end]
+  }
+
+  if (mode === 'bus') {
+    const offset = end.y >= start.y ? 0.35 : -0.35
+    return [start, { x: start.x, y: start.y + offset }, { x: end.x, y: start.y + offset }, end]
+  }
+
+  if (mode === 'avoid') {
+    const offset = end.x >= start.x ? 0.45 : -0.45
+    return [start, { x: start.x + offset, y: start.y }, { x: start.x + offset, y: end.y }, end]
+  }
+
+  return makeOrthogonalRoute(start, end)
 }
 
 function elementIntersectsEraser(element, point, radius = 0.24) {
@@ -1614,6 +1994,12 @@ function collectRequirements(elements) {
       addPackagesForText(element.text)
     }
 
+    if (element.type === 'function' && functionOptionsFor(element).usePgfplots) {
+      packages.add('\\usepackage{pgfplots}')
+      afterPreamble.add('\\pgfplotsset{compat=1.18}')
+      if (functionOptionsFor(element).colormap?.trim()) pgfplotsLibraries.add('colormaps')
+    }
+
     if (element.type === 'arrow') {
       libraries.add('arrows.meta')
     }
@@ -1638,10 +2024,12 @@ function collectRequirements(elements) {
 function buildTikz(elements, exportOptions = {}) {
   const includeGrid = exportOptions.includeGrid ?? false
   const monochrome = exportOptions.monochrome ?? true
-  const wrapFigure = exportOptions.wrapFigure ?? false
+  const exportPreset = exportOptions.exportPreset ?? 'figure'
+  const wrapFigure = exportPreset === 'snippet' ? false : exportOptions.wrapFigure ?? false
   const figureCaption = exportOptions.caption?.trim() ?? ''
   const figureLabel = safeLatexLabel(exportOptions.label ?? '')
-  const requirements = collectRequirements(elements)
+  const drawableElements = elements.filter((element) => !element.hidden)
+  const requirements = collectRequirements(drawableElements)
   const standaloneSnippets = []
   const usedColors = new Map()
   const ensureColor = (hex) => {
@@ -1673,7 +2061,7 @@ function buildTikz(elements, exportOptions = {}) {
     return usedColors.get(clean)
   }
 
-  elements.forEach((element) => {
+  drawableElements.forEach((element) => {
     ensureColor(element.stroke)
     ensureColor(element.fill)
   })
@@ -1702,7 +2090,16 @@ function buildTikz(elements, exportOptions = {}) {
     ...requirements.afterPreamble.map((item) => `% ${item}`),
     ...definitions,
   ]
-  const pictureLines = ['\\begin{tikzpicture}[x=1cm, y=1cm, line cap=round, line join=round, >=Stealth, every node/.style={font=\\small}]']
+  const journalStyle = exportOptions.journalStyle ?? 'ieee'
+  const journalOptions = {
+    ieee: 'font=\\small',
+    nature: 'font=\\small',
+    thesis: 'font=\\normalsize',
+    slides: 'font=\\large',
+  }[journalStyle]
+  const pictureLines = [
+    `\\begin{tikzpicture}[x=1cm, y=1cm, line cap=round, line join=round, >=Stealth, every node/.style={${journalOptions}}]`,
+  ]
 
   if (includeGrid) {
     pictureLines.push(
@@ -1718,10 +2115,17 @@ function buildTikz(elements, exportOptions = {}) {
     )
   }
 
-  elements.forEach((element) => {
+  drawableElements.forEach((element) => {
+    const rotation = Number(element.rotation) || 0
+    if (rotation) {
+      const center = boundsCenter(elementBounds(element))
+      pictureLines.push(`  \\begin{scope}[rotate around={${formatNumber(rotation)}:(${formatNumber(center.x)},${formatNumber(center.y)})}]`)
+    }
+    const linePrefix = rotation ? '    ' : '  '
+
     if (element.type === 'line') {
       pictureLines.push(
-        `  \\draw${optionsFor(element)} (${formatNumber(element.start.x)},${formatNumber(
+        `${linePrefix}\\draw${optionsFor(element)} (${formatNumber(element.start.x)},${formatNumber(
           element.start.y,
         )}) -- (${formatNumber(element.end.x)},${formatNumber(element.end.y)});`,
       )
@@ -1729,7 +2133,7 @@ function buildTikz(elements, exportOptions = {}) {
 
     if (element.type === 'arrow') {
       pictureLines.push(
-        `  \\draw${optionsFor(element, [tikzArrowStyle(element.arrowStyle)])} (${formatNumber(element.start.x)},${formatNumber(
+        `${linePrefix}\\draw${optionsFor(element, [tikzArrowStyle(element.arrowStyle)])} (${formatNumber(element.start.x)},${formatNumber(
           element.start.y,
         )}) -- (${formatNumber(element.end.x)},${formatNumber(element.end.y)});`,
       )
@@ -1737,7 +2141,7 @@ function buildTikz(elements, exportOptions = {}) {
 
     if (element.type === 'rect') {
       pictureLines.push(
-        `  \\draw${optionsFor(element, [], true)} (${formatNumber(element.start.x)},${formatNumber(
+        `${linePrefix}\\draw${optionsFor(element, [], true)} (${formatNumber(element.start.x)},${formatNumber(
           element.start.y,
         )}) rectangle (${formatNumber(element.end.x)},${formatNumber(element.end.y)});`,
       )
@@ -1751,7 +2155,7 @@ function buildTikz(elements, exportOptions = {}) {
       const radiusX = Math.abs(element.end.x - element.start.x) / 2
       const radiusY = Math.abs(element.end.y - element.start.y) / 2
       pictureLines.push(
-        `  \\draw${optionsFor(element, [], true)} (${formatNumber(center.x)},${formatNumber(
+        `${linePrefix}\\draw${optionsFor(element, [], true)} (${formatNumber(center.x)},${formatNumber(
           center.y,
         )}) ellipse [x radius=${formatNumber(radiusX)}, y radius=${formatNumber(radiusY)}];`,
       )
@@ -1762,24 +2166,90 @@ function buildTikz(elements, exportOptions = {}) {
       if (points.length > 1) {
         const coords = points.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
         if (element.smooth) {
-          pictureLines.push(`  \\draw${optionsFor(element, ['smooth'])} plot coordinates { ${coords} };`)
+          pictureLines.push(`${linePrefix}\\draw${optionsFor(element, ['smooth'])} plot coordinates { ${coords} };`)
         } else {
-          pictureLines.push(`  \\draw${optionsFor(element)} ${coords.replaceAll(') (', ') -- (')};`)
+          pictureLines.push(`${linePrefix}\\draw${optionsFor(element)} ${coords.replaceAll(') (', ') -- (')};`)
         }
       }
     }
 
     if (element.type === 'function') {
+      const functionOptions = functionOptionsFor(element)
       const segments = splitDrawableSegments(
-        sampleFunction(element).map((point) =>
-          point ? { x: point.x, y: point.y + (Number(element.yOffset) || 0) } : null,
-        ),
+        functionDisplayPoints(element).map((point) => (point ? { x: point.x, y: point.y } : null)),
       )
-      segments.forEach((segment, index) => {
-        const coords = segment.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
-        const comment = index === 0 ? ` % f(x) = ${element.expression}` : ''
-        pictureLines.push(`  \\draw${optionsFor(element, element.smooth === false ? [] : ['smooth'])} plot coordinates { ${coords} };${comment}`)
-      })
+      if (functionOptions.usePgfplots) {
+        const axisOptions = [
+          `width=${functionOptions.axisWidth ?? '7cm'}`,
+          `height=${functionOptions.axisHeight ?? '4.5cm'}`,
+          functionOptions.axisType === 'semilogxaxis' || functionOptions.logX ? 'xmode=log' : '',
+          functionOptions.axisType === 'semilogyaxis' || functionOptions.logY ? 'ymode=log' : '',
+          `xlabel={${formatTikzNodeText(functionOptions.xLabel)}}`,
+          `ylabel={${formatTikzNodeText(functionOptions.yLabel)}}`,
+          functionOptions.gridStyle !== 'none' ? `grid=${functionOptions.gridStyle}` : '',
+          functionOptions.xTicks?.trim() ? `xtick={${functionOptions.xTicks.trim()}}` : '',
+          functionOptions.yTicks?.trim() ? `ytick={${functionOptions.yTicks.trim()}}` : '',
+          functionOptions.tickLabelStyle?.trim() ? `tick label style={${functionOptions.tickLabelStyle.trim()}}` : '',
+          functionOptions.legend ? `legend pos=${functionOptions.legendPos || 'north east'}` : '',
+          functionOptions.colormap?.trim() ? `colormap/${functionOptions.colormap.trim()}` : '',
+          functionOptions.clip ? 'clip=true' : 'clip=false',
+          functionOptions.axisOptions?.trim() ?? '',
+        ].filter(Boolean)
+        pictureLines.push(`${linePrefix}\\begin{axis}[${axisOptions.join(', ')}]`)
+        const makeAddplotOptions = () =>
+          [
+            `draw=${ensureColor(element.stroke)}`,
+            functionOptions.markerStyle === 'none' ? 'no markers' : `mark=${functionOptions.markerStyle}`,
+            functionOptions.errorBars ? functionOptions.errorBarOptions || '/pgfplots/error bars/y dir=both, /pgfplots/error bars/y explicit' : '',
+            functionOptions.plotOptions,
+          ].filter(Boolean)
+        const dataPoints = parsedDataTablePoints(functionOptions.dataTable)
+        if (dataPoints.length) {
+          const tableRows = ['x y', ...dataPoints.map((point) => `${formatNumber(point.x)} ${formatNumber(point.y)}`)]
+          const legend = functionOptions.legend ? `\n${linePrefix}  \\addlegendentry{${formatTikzNodeText(functionOptions.legend)}}` : ''
+          pictureLines.push(`${linePrefix}  \\addplot[${makeAddplotOptions().join(', ')}] table[row sep=\\\\] {`)
+          tableRows.forEach((row) => pictureLines.push(`${linePrefix}    ${row}\\\\`))
+          pictureLines.push(`${linePrefix}  };${legend}`)
+        } else {
+          segments.forEach((segment, index) => {
+            const coords = segment.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
+            const legend = functionOptions.legend && index === 0 ? `\n${linePrefix}  \\addlegendentry{${formatTikzNodeText(functionOptions.legend)}}` : ''
+            pictureLines.push(`${linePrefix}  \\addplot[${makeAddplotOptions().join(', ')}] coordinates { ${coords} };${legend}`)
+          })
+        }
+        pictureLines.push(`${linePrefix}\\end{axis}`)
+      } else {
+        segments.forEach((segment, index) => {
+          const coords = segment.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
+          const comment = index === 0 ? ` % f(x) = ${element.expression}` : ''
+          pictureLines.push(`${linePrefix}\\draw${optionsFor(element, element.smooth === false ? [] : ['smooth'])} plot coordinates { ${coords} };${comment}`)
+        })
+        const features = functionFeaturePoints(element)
+        const markPoint = (point, label) =>
+          `${linePrefix}\\filldraw[fill=white, draw=${ensureColor(element.stroke)}, line width=0.45pt] (${formatNumber(point.x)},${formatNumber(
+            point.y,
+          )}) circle (1.7pt) node[above right, font=\\scriptsize] {${label}};`
+        if (functionOptions.showXIntercepts) features.xIntercepts.slice(0, 8).forEach((point) => pictureLines.push(markPoint(point, '$x_0$')))
+        if (functionOptions.showYIntercept && features.yIntercept) pictureLines.push(markPoint(features.yIntercept, '$y_0$'))
+        if (functionOptions.showExtrema) features.extrema.slice(0, 8).forEach((point) => pictureLines.push(markPoint(point, 'ext')))
+        if (functionOptions.showSamples) features.samples.forEach((point) => pictureLines.push(markPoint(point, '')))
+        if (functionOptions.showTangent && features.tangent) {
+          pictureLines.push(
+            `${linePrefix}\\draw[dashed, draw=${ensureColor(element.stroke)}!65, line width=0.4pt] (${formatNumber(features.tangent.start.x)},${formatNumber(
+              features.tangent.start.y,
+            )}) -- (${formatNumber(features.tangent.end.x)},${formatNumber(features.tangent.end.y)});`,
+          )
+        }
+        if (functionOptions.showAsymptotes) {
+          features.asymptotes.slice(0, 6).forEach((point) => {
+            pictureLines.push(`${linePrefix}\\draw[densely dashed, color=gray!55] (${formatNumber(point.x)},${formatNumber(worldBounds.minY)}) -- (${formatNumber(point.x)},${formatNumber(worldBounds.maxY)});`)
+          })
+        }
+        if (functionOptions.legend) {
+          const bounds = elementBounds(element)
+          pictureLines.push(`${linePrefix}\\node[anchor=west, font=\\scriptsize] at (${formatNumber(bounds.maxX + 0.2)},${formatNumber(bounds.maxY)}) {${formatTikzNodeText(functionOptions.legend)}};`)
+        }
+      }
     }
 
     if (element.type === 'text') {
@@ -1795,7 +2265,7 @@ function buildTikz(elements, exportOptions = {}) {
       }
       if (element.tikzOptions?.trim()) nodeOptions.push(element.tikzOptions.trim())
       pictureLines.push(
-        `  \\node[${nodeOptions.join(', ')}] at (${formatNumber(element.position.x)},${formatNumber(
+        `${linePrefix}\\node[${nodeOptions.join(', ')}] at (${formatNumber(element.position.x)},${formatNumber(
           element.position.y,
         )}) {${formatTikzNodeText(element.text)}};`,
       )
@@ -1823,11 +2293,36 @@ function buildTikz(elements, exportOptions = {}) {
         pictureLines.push(...snippet)
       }
     }
+
+    if (rotation) pictureLines.push('  \\end{scope}')
   })
 
   pictureLines.push('\\end{tikzpicture}')
   if (standaloneSnippets.length) {
     pictureLines.push('', '% Standalone library environments', ...standaloneSnippets)
+  }
+
+  if (exportPreset === 'standalone') {
+    return [
+      '\\documentclass[tikz,border=4pt]{standalone}',
+      ...requirements.packages,
+      ...(requirements.libraries.length ? [`\\usetikzlibrary{${requirements.libraries.join(',')}}`] : []),
+      ...(requirements.pgfplotsLibraries.length ? [`\\usepgfplotslibrary{${requirements.pgfplotsLibraries.join(',')}}`] : []),
+      ...requirements.afterPreamble,
+      ...definitions,
+      '\\begin{document}',
+      ...pictureLines,
+      '\\end{document}',
+    ].join('\n')
+  }
+
+  if (exportPreset === 'beamer') {
+    return [
+      '\\begin{frame}{TikZ sketch}',
+      '  \\centering',
+      ...indentLatex(pictureLines),
+      '\\end{frame}',
+    ].join('\n')
   }
 
   if (!wrapFigure) {
@@ -1865,8 +2360,17 @@ function App() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [helpTab, setHelpTab] = useState('tutorial')
   const [contextMenu, setContextMenu] = useState(null)
+  const [overlapCandidates, setOverlapCandidates] = useState(null)
   const [mouseWorld, setMouseWorld] = useState({ x: 0, y: 0 })
   const [settings, setSettings] = useState({ ...defaultEditorSettings, ...(initialSharedBoard?.settings ?? {}) })
+  const [layerSearch, setLayerSearch] = useState('')
+  const [recentBoards] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('tikz-sketch-recent') ?? '[]')
+    } catch {
+      return []
+    }
+  })
   const [functionDraft, setFunctionDraft] = useState({
     expression: '0.25*x^2 - 2',
     domainStart: -6,
@@ -1890,6 +2394,23 @@ function App() {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
+  useEffect(() => {
+    if (!settings.autosave) return
+    const payload = {
+      version: 2,
+      savedAt: new Date().toISOString(),
+      elements,
+      settings,
+      theme,
+      viewport: { canvasPan, zoom },
+    }
+    localStorage.setItem('tikz-sketch-autosave', JSON.stringify(payload))
+    localStorage.setItem(
+      'tikz-sketch-recent',
+      JSON.stringify([{ name: 'Autosave', savedAt: payload.savedAt, count: elements.length }, ...recentBoards.slice(0, 4)]),
+    )
+  }, [canvasPan, elements, recentBoards, settings, theme, zoom])
+
   const selectedElement = elements.find((element) => element.id === selectedId)
   const selectedElements = elements.filter((element) => selectedIds.includes(element.id))
   const selectedLibraryConfig = selectedElement?.type === 'library' ? getLibraryConfig(selectedElement) : null
@@ -1902,9 +2423,40 @@ function App() {
         wrapFigure: settings.wrapFigure,
         caption: settings.caption,
         label: settings.label,
+        exportPreset: settings.exportPreset,
+        journalStyle: settings.journalStyle,
       }),
-    [elements, settings.caption, settings.exportGrid, settings.label, settings.monochromeExport, settings.wrapFigure],
+    [
+      elements,
+      settings.caption,
+      settings.exportGrid,
+      settings.exportPreset,
+      settings.journalStyle,
+      settings.label,
+      settings.monochromeExport,
+      settings.wrapFigure,
+    ],
   )
+  const tikzWarnings = useMemo(() => {
+    if (!settings.warnMissingLibraries) return []
+    const warnings = []
+    elements.forEach((element) => {
+      if (element.type !== 'library') return
+      const preset = getLibraryPreset(element)
+      const snippet = preset.snippet?.join('\n') ?? ''
+      if (/\\begin\{axis}|\\addplot/.test(snippet) && !preset.packages?.some((item) => item.includes('pgfplots'))) {
+        warnings.push(`${elementDisplayName(element)} parece necesitar pgfplots.`)
+      }
+      if (/op amp|npn|nmos|to\[/.test(snippet) && !preset.packages?.some((item) => item.includes('circuitikz'))) {
+        warnings.push(`${elementDisplayName(element)} parece necesitar circuitikz.`)
+      }
+      if (/Stealth|bend left|positioning|right=/.test(snippet) && !(preset.libraries?.length || preset.packages?.some((item) => item.includes('tikz')))) {
+        warnings.push(`${elementDisplayName(element)} puede necesitar librerias TikZ extra.`)
+      }
+    })
+    return warnings.slice(0, 5)
+  }, [elements, settings.warnMissingLibraries])
+  const inferredNets = useMemo(() => inferCircuitNets(elements.filter((element) => !element.hidden)), [elements])
   const paletteGroups = useMemo(() => ['All', ...Array.from(new Set(libraryPaletteItems.map((preset) => preset.group))).sort()], [])
   const visiblePaletteItems = useMemo(() => {
     const query = librarySearch.trim().toLowerCase()
@@ -1934,6 +2486,16 @@ function App() {
     if (!query) return latexSymbols
     return latexSymbols.filter((symbol) => symbol.haystack.includes(query))
   }, [symbolSearch])
+  const visibleLayerElements = useMemo(() => {
+    const query = layerSearch.trim().toLowerCase()
+    return [...elements]
+      .reverse()
+      .filter((element) => !query || elementDisplayName(element).toLowerCase().includes(query) || element.type.includes(query))
+  }, [elements, layerSearch])
+  const selectionBounds = useMemo(
+    () => (selectedElements.length ? mergeBounds(selectedElements.map(elementBounds)) : null),
+    [selectedElements],
+  )
 
   const setCanvasZoom = (nextZoom) => {
     const value = Number(nextZoom)
@@ -1946,15 +2508,17 @@ function App() {
   }
 
   const commitElements = (nextElements, nextSelectedId = selectedId) => {
+    const normalizedElements = renumberCircuitLabels(nextElements)
     pushHistory(elements)
-    setElements(nextElements)
+    setElements(normalizedElements)
     setSelectedId(nextSelectedId)
     setSelectedIds(nextSelectedId ? [nextSelectedId] : [])
   }
 
   const commitElementsWithSelection = (nextElements, nextSelectedIds = []) => {
+    const normalizedElements = renumberCircuitLabels(nextElements)
     pushHistory(elements)
-    setElements(nextElements)
+    setElements(normalizedElements)
     setSelectedIds(nextSelectedIds)
     setSelectedId(nextSelectedIds.at(-1) ?? null)
   }
@@ -2005,6 +2569,9 @@ function App() {
     smooth: settings.smooth,
     arrowStyle: settings.arrowStyle,
     tikzOptions: settings.tikzOptions,
+    hidden: false,
+    locked: false,
+    rotation: 0,
   })
 
   const eraseIds = (ids, snapshot = elements) => {
@@ -2017,12 +2584,12 @@ function App() {
   }
 
   const findEraserHits = (point, sourceElements = elements) =>
-    sourceElements.filter((element) => elementIntersectsEraser(element, point)).map((element) => element.id)
+    sourceElements.filter((element) => !element.hidden && !element.locked && elementIntersectsEraser(element, point)).map((element) => element.id)
 
   const findSelectableHits = (point, sourceElements = elements) =>
     sourceElements
       .map((element, index) => ({ element, index }))
-      .filter(({ element }) => elementIntersectsEraser(element, point, 0.34))
+      .filter(({ element }) => !element.hidden && !element.locked && elementIntersectsEraser(element, point, 0.34))
       .sort((a, b) => b.index - a.index)
       .map(({ element }) => element)
 
@@ -2043,6 +2610,7 @@ function App() {
     const point = getWorldPoint(event)
     setMouseWorld(point)
     setContextMenu(null)
+    setOverlapCandidates(null)
 
     if (tool === 'pan') {
       svgRef.current?.setPointerCapture?.(event.pointerId)
@@ -2166,6 +2734,73 @@ function App() {
       return
     }
 
+    if (interaction?.mode === 'resize-selection') {
+      const originalBounds = interaction.bounds
+      const nextBounds = {
+        minX: originalBounds.minX,
+        minY: originalBounds.minY,
+        maxX: Math.max(originalBounds.minX + 0.1, point.x),
+        maxY: Math.max(originalBounds.minY + 0.1, point.y),
+      }
+      const originals = new Map(interaction.originals.map((element) => [element.id, element]))
+
+      if (!interaction.moved) {
+        setPast((items) => [...items, interaction.snapshot].slice(-50))
+        setFuture([])
+      }
+
+      setInteraction({ ...interaction, moved: true })
+      setElements((current) =>
+        current.map((element) => {
+          const original = originals.get(element.id)
+          if (!original) return element
+          const originalElementBounds = elementBounds(original)
+          const relBounds = {
+            minX:
+              nextBounds.minX +
+              ((originalElementBounds.minX - originalBounds.minX) / Math.max(0.001, originalBounds.maxX - originalBounds.minX)) *
+                (nextBounds.maxX - nextBounds.minX),
+            maxX:
+              nextBounds.minX +
+              ((originalElementBounds.maxX - originalBounds.minX) / Math.max(0.001, originalBounds.maxX - originalBounds.minX)) *
+                (nextBounds.maxX - nextBounds.minX),
+            minY:
+              nextBounds.minY +
+              ((originalElementBounds.minY - originalBounds.minY) / Math.max(0.001, originalBounds.maxY - originalBounds.minY)) *
+                (nextBounds.maxY - nextBounds.minY),
+            maxY:
+              nextBounds.minY +
+              ((originalElementBounds.maxY - originalBounds.minY) / Math.max(0.001, originalBounds.maxY - originalBounds.minY)) *
+                (nextBounds.maxY - nextBounds.minY),
+          }
+          return resizeElementToBounds(original, relBounds)
+        }),
+      )
+      return
+    }
+
+    if (interaction?.mode === 'rotate-selection') {
+      const center = boundsCenter(interaction.bounds)
+      const angle = (Math.atan2(point.y - center.y, point.x - center.x) * 180) / Math.PI
+      const delta = angle - interaction.startAngle
+      const originals = new Map(interaction.originals.map((element) => [element.id, element]))
+
+      if (!interaction.moved) {
+        setPast((items) => [...items, interaction.snapshot].slice(-50))
+        setFuture([])
+      }
+
+      setInteraction({ ...interaction, moved: true })
+      setElements((current) =>
+        current.map((element) =>
+          originals.has(element.id)
+            ? { ...element, rotation: Math.round(((Number(originals.get(element.id).rotation) || 0) + delta) * 10) / 10 }
+            : element,
+        ),
+      )
+      return
+    }
+
     if (!draft) return
 
     if (draft.type === 'path') {
@@ -2205,7 +2840,7 @@ function App() {
 
     if (distance(draft.start, draft.end) > 0.08) {
       if (settings.routeWires && draft.type === 'line') {
-        const routedPoints = makeOrthogonalRoute(draft.start, draft.end)
+        const routedPoints = makeRoutedPoints(draft.start, draft.end, settings.routeMode)
         const routedDraft =
           routedPoints.length > 2
             ? {
@@ -2236,6 +2871,11 @@ function App() {
 
     const point = getWorldPoint(event)
     const hitElements = tool === 'select' ? findSelectableHits(point) : [element]
+    if (tool === 'select' && hitElements.length > 1) {
+      setOverlapCandidates({ x: event.clientX, y: event.clientY, ids: hitElements.map((hit) => hit.id) })
+    } else {
+      setOverlapCandidates(null)
+    }
     const selectedHitIndex = hitElements.findIndex((hit) => hit.id === selectedId)
     const targetElement =
       tool === 'select' && hitElements.length > 1 && selectedHitIndex >= 0
@@ -2305,6 +2945,134 @@ function App() {
     updateSelected({ config: { ...getLibraryConfig(selectedElement), ...patch } })
   }
 
+  const updateSelectedFunctionOptions = (patch) => {
+    if (selectedElement?.type !== 'function') return
+    updateSelected({ functionOptions: { ...functionOptionsFor(selectedElement), ...patch } })
+  }
+
+  const updateElementById = (id, patch) => {
+    setElements((current) => current.map((element) => (element.id === id ? { ...element, ...patch } : element)))
+  }
+
+  const reorderElement = (id, direction) => {
+    const index = elements.findIndex((element) => element.id === id)
+    if (index < 0) return
+    const nextIndex =
+      direction === 'front'
+        ? elements.length - 1
+        : direction === 'back'
+          ? 0
+          : Math.max(0, Math.min(elements.length - 1, index + direction))
+    if (nextIndex === index) return
+    const nextElements = [...elements]
+    const [item] = nextElements.splice(index, 1)
+    nextElements.splice(nextIndex, 0, item)
+    commitElementsWithSelection(nextElements, selectedIds)
+  }
+
+  const groupSelected = () => {
+    if (selectedIds.length < 2) return
+    const groupId = `group-${createId().slice(0, 8)}`
+    commitElementsWithSelection(
+      elements.map((element) => (selectedIds.includes(element.id) ? { ...element, groupId } : element)),
+      selectedIds,
+    )
+  }
+
+  const ungroupSelected = () => {
+    if (!selectedIds.length) return
+    commitElementsWithSelection(
+      elements.map((element) => (selectedIds.includes(element.id) ? { ...element, groupId: '' } : element)),
+      selectedIds,
+    )
+  }
+
+  const alignSelected = (mode) => {
+    if (selectedElements.length < 2) return
+    const selection = mergeBounds(selectedElements.map(elementBounds))
+    const nextElements = elements.map((element) => {
+      if (!selectedIds.includes(element.id)) return element
+      const bounds = elementBounds(element)
+      const delta =
+        mode === 'left'
+          ? { x: selection.minX - bounds.minX, y: 0 }
+          : mode === 'right'
+            ? { x: selection.maxX - bounds.maxX, y: 0 }
+            : mode === 'hcenter'
+              ? { x: boundsCenter(selection).x - boundsCenter(bounds).x, y: 0 }
+              : mode === 'top'
+                ? { x: 0, y: selection.maxY - bounds.maxY }
+                : mode === 'bottom'
+                  ? { x: 0, y: selection.minY - bounds.minY }
+                  : { x: 0, y: boundsCenter(selection).y - boundsCenter(bounds).y }
+      return moveElement(element, delta.x, delta.y)
+    })
+    commitElementsWithSelection(nextElements, selectedIds)
+  }
+
+  const distributeSelected = (axis) => {
+    if (selectedElements.length < 3) return
+    const sorted = [...selectedElements].sort((a, b) => boundsCenter(elementBounds(a))[axis] - boundsCenter(elementBounds(b))[axis])
+    const first = boundsCenter(elementBounds(sorted[0]))[axis]
+    const last = boundsCenter(elementBounds(sorted.at(-1)))[axis]
+    const step = (last - first) / Math.max(1, sorted.length - 1)
+    const target = new Map(sorted.map((element, index) => [element.id, first + step * index]))
+    const nextElements = elements.map((element) => {
+      if (!target.has(element.id)) return element
+      const bounds = elementBounds(element)
+      const delta = target.get(element.id) - boundsCenter(bounds)[axis]
+      return axis === 'x' ? moveElement(element, delta, 0) : moveElement(element, 0, delta)
+    })
+    commitElementsWithSelection(nextElements, selectedIds)
+  }
+
+  const makeSelectedSameSize = () => {
+    if (selectedElements.length < 2) return
+    const sourceBounds = elementBounds(selectedElements.at(-1))
+    const sourceWidth = sourceBounds.maxX - sourceBounds.minX
+    const sourceHeight = sourceBounds.maxY - sourceBounds.minY
+    const nextElements = elements.map((element) => {
+      if (!selectedIds.includes(element.id)) return element
+      const center = boundsCenter(elementBounds(element))
+      return resizeElementToBounds(element, {
+        minX: center.x - sourceWidth / 2,
+        maxX: center.x + sourceWidth / 2,
+        minY: center.y - sourceHeight / 2,
+        maxY: center.y + sourceHeight / 2,
+      })
+    })
+    commitElementsWithSelection(nextElements, selectedIds)
+  }
+
+  const resizeElementToSelection = (nextBounds) => {
+    if (!selectionBounds || !selectedIds.length) return
+    const originalBounds = selectionBounds
+    const nextElements = elements.map((element) => {
+      if (!selectedIds.includes(element.id)) return element
+      const current = elementBounds(element)
+      const relBounds = {
+        minX:
+          nextBounds.minX +
+          ((current.minX - originalBounds.minX) / Math.max(0.001, originalBounds.maxX - originalBounds.minX)) *
+            (nextBounds.maxX - nextBounds.minX),
+        maxX:
+          nextBounds.minX +
+          ((current.maxX - originalBounds.minX) / Math.max(0.001, originalBounds.maxX - originalBounds.minX)) *
+            (nextBounds.maxX - nextBounds.minX),
+        minY:
+          nextBounds.minY +
+          ((current.minY - originalBounds.minY) / Math.max(0.001, originalBounds.maxY - originalBounds.minY)) *
+            (nextBounds.maxY - nextBounds.minY),
+        maxY:
+          nextBounds.minY +
+          ((current.maxY - originalBounds.minY) / Math.max(0.001, originalBounds.maxY - originalBounds.minY)) *
+            (nextBounds.maxY - nextBounds.minY),
+      }
+      return resizeElementToBounds(element, relBounds)
+    })
+    commitElementsWithSelection(nextElements, selectedIds)
+  }
+
   const insertLatexSymbol = (symbol) => {
     if (selectedElement?.type === 'text') {
       updateSelected({ text: appendLatexSymbol(selectedElement.text, symbol) })
@@ -2371,6 +3139,7 @@ function App() {
         yOffset: 0,
         stroke: settings.stroke,
         smooth: true,
+        functionOptions: { ...defaultFunctionOptions },
       }
       setFunctionError('')
       commitElements([...elements, nextElement], nextElement.id)
@@ -2459,6 +3228,67 @@ function App() {
       customPreset,
     }
     commitElements([...elements, nextElement], nextElement.id)
+    setTool('select')
+  }
+
+  const importEditableTikzSnippet = () => {
+    const snippet = customLibrary.snippet
+    const pointPattern = '\\((-?\\d+(?:\\.\\d+)?),\\s*(-?\\d+(?:\\.\\d+)?)\\)'
+    const lineMatch = snippet.match(new RegExp(`${pointPattern}\\s*--\\s*${pointPattern}`))
+    const rectMatch = snippet.match(new RegExp(`${pointPattern}\\s*rectangle\\s*${pointPattern}`))
+    const nodeMatch = snippet.match(/\\node(?:\[[^\]]*])?\s*at\s*\((-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\)\s*\{([^}]*)}/)
+    let nextElement = null
+
+    if (rectMatch) {
+      nextElement = {
+        ...makeBaseElement(),
+        type: 'rect',
+        start: { x: Number(rectMatch[1]), y: Number(rectMatch[2]) },
+        end: { x: Number(rectMatch[3]), y: Number(rectMatch[4]) },
+      }
+    } else if (lineMatch) {
+      nextElement = {
+        ...makeBaseElement(),
+        type: snippet.includes('->') || snippet.includes('Stealth') ? 'arrow' : 'line',
+        start: { x: Number(lineMatch[1]), y: Number(lineMatch[2]) },
+        end: { x: Number(lineMatch[3]), y: Number(lineMatch[4]) },
+      }
+    } else if (nodeMatch) {
+      nextElement = {
+        ...makeBaseElement(),
+        type: 'text',
+        position: { x: Number(nodeMatch[1]), y: Number(nodeMatch[2]) },
+        text: nodeMatch[3],
+      }
+    }
+
+    if (!nextElement) {
+      window.alert('Solo puedo convertir automaticamente nodos, lineas y rectangulos TikZ simples por ahora.')
+      return
+    }
+
+    commitElements([...elements, nextElement], nextElement.id)
+    setTool('select')
+  }
+
+  const loadGalleryExample = (kind) => {
+    const presetIds = {
+      qpsk: ['telecom-random-bits', 'telecom-qpsk-mod', 'telecom-channel', 'telecom-qpsk-demod', 'plot-constellation'],
+      ofdm: ['telecom-bits', 'telecom-ifft', 'telecom-cp', 'telecom-channel', 'telecom-fft', 'plot-spectrum'],
+      mimo: ['telecom-mimo-tx', 'telecom-mimo-channel', 'telecom-mimo-rx', 'plot-ber'],
+      superhet: ['telecom-antenna', 'rf-amplifier', 'telecom-superhet', 'telecom-filter', 'plot-spectrum'],
+      matched: ['telecom-qpsk-mod', 'telecom-channel', 'telecom-matched-filter', 'telecom-delay-block', 'plot-eye'],
+      rf: ['rf-waveguide', 'rf-coupler', 'rf-splitter', 'rf-circulator', 'rf-sparameter'],
+    }[kind] ?? ['telecom-transmitter-chain', 'telecom-channel', 'telecom-receiver-chain']
+    const nextElements = presetIds
+      .map((id, index) => {
+        const preset = libraryPaletteItems.find((item) => item.id === id)
+        if (!preset) return null
+        return makeLibraryElement(preset, { x: -7 + index * 3, y: 2 - (index % 2) * 2.2 })
+      })
+      .filter(Boolean)
+    if (!nextElements.length) return
+    commitElementsWithSelection(nextElements, nextElements.map((element) => element.id))
     setTool('select')
   }
 
@@ -2555,29 +3385,53 @@ function App() {
     setContextMenu(null)
   }
 
+  const currentBoardPayload = () => ({
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    elements,
+    settings,
+    theme,
+    viewport: { canvasPan, zoom },
+  })
+
   const downloadBoardState = () => {
-    const payload = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      elements,
-      settings,
-      theme,
-      viewport: { canvasPan, zoom },
-    }
+    const payload = currentBoardPayload()
     downloadBlob(
       new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' }),
       'tikz-sketch-board.json',
     )
   }
 
+  const downloadOverleafZip = () => {
+    const payload = currentBoardPayload()
+    const mainTex = buildTikz(elements, {
+      ...settings,
+      includeGrid: settings.exportGrid,
+      monochrome: settings.monochromeExport,
+      wrapFigure: false,
+      exportPreset: 'standalone',
+      journalStyle: settings.journalStyle,
+    })
+    const readme = [
+      '# TikZ Sketch Converter export',
+      '',
+      'Upload this zip to Overleaf or unzip it locally.',
+      '',
+      '- `main.tex` is a standalone compilable figure.',
+      '- `board.json` keeps the editable board state for TikZ Sketch Converter.',
+      '',
+      'Made by Guillem Moreno Garcia.',
+    ].join('\n')
+    const zip = createZipBlob([
+      { name: 'main.tex', content: mainTex },
+      { name: 'board.json', content: JSON.stringify(payload, null, 2) },
+      { name: 'README.md', content: readme },
+    ])
+    downloadBlob(zip, 'tikz-sketch-overleaf.zip')
+  }
+
   const copyShareUrl = async () => {
-    const payload = {
-      version: 1,
-      elements,
-      settings,
-      theme,
-      viewport: { canvasPan, zoom },
-    }
+    const payload = currentBoardPayload()
     const encoded = encodeBoardPayload(payload)
     const nextUrl = `${window.location.origin}${window.location.pathname}${window.location.search}#board=${encoded}`
     await navigator.clipboard.writeText(nextUrl)
@@ -2625,6 +3479,24 @@ function App() {
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
     clone.setAttribute('width', `${CANVAS.width}`)
     clone.setAttribute('height', `${CANVAS.height}`)
+    if (settings.exportTransparent) {
+      clone.querySelector('rect')?.setAttribute('fill', 'transparent')
+    }
+    if (settings.exportCrop && elements.some((element) => !element.hidden)) {
+      const bounds = mergeBounds(elements.filter((element) => !element.hidden).map(elementBounds))
+      const topLeft = worldToScreen({ x: bounds.minX, y: bounds.maxY })
+      const bottomRight = worldToScreen({ x: bounds.maxX, y: bounds.minY })
+      const margin = Number(settings.exportMargin) || 0
+      const crop = {
+        x: Math.max(0, Math.min(topLeft.x, bottomRight.x) - margin),
+        y: Math.max(0, Math.min(topLeft.y, bottomRight.y) - margin),
+        width: Math.min(CANVAS.width, Math.abs(bottomRight.x - topLeft.x) + margin * 2),
+        height: Math.min(CANVAS.height, Math.abs(bottomRight.y - topLeft.y) + margin * 2),
+      }
+      clone.setAttribute('viewBox', `${formatNumber(crop.x)} ${formatNumber(crop.y)} ${formatNumber(crop.width)} ${formatNumber(crop.height)}`)
+      clone.setAttribute('width', `${Math.max(1, Math.round(crop.width))}`)
+      clone.setAttribute('height', `${Math.max(1, Math.round(crop.height))}`)
+    }
 
     const style = document.createElementNS('http://www.w3.org/2000/svg', 'style')
     style.textContent = Array.from(document.styleSheets)
@@ -2663,13 +3535,15 @@ function App() {
         image.src = url
       })
 
-      const pixelRatio = 2
+      const pixelRatio = Math.max(1, Math.min(6, Number(settings.exportScale) || 2))
       const canvas = document.createElement('canvas')
       canvas.width = CANVAS.width * pixelRatio
       canvas.height = CANVAS.height * pixelRatio
       const context = canvas.getContext('2d')
-      context.fillStyle = '#ffffff'
-      context.fillRect(0, 0, canvas.width, canvas.height)
+      if (!settings.exportTransparent) {
+        context.fillStyle = '#ffffff'
+        context.fillRect(0, 0, canvas.width, canvas.height)
+      }
       context.scale(pixelRatio, pixelRatio)
       context.drawImage(image, 0, 0, CANVAS.width, CANVAS.height)
 
@@ -2679,6 +3553,61 @@ function App() {
       URL.revokeObjectURL(url)
     }
   }
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return
+      const key = event.key.toLowerCase()
+      const modifier = event.ctrlKey || event.metaKey
+
+      if (modifier && key === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) redo()
+        else undo()
+      } else if (modifier && key === 'y') {
+        event.preventDefault()
+        redo()
+      } else if (modifier && key === 'c') {
+        event.preventDefault()
+        copySelection()
+      } else if (modifier && key === 'v') {
+        event.preventDefault()
+        pasteSelection()
+      } else if (modifier && key === 'd') {
+        event.preventDefault()
+        duplicateSelection()
+      } else if (modifier && key === 'e') {
+        event.preventDefault()
+        downloadTikz()
+      } else if (key === 'delete' || key === 'backspace') {
+        event.preventDefault()
+        deleteSelected()
+      } else if (key === 'v') {
+        setTool('select')
+      } else if (key === 'h') {
+        setTool('pan')
+      } else if (key === 'l') {
+        setTool('line')
+      } else if (key === 'a') {
+        setTool('arrow')
+      } else if (key === 'p') {
+        setTool('pen')
+      } else if (key === 'g') {
+        setSettings((state) => ({ ...state, snap: !state.snap }))
+      } else if (key === 't') {
+        setSettings((state) => ({ ...state, terminalSnap: !state.terminalSnap }))
+      } else if (key === '+') {
+        setCanvasZoom(zoom + 0.1)
+      } else if (key === '-') {
+        setCanvasZoom(zoom - 0.1)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+    // Keyboard bindings intentionally track the latest render state; keeping this local avoids a wide useCallback refactor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoom])
 
   const renderPolyline = (points, className, element, halo = false) => {
     const screenPoints = points.map(worldToScreen).map((point) => `${point.x},${point.y}`).join(' ')
@@ -3577,6 +4506,66 @@ function App() {
     return null
   }
 
+  const renderSelectionHandles = (bounds) => {
+    const topLeft = worldToScreen({ x: bounds.minX, y: bounds.maxY })
+    const bottomRight = worldToScreen({ x: bounds.maxX, y: bounds.minY })
+    const rotatePoint = { x: bottomRight.x + 22, y: topLeft.y - 22 }
+    const startResize = (event) => {
+      event.stopPropagation()
+      const point = getWorldPoint(event)
+      svgRef.current?.setPointerCapture?.(event.pointerId)
+      setInteraction({
+        mode: 'resize-selection',
+        origin: point,
+        bounds,
+        originals: selectedElements,
+        snapshot: elements,
+        moved: false,
+      })
+    }
+    const startRotate = (event) => {
+      event.stopPropagation()
+      const point = getWorldPoint(event)
+      const center = boundsCenter(bounds)
+      svgRef.current?.setPointerCapture?.(event.pointerId)
+      setInteraction({
+        mode: 'rotate-selection',
+        startAngle: (Math.atan2(point.y - center.y, point.x - center.x) * 180) / Math.PI,
+        bounds,
+        originals: selectedElements,
+        snapshot: elements,
+        moved: false,
+      })
+    }
+
+    return (
+      <>
+        <rect
+          x={topLeft.x}
+          y={topLeft.y}
+          width={bottomRight.x - topLeft.x}
+          height={bottomRight.y - topLeft.y}
+          fill="none"
+          stroke="#111111"
+          strokeDasharray="3 3"
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+          pointerEvents="none"
+        />
+        <rect
+          x={bottomRight.x - 5}
+          y={bottomRight.y - 5}
+          width="10"
+          height="10"
+          className="resize-handle"
+          onPointerDown={startResize}
+        />
+        <line x1={bottomRight.x} y1={topLeft.y} x2={rotatePoint.x} y2={rotatePoint.y} stroke="#111111" strokeWidth="1" />
+        <circle cx={rotatePoint.x} cy={rotatePoint.y} r="6" className="rotate-handle" onPointerDown={startRotate} />
+      </>
+    )
+  }
+
   const gridLines = useMemo(() => {
     const lines = []
     const minX = Math.ceil(worldBounds.minX) - 24
@@ -3673,6 +4662,10 @@ function App() {
               <Download size={17} />
               Exportar .TeX
             </button>
+            <button type="button" className="ghost-button" onClick={downloadOverleafZip}>
+              <Download size={17} />
+              Overleaf ZIP
+            </button>
             <button type="button" className="ghost-button" onClick={downloadCanvasPng}>
               <Download size={17} />
               Exportar PNG
@@ -3739,20 +4732,32 @@ function App() {
                 </g>
               )}
               <g>
-                {elements.map((element) => (
-                  <g
-                    key={element.id}
-                    className={`canvas-element ${selectedIds.includes(element.id) ? 'is-selected' : ''}`}
-                    onPointerDown={(event) => handleElementPointerDown(event, element)}
-                    onContextMenu={(event) => handleElementContextMenu(event, element)}
-                  >
-                    {renderElementHitTarget(element)}
-                    {selectedIds.includes(element.id) && renderElementShape(element, true)}
-                    {renderElementShape(element)}
-                  </g>
-                ))}
+                {elements
+                  .filter((element) => !element.hidden)
+                  .map((element) => {
+                    const center = worldToScreen(boundsCenter(elementBounds(element)))
+                    const rotation = Number(element.rotation) || 0
+                    return (
+                      <g
+                        key={element.id}
+                        className={`canvas-element ${selectedIds.includes(element.id) ? 'is-selected' : ''} ${element.locked ? 'is-locked' : ''}`}
+                        transform={rotation ? `rotate(${-rotation} ${center.x} ${center.y})` : undefined}
+                        onPointerDown={(event) => handleElementPointerDown(event, element)}
+                        onContextMenu={(event) => handleElementContextMenu(event, element)}
+                      >
+                        {renderElementHitTarget(element)}
+                        {selectedIds.includes(element.id) && renderElementShape(element, true)}
+                        {renderElementShape(element)}
+                      </g>
+                    )
+                  })}
               </g>
               {draft && <g className="draft-layer">{renderElementShape(draft)}</g>}
+              {selectionBounds && (
+                <g className="selection-handles">
+                  {renderSelectionHandles(selectionBounds)}
+                </g>
+              )}
             </svg>
           </div>
           <div className="canvas-zoom-controls" aria-label="Zoom de lienzo">
@@ -3779,7 +4784,7 @@ function App() {
                 : 'Sin seleccion'}
           </span>
           <span>x {formatNumber(mouseWorld.x)} - y {formatNumber(mouseWorld.y)}</span>
-          <span>{settings.snap ? `Grid ${SNAP_STEP}` : 'Grid libre'} · {settings.terminalSnap ? 'terminales' : 'sin terminales'}</span>
+          <span>{settings.snap ? `Grid ${SNAP_STEP}` : 'Grid libre'} - {settings.terminalSnap ? 'terminales' : 'sin terminales'}</span>
         </footer>
       </section>
 
@@ -3940,6 +4945,77 @@ function App() {
               />
               <span>Cable 90°</span>
             </label>
+          </div>
+        </section>
+
+        <section className="panel-section layers-section">
+          <div className="panel-title">
+            <Layers size={18} />
+            <h2>Capas y layout</h2>
+          </div>
+          <label className="field">
+            <span>Buscar capa</span>
+            <input value={layerSearch} onChange={(event) => setLayerSearch(event.target.value)} placeholder="nombre, tipo, formula..." />
+          </label>
+          <div className="layer-action-grid">
+            <button type="button" className="ghost-button" onClick={() => alignSelected('left')} disabled={selectedIds.length < 2}>
+              Align L
+            </button>
+            <button type="button" className="ghost-button" onClick={() => alignSelected('hcenter')} disabled={selectedIds.length < 2}>
+              Center X
+            </button>
+            <button type="button" className="ghost-button" onClick={() => alignSelected('right')} disabled={selectedIds.length < 2}>
+              Align R
+            </button>
+            <button type="button" className="ghost-button" onClick={() => alignSelected('top')} disabled={selectedIds.length < 2}>
+              Top
+            </button>
+            <button type="button" className="ghost-button" onClick={() => alignSelected('vcenter')} disabled={selectedIds.length < 2}>
+              Center Y
+            </button>
+            <button type="button" className="ghost-button" onClick={() => alignSelected('bottom')} disabled={selectedIds.length < 2}>
+              Bottom
+            </button>
+            <button type="button" className="ghost-button" onClick={() => distributeSelected('x')} disabled={selectedIds.length < 3}>
+              Space X
+            </button>
+            <button type="button" className="ghost-button" onClick={() => distributeSelected('y')} disabled={selectedIds.length < 3}>
+              Space Y
+            </button>
+            <button type="button" className="ghost-button" onClick={makeSelectedSameSize} disabled={selectedIds.length < 2}>
+              Same size
+            </button>
+            <button type="button" className="ghost-button" onClick={groupSelected} disabled={selectedIds.length < 2}>
+              Group
+            </button>
+            <button type="button" className="ghost-button" onClick={ungroupSelected} disabled={!selectedIds.length}>
+              Ungroup
+            </button>
+          </div>
+          <div className="layer-list">
+            {visibleLayerElements.map((element) => (
+              <div key={element.id} className={`layer-row ${selectedIds.includes(element.id) ? 'is-active' : ''}`}>
+                <button type="button" className="layer-name" onClick={() => selectOnly(element.id)}>
+                  <strong>{elementDisplayName(element)}</strong>
+                  <small>
+                    {element.type}
+                    {element.groupId ? ` · ${element.groupId}` : ''}
+                  </small>
+                </button>
+                <button type="button" title="Visible" onClick={() => updateElementById(element.id, { hidden: !element.hidden })}>
+                  {element.hidden ? 'H' : 'V'}
+                </button>
+                <button type="button" title="Lock" onClick={() => updateElementById(element.id, { locked: !element.locked })}>
+                  {element.locked ? 'L' : 'U'}
+                </button>
+                <button type="button" title="Back" onClick={() => reorderElement(element.id, -1)}>
+                  ↓
+                </button>
+                <button type="button" title="Front" onClick={() => reorderElement(element.id, 1)}>
+                  ↑
+                </button>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -4151,6 +5227,9 @@ function App() {
             <button type="button" className="ghost-button full" onClick={addCustomLibrary}>
               Add custom block
             </button>
+            <button type="button" className="ghost-button full" onClick={importEditableTikzSnippet}>
+              Importar como objeto editable
+            </button>
           </details>
         </section>
 
@@ -4195,6 +5274,74 @@ function App() {
                   Edicion multiple activa: colores, grosor, discontinuidad y opciones TikZ se aplican a todos los objetos seleccionados.
                 </p>
               )}
+              <label className="field">
+                <span>Nombre en capas</span>
+                <input
+                  type="text"
+                  value={selectedElement.displayName ?? ''}
+                  placeholder={elementDisplayName(selectedElement)}
+                  onChange={(event) => updateSelected({ displayName: event.target.value })}
+                />
+              </label>
+              <div className="field-pair">
+                <label className="field">
+                  <span>Rotacion</span>
+                  <input
+                    type="number"
+                    step="1"
+                    value={selectedElement.rotation ?? 0}
+                    onChange={(event) => updateSelected({ rotation: Number(event.target.value) })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Grupo</span>
+                  <input
+                    type="text"
+                    value={selectedElement.groupId ?? ''}
+                    onChange={(event) => updateSelected({ groupId: event.target.value })}
+                  />
+                </label>
+              </div>
+              {selectionBounds && (
+                <div className="field-pair">
+                  <label className="field">
+                    <span>Ancho cm</span>
+                    <input
+                      type="number"
+                      step="0.05"
+                      value={formatNumber(selectionBounds.maxX - selectionBounds.minX)}
+                      onChange={(event) => {
+                        const width = Math.max(0.05, Number(event.target.value))
+                        const center = boundsCenter(selectionBounds)
+                        resizeElementToSelection({ minX: center.x - width / 2, maxX: center.x + width / 2, minY: selectionBounds.minY, maxY: selectionBounds.maxY })
+                      }}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Alto cm</span>
+                    <input
+                      type="number"
+                      step="0.05"
+                      value={formatNumber(selectionBounds.maxY - selectionBounds.minY)}
+                      onChange={(event) => {
+                        const height = Math.max(0.05, Number(event.target.value))
+                        const center = boundsCenter(selectionBounds)
+                        resizeElementToSelection({ minX: selectionBounds.minX, maxX: selectionBounds.maxX, minY: center.y - height / 2, maxY: center.y + height / 2 })
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+              <div className="toggle-grid">
+                <label className="toggle">
+                  <input type="checkbox" checked={selectedElement.hidden ?? false} onChange={(event) => updateSelected({ hidden: event.target.checked })} />
+                  <span>Oculto</span>
+                </label>
+                <label className="toggle">
+                  <input type="checkbox" checked={selectedElement.locked ?? false} onChange={(event) => updateSelected({ locked: event.target.checked })} />
+                  <span>Bloqueado</span>
+                </label>
+              </div>
               <label className="field">
                 <span>Reemplazar por objeto TikZ</span>
                 <select value="" onChange={(event) => replaceSelectedWithPreset(event.target.value)}>
@@ -4335,6 +5482,180 @@ function App() {
                     />
                     <span>Suavizar curva</span>
                   </label>
+                  <div className="object-config">
+                    <div className="toggle-grid">
+                      {[
+                        ['showXIntercepts', 'Cortes X'],
+                        ['showYIntercept', 'Corte Y'],
+                        ['showExtrema', 'Extremos'],
+                        ['showSamples', 'Muestras'],
+                        ['showTangent', 'Tangente'],
+                        ['showAsymptotes', 'Asintotas'],
+                        ['usePgfplots', 'PGFPlots'],
+                      ].map(([key, label]) => (
+                        <label key={key} className="toggle">
+                          <input
+                            type="checkbox"
+                            checked={functionOptionsFor(selectedElement)[key]}
+                            onChange={(event) => updateSelectedFunctionOptions({ [key]: event.target.checked })}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>Tipo eje</span>
+                        <select
+                          value={functionOptionsFor(selectedElement).axisType}
+                          onChange={(event) => updateSelectedFunctionOptions({ axisType: event.target.value })}
+                        >
+                          <option value="axis">axis</option>
+                          <option value="semilogxaxis">semilog x</option>
+                          <option value="semilogyaxis">semilog y</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Marcador</span>
+                        <select
+                          value={functionOptionsFor(selectedElement).markerStyle}
+                          onChange={(event) => updateSelectedFunctionOptions({ markerStyle: event.target.value })}
+                        >
+                          <option value="none">Sin marcador</option>
+                          <option value="*">*</option>
+                          <option value="square*">square</option>
+                          <option value="triangle*">triangle</option>
+                          <option value="x">x</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="toggle-grid">
+                      {[
+                        ['logX', 'Log X'],
+                        ['logY', 'Log Y'],
+                        ['clip', 'Clip axis'],
+                        ['errorBars', 'Error bars'],
+                      ].map(([key, label]) => (
+                        <label key={key} className="toggle">
+                          <input
+                            type="checkbox"
+                            checked={functionOptionsFor(selectedElement)[key]}
+                            onChange={(event) => updateSelectedFunctionOptions({ [key]: event.target.checked })}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>xlabel</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).xLabel}
+                          onChange={(event) => updateSelectedFunctionOptions({ xLabel: event.target.value })}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>ylabel</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).yLabel}
+                          onChange={(event) => updateSelectedFunctionOptions({ yLabel: event.target.value })}
+                        />
+                      </label>
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>Ticks X</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).xTicks}
+                          onChange={(event) => updateSelectedFunctionOptions({ xTicks: event.target.value })}
+                          placeholder="-2,0,2"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Ticks Y</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).yTicks}
+                          onChange={(event) => updateSelectedFunctionOptions({ yTicks: event.target.value })}
+                          placeholder="0,0.5,1"
+                        />
+                      </label>
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>Legend pos</span>
+                        <select
+                          value={functionOptionsFor(selectedElement).legendPos}
+                          onChange={(event) => updateSelectedFunctionOptions({ legendPos: event.target.value })}
+                        >
+                          <option value="north east">north east</option>
+                          <option value="north west">north west</option>
+                          <option value="south east">south east</option>
+                          <option value="south west">south west</option>
+                          <option value="outer north east">outer north east</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Colormap</span>
+                        <select
+                          value={functionOptionsFor(selectedElement).colormap}
+                          onChange={(event) => updateSelectedFunctionOptions({ colormap: event.target.value })}
+                        >
+                          <option value="">Sin colormap</option>
+                          <option value="viridis">viridis</option>
+                          <option value="hot">hot</option>
+                          <option value="cool">cool</option>
+                          <option value="blackwhite">blackwhite</option>
+                        </select>
+                      </label>
+                    </div>
+                    <label className="field">
+                      <span>Leyenda</span>
+                      <input
+                        value={functionOptionsFor(selectedElement).legend}
+                        onChange={(event) => updateSelectedFunctionOptions({ legend: event.target.value })}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Estilo tick labels</span>
+                      <input
+                        value={functionOptionsFor(selectedElement).tickLabelStyle}
+                        onChange={(event) => updateSelectedFunctionOptions({ tickLabelStyle: event.target.value })}
+                      />
+                    </label>
+                    {functionOptionsFor(selectedElement).errorBars && (
+                      <label className="field">
+                        <span>Opciones error bars</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).errorBarOptions}
+                          onChange={(event) => updateSelectedFunctionOptions({ errorBarOptions: event.target.value })}
+                        />
+                      </label>
+                    )}
+                    <label className="field">
+                      <span>Coordenadas CSV/tabla</span>
+                      <textarea
+                        className="snippet-input"
+                        value={functionOptionsFor(selectedElement).dataTable}
+                        onChange={(event) => updateSelectedFunctionOptions({ dataTable: event.target.value })}
+                        placeholder={'0,0\n1,0.8\n2,0.4'}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Opciones addplot</span>
+                      <input
+                        value={functionOptionsFor(selectedElement).plotOptions}
+                        onChange={(event) => updateSelectedFunctionOptions({ plotOptions: event.target.value })}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Opciones axis extra</span>
+                      <input
+                        value={functionOptionsFor(selectedElement).axisOptions}
+                        onChange={(event) => updateSelectedFunctionOptions({ axisOptions: event.target.value })}
+                        placeholder="minor tick num=1, ymin=-1..."
+                      />
+                    </label>
+                  </div>
                 </>
               )}
               {(selectedElement.type === 'diagram' || selectedElement.type === 'library') && (
@@ -4496,6 +5817,10 @@ function App() {
                               />
                             </label>
                           </div>
+                          <div className="net-summary">
+                            <strong>Topologia inferida</strong>
+                            <span>{inferredNets.length} nets con conexiones compartidas</span>
+                          </div>
                         </div>
                       )}
                       <div className="field-pair">
@@ -4641,6 +5966,69 @@ function App() {
             />
             <span>Envolver en figure</span>
           </label>
+          <div className="field-pair">
+            <label className="field">
+              <span>Preset export</span>
+              <select value={settings.exportPreset} onChange={(event) => setSettings((state) => ({ ...state, exportPreset: event.target.value }))}>
+                {exportPresetOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Estilo paper</span>
+              <select value={settings.journalStyle} onChange={(event) => setSettings((state) => ({ ...state, journalStyle: event.target.value }))}>
+                {journalStyleOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="field-pair">
+            <label className="field">
+              <span>Escala PNG/SVG</span>
+              <input
+                type="number"
+                min="1"
+                max="6"
+                step="0.5"
+                value={settings.exportScale}
+                onChange={(event) => setSettings((state) => ({ ...state, exportScale: Number(event.target.value) }))}
+              />
+            </label>
+            <label className="field">
+              <span>Margen export</span>
+              <input
+                type="number"
+                min="0"
+                max="120"
+                value={settings.exportMargin}
+                onChange={(event) => setSettings((state) => ({ ...state, exportMargin: Number(event.target.value) }))}
+              />
+            </label>
+          </div>
+          <div className="toggle-grid">
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={settings.exportTransparent}
+                onChange={(event) => setSettings((state) => ({ ...state, exportTransparent: event.target.checked }))}
+              />
+              <span>Fondo transparente</span>
+            </label>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={settings.exportCrop}
+                onChange={(event) => setSettings((state) => ({ ...state, exportCrop: event.target.checked }))}
+              />
+              <span>Crop contenido</span>
+            </label>
+          </div>
           {settings.wrapFigure && (
             <div className="field-pair">
               <label className="field">
@@ -4659,6 +6047,13 @@ function App() {
                   onChange={(event) => setSettings((state) => ({ ...state, label: event.target.value }))}
                 />
               </label>
+            </div>
+          )}
+          {tikzWarnings.length > 0 && (
+            <div className="warning-list">
+              {tikzWarnings.map((warning) => (
+                <span key={warning}>{warning}</span>
+              ))}
             </div>
           )}
           <textarea className="code-output" value={tikzCode} readOnly spellCheck="false" />
@@ -4681,6 +6076,10 @@ function App() {
             <button type="button" className="ghost-button" onClick={downloadCanvasSvg}>
               <Download size={17} />
               Exportar SVG
+            </button>
+            <button type="button" className="ghost-button" onClick={downloadOverleafZip}>
+              <Download size={17} />
+              Overleaf ZIP
             </button>
             <button type="button" className="ghost-button" onClick={copyShareUrl}>
               <Link size={17} />
@@ -4728,6 +6127,28 @@ function App() {
         </div>
       )}
 
+      {overlapCandidates && (
+        <div className="overlap-menu" style={{ left: overlapCandidates.x, top: overlapCandidates.y + 12 }}>
+          <span>{overlapCandidates.ids.length} objetos bajo el cursor</span>
+          {overlapCandidates.ids.map((id) => {
+            const element = elements.find((candidate) => candidate.id === id)
+            if (!element) return null
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  selectOnly(id)
+                  setOverlapCandidates(null)
+                }}
+              >
+                {elementDisplayName(element)}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {settingsOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setSettingsOpen(false)}>
           <section className="modal-panel" role="dialog" aria-modal="true" aria-label="Ajustes" onMouseDown={(event) => event.stopPropagation()}>
@@ -4758,6 +6179,16 @@ function App() {
                 />
                 <span>Rutar cables en angulos rectos</span>
               </label>
+              <label className="field">
+                <span>Modo de cable</span>
+                <select value={settings.routeMode} onChange={(event) => setSettings((state) => ({ ...state, routeMode: event.target.value }))}>
+                  {routeModeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="toggle">
                 <input
                   type="checkbox"
@@ -4766,6 +6197,18 @@ function App() {
                 />
                 <span>Incluir grid/ejes en TikZ</span>
               </label>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={settings.autosave}
+                  onChange={(event) => setSettings((state) => ({ ...state, autosave: event.target.checked }))}
+                />
+                <span>Autosave local</span>
+              </label>
+            </div>
+            <div className="recent-list">
+              <strong>Recent local boards</strong>
+              {recentBoards.length ? recentBoards.map((item, index) => <span key={`${item.savedAt}-${index}`}>{item.name} · {item.count} objetos</span>) : <span>No hay recientes todavia</span>}
             </div>
           </section>
         </div>
@@ -4796,6 +6239,26 @@ function App() {
                 <p>Arrastra objetos TikZ al lienzo, usa Shift+clic para seleccionar varios, y clic repetido sobre objetos superpuestos para ciclar la seleccion.</p>
                 <p>Para circuitos, activa snap a terminales, dibuja lineas con ruteo 90 grados y edita etiqueta, valor, terminales y orientacion desde Seleccion.</p>
                 <p>El resultado se puede copiar como codigo `.TeX`, exportar como `.tex`, PNG, SVG, JSON editable o URL compartible.</p>
+                <div className="gallery-actions">
+                  <button type="button" className="ghost-button" onClick={() => loadGalleryExample('qpsk')}>
+                    QPSK chain
+                  </button>
+                  <button type="button" className="ghost-button" onClick={() => loadGalleryExample('ofdm')}>
+                    OFDM chain
+                  </button>
+                  <button type="button" className="ghost-button" onClick={() => loadGalleryExample('mimo')}>
+                    MIMO link
+                  </button>
+                  <button type="button" className="ghost-button" onClick={() => loadGalleryExample('superhet')}>
+                    Superhet RX
+                  </button>
+                  <button type="button" className="ghost-button" onClick={() => loadGalleryExample('matched')}>
+                    Matched filter
+                  </button>
+                  <button type="button" className="ghost-button" onClick={() => loadGalleryExample('rf')}>
+                    RF two-port
+                  </button>
+                </div>
               </div>
             )}
             {helpTab === 'updates' && (

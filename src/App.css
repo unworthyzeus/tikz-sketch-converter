@@ -819,6 +819,85 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
+.layers-section {
+  max-height: 420px;
+}
+
+.layer-action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.layer-action-grid .ghost-button {
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.layer-list {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.layer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(4, 28px);
+  gap: 4px;
+  align-items: center;
+  padding: 5px;
+  border: 1px solid #d8dce4;
+  border-radius: 3px;
+  background: #fbfbfc;
+}
+
+.layer-row.is-active {
+  border-color: #111111;
+  background: #f5f6f8;
+}
+
+.layer-name {
+  display: grid;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #111111;
+  text-align: left;
+  cursor: pointer;
+}
+
+.layer-name strong,
+.layer-name small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-name strong {
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.layer-name small {
+  color: #5d6675;
+  font-size: 10px;
+}
+
+.layer-row > button:not(.layer-name) {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d8dce4;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #303846;
+  font-size: 10px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
 .object-config {
   display: grid;
   gap: 12px;
@@ -832,6 +911,25 @@ textarea:focus-visible {
   border: 1px solid #d8dce4;
   border-radius: 3px;
   background: #fbfbfc;
+}
+
+.net-summary,
+.recent-list,
+.warning-list {
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid #d8dce4;
+  border-radius: 3px;
+  background: #fbfbfc;
+  color: #4b5563;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.warning-list {
+  color: #8c2f39;
+  background: #fff7f7;
 }
 
 .selection-note {
@@ -895,6 +993,22 @@ textarea:focus-visible {
   cursor: grab;
 }
 
+.canvas-element.is-locked {
+  cursor: not-allowed;
+}
+
+.resize-handle,
+.rotate-handle {
+  fill: #ffffff;
+  stroke: #111111;
+  stroke-width: 1.2px;
+  cursor: nwse-resize;
+}
+
+.rotate-handle {
+  cursor: grab;
+}
+
 .context-menu {
   position: fixed;
   z-index: 20;
@@ -906,6 +1020,48 @@ textarea:focus-visible {
   border-radius: 4px;
   background: #ffffff;
   box-shadow: 0 18px 48px rgb(17 17 17 / 0.18);
+}
+
+.overlap-menu {
+  position: fixed;
+  z-index: 21;
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  max-width: 260px;
+  padding: 8px;
+  border: 1px solid #c7ccd6;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgb(17 17 17 / 0.16);
+}
+
+.overlap-menu span {
+  color: #5d6675;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.overlap-menu button {
+  min-height: 28px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #111111;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.overlap-menu button:hover {
+  background: #f5f6f8;
+}
+
+.gallery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .context-menu button,
@@ -1042,7 +1198,9 @@ html[data-theme='dark'] .context-menu button,
 html[data-theme='dark'] .context-menu label,
 html[data-theme='dark'] .context-menu select,
 html[data-theme='dark'] .modal-panel,
-html[data-theme='dark'] .help-copy p {
+html[data-theme='dark'] .help-copy p,
+html[data-theme='dark'] .layer-name,
+html[data-theme='dark'] .overlap-menu button {
   color: #edf0f4;
 }
 
@@ -1057,7 +1215,11 @@ html[data-theme='dark'] .selection-note,
 html[data-theme='dark'] .library-button small,
 html[data-theme='dark'] .preset-button small,
 html[data-theme='dark'] .symbol-count,
-html[data-theme='dark'] .symbol-button small {
+html[data-theme='dark'] .symbol-button small,
+html[data-theme='dark'] .layer-name small,
+html[data-theme='dark'] .overlap-menu span,
+html[data-theme='dark'] .net-summary,
+html[data-theme='dark'] .recent-list {
   color: #a5adbb;
 }
 
@@ -1079,9 +1241,14 @@ html[data-theme='dark'] .zoom-button,
 html[data-theme='dark'] .canvas-zoom-controls,
 html[data-theme='dark'] .icon-danger,
 html[data-theme='dark'] .context-menu,
+html[data-theme='dark'] .overlap-menu,
 html[data-theme='dark'] .modal-panel,
 html[data-theme='dark'] .help-tabs button,
-html[data-theme='dark'] .circuit-config {
+html[data-theme='dark'] .circuit-config,
+html[data-theme='dark'] .layer-row,
+html[data-theme='dark'] .layer-row > button:not(.layer-name),
+html[data-theme='dark'] .net-summary,
+html[data-theme='dark'] .recent-list {
   border-color: #343b46;
   background: #1d222b;
 }
@@ -1115,6 +1282,11 @@ html[data-theme='dark'] .preset-button:hover,
 html[data-theme='dark'] .library-button:hover,
 html[data-theme='dark'] .filter-chip:hover,
 html[data-theme='dark'] .context-menu button:hover {
+  border-color: #edf0f4;
+  background: #252c37;
+}
+
+html[data-theme='dark'] .layer-row.is-active {
   border-color: #edf0f4;
   background: #252c37;
 }
