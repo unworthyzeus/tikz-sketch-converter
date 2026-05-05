@@ -16,6 +16,17 @@ test('functionLegendEntries exposes every visible series with a useful label', (
   ])
 })
 
+test('functionLegendEntries returns no entries when the requested maximum is zero', () => {
+  const series = [
+    { series: { id: 'primary', expression: 'sin(x)' } },
+    { series: { id: 'secondary', expression: 'cos(x)' } },
+    { series: { id: 'third', expression: 'tan(x)' } },
+  ]
+
+  assert.deepEqual(functionLegendEntries(series, 0), [])
+  assert.deepEqual(functionLegendEntries(series, -2), [])
+})
+
 test('curveMarkerPoints samples finite curve points without flooding the preview', () => {
   const points = Array.from({ length: 25 }, (_, index) => ({ x: index, y: index * index }))
 
@@ -28,6 +39,13 @@ test('curveMarkerPoints samples finite curve points without flooding the preview
     curveMarkerPoints([null, { x: 1, y: 1 }, null, { x: 2, y: 4 }], 'diamond*', 6).map((point) => point.x),
     [1, 2],
   )
+})
+
+test('curveMarkerPoints returns no preview markers when the requested maximum is zero', () => {
+  const points = Array.from({ length: 5 }, (_, index) => ({ x: index, y: index }))
+
+  assert.deepEqual(curveMarkerPoints(points, '*', 0), [])
+  assert.deepEqual(curveMarkerPoints(points, '*', -3), [])
 })
 
 test('markerGlyphParts maps PGFPlots marker styles to SVG drawing primitives', () => {

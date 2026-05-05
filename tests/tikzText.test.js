@@ -23,3 +23,15 @@ test('formatTikzNodeText preserves explicit LaTeX-only labels', () => {
 
   assert.equal(formatTikzNodeText('\\alpha_1'), '\\alpha_1')
 })
+
+test('formatTikzNodeText escapes literal text around LaTeX commands', () => {
+  const { formatTikzNodeText } = loadTikzTextHelpers()
+
+  assert.equal(formatTikzNodeText('Gain \\alpha_1 & 50%'), 'Gain \\alpha_1 \\& 50\\%')
+})
+
+test('formatTikzNodeText treats an unmatched dollar as literal text', () => {
+  const { formatTikzNodeText } = loadTikzTextHelpers()
+
+  assert.equal(formatTikzNodeText('Cost $5 & rising'), 'Cost \\$5 \\& rising')
+})

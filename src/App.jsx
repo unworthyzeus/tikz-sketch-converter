@@ -556,7 +556,7 @@ const defaultFunctionOptions = {
   series: [],
   yScale: 1,
   axisOptions: '',
-  plotOptions: 'line width=0.75pt',
+  plotOptions: '',
 }
 
 const exportPresetOptions = [
@@ -1443,7 +1443,6 @@ const mathFunctionHelpers = {
   max: Math.max,
   min: Math.min,
   mod: (value, modulus) => ((value % modulus) + modulus) % modulus,
-  nin: Math.min,
   pow: Math.pow,
   rad: (value) => (value * Math.PI) / 180,
   rect: (value) => (Math.abs(value) <= 0.5 ? 1 : 0),
@@ -2110,18 +2109,28 @@ function escapeTikzText(text) {
 }
 
 function formatTikzTextSegment(text) {
-  if (!text) return ''
-  if (/\\/.test(text)) return text
-  return escapeTikzText(text)
+  const value = `${text ?? ''}`
+  if (!value) return ''
+  if (!/\\/.test(value)) return escapeTikzText(value)
+
+  const latexFragments = []
+  const protectedText = value.replace(
+    /\\(?:[A-Za-z]+|.)(?:\{[^{}]*\})*(?:[_^](?:\{[^{}]*\}|[A-Za-z0-9]+))*/g,
+    (fragment) => {
+      const token = `@@${latexFragments.length}@@`
+      latexFragments.push(fragment)
+      return token
+    },
+  )
+
+  return escapeTikzText(protectedText).replace(/@@(\d+)@@/g, (_, index) => latexFragments[Number(index)] ?? '')
 }
 
 function formatTikzNodeText(text) {
   const value = `${text ?? ''}`
-  if (!value.includes('$')) return /\\/.test(value) ? value : escapeTikzText(value)
-
-  const parts = value.split(/(\$[^$]+\$)/g)
-  if (parts.length === 1) return value
-  return parts
+  if (!/\$[^$]+\$/.test(value)) return formatTikzTextSegment(value)
+  return value
+    .split(/(\$[^$]+\$)/g)
     .map((part) => (part.startsWith('$') && part.endsWith('$') ? part : formatTikzTextSegment(part)))
     .join('')
 }
@@ -2132,7 +2141,7 @@ function indentLatex(lines, spaces = 2) {
 }
 
 function safeLatexLabel(label) {
-  return label
+  return `${label ?? ''}`
     .trim()
     .replace(/\s+/g, '-')
     .replace(/[^A-Za-z0-9:_.-]/g, '')
@@ -3223,7 +3232,7 @@ function buildTikz(elements, exportOptions = {}) {
   const monochrome = exportOptions.monochrome ?? true
   const exportPreset = exportOptions.exportPreset ?? 'figure'
   const wrapFigure = exportPreset === 'snippet' ? false : exportOptions.wrapFigure ?? false
-  const figureCaption = exportOptions.caption?.trim() ?? ''
+  const figureCaption = formatTikzNodeText(`${exportOptions.caption ?? ''}`.trim())
   const figureLabel = safeLatexLabel(exportOptions.label ?? '')
   const drawableElements = elements.filter((element) => !element.hidden)
   const requirements = collectRequirements(drawableElements)

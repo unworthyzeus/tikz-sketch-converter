@@ -758,10 +758,10 @@ export const libraryPaletteItems = [
     ['plot-constellation', 'Plots', 'Constellation', 'I/Q symbol points', 'plot', ['\\begin{axis}[width=3.5cm,height=3.5cm,axis lines=middle,xlabel={$I$},ylabel={$Q$},xmin=-1.5,xmax=1.5,ymin=-1.5,ymax=1.5,tick label style={font=\\scriptsize}]', '  \\addplot[only marks, mark=*, draw=__COLOR__] coordinates {(-1,-1) (-1,1) (1,-1) (1,1)};', '\\end{axis}']],
     ['plot-ber', 'Plots', 'BER curve', 'Semilog BER plot', 'plot', ['\\begin{semilogyaxis}[width=4.8cm,height=3.2cm,axis lines=left,xlabel={SNR},ylabel={BER},grid=major,tick label style={font=\\scriptsize}]', '  \\addplot[draw=__COLOR__, mark=*] coordinates {(0,1e-1) (4,2e-2) (8,2e-3) (12,1e-5)};', '\\end{semilogyaxis}']],
     ['plot-eye', 'Plots', 'Eye diagram', 'Overlaid symbol traces', 'plot', ['\\begin{axis}[width=4.5cm,height=2.8cm,axis lines=left,xlabel={time},ylabel={amp},tick label style={font=\\scriptsize}]', '  \\addplot[draw=__COLOR__!55, smooth] coordinates {(0,-1) (.5,1) (1,-1) (1.5,1) (2,-1)};', '  \\addplot[draw=__COLOR__, smooth] coordinates {(0,1) (.5,-1) (1,1) (1.5,-1) (2,1)};', '\\end{axis}']],
-    ['plot-spectrogram', 'Plots', 'Spectrogram heatmap', 'Time-frequency matrix', 'plot', ['\\begin{axis}[width=4.8cm,height=3.2cm,xlabel={time},ylabel={frequency},view={0}{90},colorbar,tick label style={font=\\scriptsize}]', '  \\addplot3[surf, shader=interp] coordinates {(0,0,0.1) (1,0,0.8) (2,0,0.2) (0,1,0.2) (1,1,1) (2,1,0.4) (0,2,0.1) (1,2,0.6) (2,2,0.9)};', '\\end{axis}'], ['colormaps']],
+    ['plot-spectrogram', 'Plots', 'Spectrogram heatmap', 'Time-frequency matrix', 'plot', ['\\begin{axis}[width=4.8cm,height=3.2cm,xlabel={time},ylabel={frequency},view={0}{90},colorbar,tick label style={font=\\scriptsize}]', '  \\addplot3[surf, shader=interp] coordinates {(0,0,0.1) (1,0,0.8) (2,0,0.2) (0,1,0.2) (1,1,1) (2,1,0.4) (0,2,0.1) (1,2,0.6) (2,2,0.9)};', '\\end{axis}'], [], ['colormaps']],
     ['plot-frequency-response', 'Plots', 'Frequency response', 'Magnitude and phase axis', 'plot', ['\\begin{axis}[width=4.8cm,height=3.2cm,axis lines=left,xlabel={$\\omega$},ylabel={$|H|$},grid=major,tick label style={font=\\scriptsize}]', '  \\addplot[draw=__COLOR__, smooth] coordinates {(0,0.1) (1,0.85) (2,1) (3,0.65) (4,0.2)};', '\\end{axis}']],
     ['plot-impulse-response', 'Plots', 'Impulse response', 'Discrete stem plot', 'plot', ['\\begin{axis}[width=4.8cm,height=3.2cm,axis lines=left,xlabel={$n$},ylabel={$h[n]$},ycomb,tick label style={font=\\scriptsize}]', '  \\addplot[draw=__COLOR__, mark=*] coordinates {(0,1) (1,.55) (2,.3) (3,.16) (4,.08)};', '\\end{axis}']],
-  ].map(([id, group, title, description, preview, snippet, libraries = []]) => ({
+  ].map(([id, group, title, description, preview, snippet, libraries = [], pgfplotsLibraries = []]) => ({
     id,
     group,
     title,
@@ -775,6 +775,7 @@ export const libraryPaletteItems = [
     preview,
     packages: group === 'Circuit' ? ['\\usepackage[american]{circuitikz}'] : group === 'Plots' ? ['\\usepackage{pgfplots}'] : ['\\usepackage{tikz}'],
     libraries: group === 'Telecom' ? ['arrows.meta', 'positioning', ...libraries] : libraries,
+    pgfplotsLibraries,
     afterPreamble: group === 'Plots' ? ['\\pgfplotsset{compat=1.18}'] : [],
     snippet,
   })),

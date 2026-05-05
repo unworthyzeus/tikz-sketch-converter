@@ -4,6 +4,7 @@ function cleanText(value) {
 }
 
 export function objectPreviewBadges(preset = {}, config = {}, maxBadges = 4) {
+  const badgeLimit = Number.isFinite(+maxBadges) ? Math.max(0, Math.floor(+maxBadges)) : 4
   const primaryLabel = cleanText(config.autoLabel ? config.circuitLabel : config.label)
   const entries = []
 
@@ -23,7 +24,7 @@ export function objectPreviewBadges(preset = {}, config = {}, maxBadges = 4) {
     if (text) entries.push({ key, text })
   })
 
-  return entries.slice(0, maxBadges)
+  return entries.slice(0, badgeLimit)
 }
 
 export function terminalPreviewLabels(value = '', count = 0) {

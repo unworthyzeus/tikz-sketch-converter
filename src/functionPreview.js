@@ -1,5 +1,6 @@
 export function functionLegendEntries(displaySeries = [], maxEntries = 6) {
-  return displaySeries.slice(0, maxEntries).map(({ series }, index) => {
+  const entryLimit = Number.isFinite(+maxEntries) ? Math.max(0, Math.floor(+maxEntries)) : 6
+  return displaySeries.slice(0, entryLimit).map(({ series }, index) => {
     const legend = `${series?.legend ?? ''}`.trim()
     const expression = `${series?.expression ?? ''}`.trim()
     return {
@@ -15,13 +16,15 @@ export function functionLegendEntries(displaySeries = [], maxEntries = 6) {
 
 export function curveMarkerPoints(points = [], markerStyle = 'none', maxMarkers = 8) {
   if (!markerStyle || markerStyle === 'none') return []
+  const markerLimit = Number.isFinite(+maxMarkers) ? Math.max(0, Math.floor(+maxMarkers)) : 8
+  if (markerLimit === 0) return []
 
   const finitePoints = points.filter(
     (point) => point && Number.isFinite(point.x) && Number.isFinite(point.y),
   )
-  if (finitePoints.length <= maxMarkers) return finitePoints
+  if (finitePoints.length <= markerLimit) return finitePoints
 
-  const markerCount = Math.max(1, maxMarkers)
+  const markerCount = markerLimit
   if (markerCount === 1) return [finitePoints[Math.floor(finitePoints.length / 2)]]
 
   const indexes = new Set()

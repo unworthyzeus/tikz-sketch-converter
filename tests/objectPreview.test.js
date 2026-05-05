@@ -32,6 +32,18 @@ test('objectPreviewBadges falls back to object title and trims empty metadata', 
   ])
 })
 
+test('objectPreviewBadges returns no badges when the requested maximum is zero', () => {
+  const config = {
+    paperRole: 'encoder',
+    datasetTag: 'mnist',
+    referenceName: 'fig1',
+    netName: 'N1',
+  }
+
+  assert.deepEqual(objectPreviewBadges({ title: 'Transformer' }, config, 0), [])
+  assert.deepEqual(objectPreviewBadges({ title: 'Transformer' }, config, -2), [])
+})
+
 test('terminalPreviewLabels uses configured terminal names when available', () => {
   assert.deepEqual(terminalPreviewLabels('in, out', 2), ['in', 'out'])
   assert.deepEqual(terminalPreviewLabels('gate; drain\nsource', 3), ['gate', 'drain', 'source'])
