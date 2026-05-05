@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { curveMarkerPoints, functionLegendEntries, markerGlyphParts } from '../src/functionPreview.js'
+import {
+  curveMarkerPoints,
+  functionLegendEntries,
+  functionSeriesIsRenderable,
+  markerGlyphParts,
+} from '../src/functionPreview.js'
 
 test('functionLegendEntries exposes every visible series with a useful label', () => {
   const entries = functionLegendEntries([
@@ -56,4 +61,10 @@ test('markerGlyphParts maps PGFPlots marker styles to SVG drawing primitives', (
   assert.equal(markerGlyphParts('triangle*', { x: 10, y: 20, size: 4 })[0].type, 'path')
   assert.equal(markerGlyphParts('x', { x: 10, y: 20, size: 4 }).length, 2)
   assert.deepEqual(markerGlyphParts('none', { x: 10, y: 20, size: 4 }), [])
+})
+
+test('functionSeriesIsRenderable allows table-only series', () => {
+  assert.equal(functionSeriesIsRenderable({ expression: '', dataTable: '0,0\n1,1' }), true)
+  assert.equal(functionSeriesIsRenderable({ expression: 'sin(x)', dataTable: '' }), true)
+  assert.equal(functionSeriesIsRenderable({ expression: '  ', dataTable: '  ' }), false)
 })

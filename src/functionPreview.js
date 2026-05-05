@@ -87,3 +87,7 @@ export function markerGlyphParts(markerStyle, point) {
 
   return []
 }
+
+export function functionSeriesIsRenderable(series = {}) {
+  return Boolean(`${series.expression ?? ''}`.trim() || `${series.dataTable ?? ''}`.trim())
+}

@@ -39,11 +39,13 @@ import {
 } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 import './App.css'
+import { circuitDrawTikzOptions } from './circuitOptions'
 import { writeClipboardText } from './clipboard'
 import { moveElementBy } from './elementTransforms'
 import { createEditorKeydownHandler } from './editorKeyboard'
-import { curveMarkerPoints, functionLegendEntries, markerGlyphParts } from './functionPreview'
+import { curveMarkerPoints, functionLegendEntries, functionSeriesIsRenderable, markerGlyphParts } from './functionPreview'
 import { latexSymbolGroups } from './latexSymbols'
+import { configDrivenRequirements } from './libraryRequirements'
 import { objectPreviewBadges, terminalPreviewLabels } from './objectPreview'
 import {
   buildPaperChecklist,
@@ -54,10 +56,12 @@ import {
   resolvePaperComposer,
   subfigureLayouts,
 } from './paperComposer'
+import { advancedPgfplotsAxisOptions } from './pgfplotsOptions'
 import { previewKindForPreset } from './previewKinds'
 import { rasterSafeSvgText } from './svgRasterExport'
 import { libraryPresets } from './tikzLibraryPresets'
 import { libraryPaletteItems } from './tikzPaletteItems'
+import { splitTikzOptions } from './tikzOptions'
 import { clampCanvasZoom, initialCanvasZoom } from './viewportDefaults'
 
 let katexRenderer = null
@@ -279,7 +283,7 @@ const objectConfigSections = [
     title: 'Shape options',
     domains: ['shape', 'flow', 'geometry', 'annotation', 'paper'],
     fields: [
-      { key: 'shapeVariant', label: 'Variant', type: 'select', options: [...libraryNodeShapeOptions, { value: 'cloud', label: 'Cloud' }, { value: 'cylinder', label: 'Cylinder' }, { value: 'callout', label: 'Callout' }] },
+      { key: 'shapeVariant', label: 'Variant', type: 'select', options: [...libraryNodeShapeOptions, { value: 'cloud', label: 'Cloud' }, { value: 'cylinder', label: 'Cylinder' }, { value: 'callout', label: 'Callout' }, { value: 'split', label: 'Split' }] },
       { key: 'shapeAspect', label: 'Aspect', type: 'number', min: 0.2, max: 6, step: 0.05 },
       { key: 'cloudPuffs', label: 'Cloud puffs', type: 'number', min: 4, max: 24, step: 1 },
       { key: 'splitParts', label: 'Split parts', type: 'number', min: 1, max: 8, step: 1 },
@@ -327,8 +331,13 @@ const objectConfigSections = [
       { key: 'ylabel', label: 'ylabel', type: 'text', placeholder: '$y$' },
       { key: 'plotTitle', label: 'Title', type: 'text' },
       { key: 'legendPos', label: 'Legend pos', type: 'select', options: legendPositionOptions },
+      { key: 'legendColumns', label: 'Legend cols', type: 'number', min: 1, max: 8, step: 1 },
       { key: 'markStyle', label: 'Mark', type: 'select', options: markStyleOptions },
       { key: 'plotSmooth', label: 'Smooth', type: 'checkbox' },
+      { key: 'axisEqual', label: 'Axis equal image', type: 'checkbox' },
+      { key: 'minorTicks', label: 'Minor ticks', type: 'number', min: 0, max: 20, step: 1 },
+      { key: 'reverseX', label: 'Reverse X', type: 'checkbox' },
+      { key: 'reverseY', label: 'Reverse Y', type: 'checkbox' },
       { key: 'colormap', label: 'Colormap', type: 'text', placeholder: 'viridis, hot, blackwhite' },
       { key: 'xtick', label: 'xtick', type: 'text', placeholder: '0,1,2' },
       { key: 'ytick', label: 'ytick', type: 'text', placeholder: '-1,0,1' },
@@ -545,7 +554,12 @@ const defaultFunctionOptions = {
   yTicks: '',
   tickLabelStyle: 'font=\\scriptsize',
   legendPos: 'north east',
+  legendColumns: 1,
   colormap: '',
+  axisEqual: false,
+  minorTicks: 0,
+  reverseX: false,
+  reverseY: false,
   errorBars: false,
   errorBarOptions: '/pgfplots/error bars/y dir=both, /pgfplots/error bars/y explicit',
   clip: true,
@@ -905,8 +919,13 @@ function defaultLibraryConfig(preset = {}) {
     ylabel: '',
     plotTitle: '',
     legendPos: '',
+    legendColumns: 1,
     markStyle: '',
     plotSmooth: false,
+    axisEqual: false,
+    minorTicks: 0,
+    reverseX: false,
+    reverseY: false,
     colormap: '',
     xtick: '',
     ytick: '',
@@ -971,7 +990,7 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
     textWidth: numberInRange(config.textWidth, 0, 0, 12),
     shapeVariant: enumValue(
       config.shapeVariant,
-      [...libraryNodeShapeOptions, { value: 'cloud' }, { value: 'cylinder' }, { value: 'callout' }],
+      [...libraryNodeShapeOptions, { value: 'cloud' }, { value: 'cylinder' }, { value: 'callout' }, { value: 'split' }],
       'rounded',
     ),
     shapeAspect: numberInRange(config.shapeAspect, 1.7, 0.2, 6),
@@ -1002,8 +1021,13 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
     yMode: enumValue(config.yMode, axisModeOptions, 'linear'),
     samples: Math.round(numberInRange(config.samples, 120, 2, 1000)),
     legendPos: enumValue(config.legendPos, legendPositionOptions, ''),
+    legendColumns: Math.round(numberInRange(config.legendColumns, 1, 1, 8)),
     markStyle: enumValue(config.markStyle, markStyleOptions, ''),
     plotSmooth: Boolean(config.plotSmooth),
+    axisEqual: Boolean(config.axisEqual),
+    minorTicks: Math.round(numberInRange(config.minorTicks, 0, 0, 20)),
+    reverseX: Boolean(config.reverseX),
+    reverseY: Boolean(config.reverseY),
     matrixDelimiter: enumValue(config.matrixDelimiter, matrixDelimiterOptions, 'none'),
     rowSep: numberInRange(config.rowSep, 0, 0, 4),
     columnSep: numberInRange(config.columnSep, 0, 0, 4),
@@ -1648,7 +1672,7 @@ function editableFunctionSeriesFor(element) {
 function functionSeriesFor(element) {
   return [
     primaryFunctionSeries(element),
-    ...editableFunctionSeriesFor(element).filter((series) => series.enabled && series.expression),
+    ...editableFunctionSeriesFor(element).filter((series) => series.enabled && functionSeriesIsRenderable(series)),
   ]
 }
 
@@ -2720,13 +2744,6 @@ function tikzNodeShapeOptions(shape) {
   return shapes[shape] ?? shapes.rounded
 }
 
-function splitOptionList(value = '') {
-  return `${value}`
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
-
 function libraryCommonTikzOptions(config) {
   const options = []
   if (config.lineCap !== 'butt') options.push(`line cap=${config.lineCap}`)
@@ -2774,10 +2791,11 @@ function libraryAxisTikzOptions(config) {
   if (config.ylabel.trim()) options.push(`ylabel={${formatTikzNodeText(config.ylabel)}}`)
   if (config.plotTitle.trim()) options.push(`title={${formatTikzNodeText(config.plotTitle)}}`)
   if (config.legendPos) options.push(`legend pos=${config.legendPos}`)
+  options.push(...advancedPgfplotsAxisOptions(config))
   if (config.xtick.trim()) options.push(`xtick={${config.xtick.trim()}}`)
   if (config.ytick.trim()) options.push(`ytick={${config.ytick.trim()}}`)
   if (config.colormap.trim()) options.push(`colormap/${config.colormap.trim()}`)
-  options.push(...splitOptionList(config.axisExtraOptions))
+  options.push(...splitTikzOptions(config.axisExtraOptions))
   return options
 }
 
@@ -2787,7 +2805,7 @@ function libraryAddPlotTikzOptions(config) {
   if (config.samples !== 120) options.push(`samples=${config.samples}`)
   if (config.markStyle) options.push(`mark=${config.markStyle}`)
   if (config.plotSmooth) options.push('smooth')
-  options.push(...splitOptionList(config.addplotExtraOptions))
+  options.push(...splitTikzOptions(config.addplotExtraOptions))
   return options
 }
 
@@ -2865,6 +2883,7 @@ function buildConfiguredLibrarySnippet(preset, element) {
   if (circuitComponent) {
     const end = circuitEndPoint(config)
     const terminals = circuitTerminalOption(config.terminalStyle)
+    const drawOptions = circuitDrawTikzOptions(config, formatNumber)
     const componentOptions = [circuitComponent]
     if (terminals) componentOptions.push(terminals)
     const printedLabel = config.autoLabel ? config.circuitLabel : config.label
@@ -2880,7 +2899,7 @@ function buildConfiguredLibrarySnippet(preset, element) {
     if (config.invertComponent) componentOptions.push('invert')
 
     return [
-      `\\draw[draw=__COLOR__, line width=0.65pt] (0,0) to[${componentOptions.join(',')}] (${formatNumber(
+      `\\draw[${drawOptions.join(', ')}] (0,0) to[${componentOptions.join(',')}] (${formatNumber(
         end.x,
       )},${formatNumber(end.y)});`,
     ]
@@ -2963,13 +2982,15 @@ function buildConfiguredLibrarySnippet(preset, element) {
     callout: `rectangle callout, callout relative pointer={(${formatNumber(config.calloutPointerX)},${formatNumber(
       config.calloutPointerY,
     )})}`,
+    split: `rectangle split, rectangle split parts=${config.splitParts}`,
   }
   const shape = configuredShapeOptions[config.shapeVariant] ?? simpleNodeShapes[preset.id]
   if (!shape) return null
 
   const nodeName = preset.id === 'annotation-callout-arrow' ? 'note' : 'obj'
+  const nodeContent = config.shapeVariant === 'split' ? rectangleSplitNodeContent(config) : label
   const lines = [
-    `\\node[${shape}, draw=__COLOR__, __FILL_STYLE__, line width=0.6pt, minimum width=${width}cm, minimum height=${height}cm, inner sep=${formatNumber(config.innerSep)}pt] (${nodeName}) at (0,0) {${label}};`,
+    `\\node[${shape}, draw=__COLOR__, __FILL_STYLE__, line width=0.6pt, minimum width=${width}cm, minimum height=${height}cm, inner sep=${formatNumber(config.innerSep)}pt] (${nodeName}) at (0,0) {${nodeContent}};`,
   ]
 
   if (preset.id === 'annotation-callout-arrow') {
@@ -3036,6 +3057,18 @@ function buildExtraNodeTikz(element, color, fill, scopeStretch = { x: 1, y: 1 })
   })
 
   return lines
+}
+
+const rectangleSplitPartNames = ['second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth']
+
+function rectangleSplitNodeContent(config) {
+  return splitNodeLabels(config.blockLabels || config.label, config.splitParts)
+    .map((entry, index) => {
+      const text = formatTikzNodeText(entry)
+      if (index === 0) return text
+      return `\\nodepart{${rectangleSplitPartNames[index - 1]}}${text}`
+    })
+    .join('')
 }
 
 function replaceLibraryTokens(line, element, color, fill) {
@@ -3212,10 +3245,14 @@ function collectRequirements(elements) {
 
     if (element.type === 'library') {
       const preset = getLibraryPreset(element)
+      const config = getLibraryConfig(element, preset)
+      const drivenRequirements = configDrivenRequirements(config)
       preset.packages?.forEach((item) => packages.add(item))
       preset.libraries?.forEach((item) => libraries.add(item))
       preset.pgfplotsLibraries?.forEach((item) => pgfplotsLibraries.add(item))
       preset.afterPreamble?.forEach((item) => afterPreamble.add(item))
+      drivenRequirements.libraries.forEach((item) => libraries.add(item))
+      drivenRequirements.pgfplotsLibraries.forEach((item) => pgfplotsLibraries.add(item))
     }
   })
 
@@ -3418,6 +3455,10 @@ function buildTikz(elements, exportOptions = {}) {
           functionOptions.yTicks?.trim() ? `ytick={${functionOptions.yTicks.trim()}}` : '',
           functionOptions.tickLabelStyle?.trim() ? `tick label style={${functionOptions.tickLabelStyle.trim()}}` : '',
           hasFunctionLegend ? `legend pos=${functionOptions.legendPos || 'north east'}` : '',
+          ...advancedPgfplotsAxisOptions({
+            ...functionOptions,
+            legendColumns: hasFunctionLegend ? functionOptions.legendColumns : 1,
+          }),
           functionOptions.colormap?.trim() ? `colormap/${functionOptions.colormap.trim()}` : '',
           functionOptions.clip ? 'clip=true' : 'clip=false',
           functionOptions.axisOptions?.trim() ?? '',
@@ -8803,6 +8844,9 @@ function App() {
                         ['logY', 'Log Y'],
                         ['clip', 'Clip axis'],
                         ['errorBars', 'Error bars'],
+                        ['axisEqual', 'Axis equal'],
+                        ['reverseX', 'Invertir X'],
+                        ['reverseY', 'Invertir Y'],
                       ].map(([key, label]) => (
                         <label key={key} className="toggle">
                           <input
@@ -8874,6 +8918,30 @@ function App() {
                           <option value="cool">cool</option>
                           <option value="blackwhite">blackwhite</option>
                         </select>
+                      </label>
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>Minor ticks</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="20"
+                          step="1"
+                          value={functionOptionsFor(selectedElement).minorTicks}
+                          onChange={(event) => updateSelectedFunctionOptions({ minorTicks: Number(event.target.value) })}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Legend cols</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="8"
+                          step="1"
+                          value={functionOptionsFor(selectedElement).legendColumns}
+                          onChange={(event) => updateSelectedFunctionOptions({ legendColumns: Number(event.target.value) })}
+                        />
                       </label>
                     </div>
                     <label className="field">
