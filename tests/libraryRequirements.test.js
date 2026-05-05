@@ -16,6 +16,8 @@ test('configDrivenRequirements adds TikZ libraries required by object styling op
 test('configDrivenRequirements adds shape and PGFPlots libraries for advanced variants', () => {
   assert.deepEqual(configDrivenRequirements({ shapeVariant: 'cloud' }).libraries, ['shapes.symbols'])
   assert.deepEqual(configDrivenRequirements({ shapeVariant: 'cylinder' }).libraries, ['shapes.geometric'])
+  assert.deepEqual(configDrivenRequirements({ shapeVariant: 'diamond' }).libraries, ['shapes.geometric'])
+  assert.deepEqual(configDrivenRequirements({ shapeVariant: 'ellipse' }).libraries, ['shapes.geometric'])
   assert.deepEqual(configDrivenRequirements({ shapeVariant: 'split' }).libraries, ['shapes.multipart'])
   assert.deepEqual(configDrivenRequirements({ colormap: 'viridis' }).pgfplotsLibraries, ['colormaps'])
 })

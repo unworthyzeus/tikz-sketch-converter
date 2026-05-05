@@ -52,6 +52,7 @@ import {
   libraryProfileFieldKeysForPreset,
   libraryProfileSectionSpecsForPreset,
 } from './libraryObjectProfiles'
+import { applyLibraryPlotDataTable, libraryAddPlotTikzOptions } from './libraryPlotOptions'
 import { shouldUseConfiguredLibrarySnippet } from './librarySnippetConfig'
 import { objectPreviewBadges, terminalPreviewLabels } from './objectPreview'
 import {
@@ -388,6 +389,7 @@ const objectConfigSections = [
       { key: 'ytick', label: 'ytick', type: 'text', placeholder: '-1,0,1' },
       { key: 'axisExtraOptions', label: 'Axis extra', type: 'text', placeholder: 'minor tick num=1' },
       { key: 'addplotExtraOptions', label: 'Addplot extra', type: 'text', placeholder: 'forget plot, thick' },
+      { key: 'errorBars', label: 'Error bars', type: 'checkbox' },
       { key: 'errorBarOptions', label: 'Error bars', type: 'text', placeholder: '/pgfplots/error bars/y dir=both' },
       { key: 'dataTable', label: 'Data table', type: 'textarea', placeholder: '0,0\n1,0.8\n2,0.4' },
     ],
@@ -1003,6 +1005,7 @@ function defaultLibraryConfig(preset = {}) {
     ytick: '',
     axisExtraOptions: '',
     addplotExtraOptions: '',
+    errorBars: false,
     errorBarOptions: '/pgfplots/error bars/y dir=both, /pgfplots/error bars/y explicit',
     dataTable: '',
     matrixDelimiter: 'none',
@@ -1110,6 +1113,7 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
     pointMeta: enumValue(config.pointMeta, pointMetaOptions, ''),
     stemPlot: Boolean(config.stemPlot),
     constPlot: Boolean(config.constPlot),
+    errorBars: Boolean(config.errorBars),
     matrixDelimiter: enumValue(config.matrixDelimiter, matrixDelimiterOptions, 'none'),
     rowSep: numberInRange(config.rowSep, 0, 0, 4),
     columnSep: numberInRange(config.columnSep, 0, 0, 4),
@@ -2893,20 +2897,6 @@ function libraryAxisTikzOptions(config) {
   return options
 }
 
-function libraryAddPlotTikzOptions(config) {
-  const options = []
-  if (config.plotDomain.trim()) options.push(`domain=${config.plotDomain.trim()}`)
-  if (config.samples !== 120) options.push(`samples=${config.samples}`)
-  if (config.markStyle) options.push(`mark=${config.markStyle}`)
-  if (config.plotSmooth) options.push('smooth')
-  if (config.shader) options.push(`shader=${config.shader}`)
-  if (config.pointMeta) options.push(`point meta=${config.pointMeta}`)
-  if (config.stemPlot) options.push('ycomb')
-  if (config.constPlot) options.push('const plot')
-  options.push(...splitTikzOptions(config.addplotExtraOptions))
-  return options
-}
-
 function libraryMatrixTikzOptions(config) {
   const options = []
   const delimiters = {
@@ -2943,6 +2933,7 @@ function applyLibraryConfigToSnippet(lines, preset, element) {
   let nextLines = lines
   nextLines = injectTikzOptionsIntoLines(nextLines, axisOptions, ['\\begin{axis}', '\\begin{polaraxis}', '\\begin{semilogyaxis}', '\\begin{groupplot}'])
   nextLines = injectTikzOptionsIntoLines(nextLines, addPlotOptions, ['\\addplot3', '\\addplot+', '\\addplot'])
+  nextLines = applyLibraryPlotDataTable(nextLines, config.dataTable)
   nextLines = injectTikzOptionsIntoLines(nextLines, matrixOptions, ['\\matrix'])
   nextLines = injectTikzOptionsIntoLines(nextLines, ganttOptions, ['\\begin{ganttchart}'])
   nextLines = injectTikzOptionsIntoLines(nextLines, nodeOptions, ['\\node'])

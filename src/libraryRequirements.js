@@ -12,6 +12,8 @@ export function configDrivenRequirements(config = {}) {
   if (config.shapeVariant === 'callout') libraries.add('shapes.callouts')
   if (config.shapeVariant === 'cloud') libraries.add('shapes.symbols')
   if (config.shapeVariant === 'cylinder') libraries.add('shapes.geometric')
+  if (config.shapeVariant === 'diamond') libraries.add('shapes.geometric')
+  if (config.shapeVariant === 'ellipse') libraries.add('shapes.geometric')
   if (config.shapeVariant === 'split') libraries.add('shapes.multipart')
 
   if (hasText(config.colormap)) pgfplotsLibraries.add('colormaps')
