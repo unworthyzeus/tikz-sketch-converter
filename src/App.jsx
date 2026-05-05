@@ -46,6 +46,7 @@ import { createEditorKeydownHandler } from './editorKeyboard'
 import { curveMarkerPoints, functionLegendEntries, functionSeriesIsRenderable, markerGlyphParts } from './functionPreview'
 import { latexSymbolGroups } from './latexSymbols'
 import { configDrivenRequirements } from './libraryRequirements'
+import { shouldUseConfiguredLibrarySnippet } from './librarySnippetConfig'
 import { objectPreviewBadges, terminalPreviewLabels } from './objectPreview'
 import {
   buildPaperChecklist,
@@ -2879,6 +2880,9 @@ function buildConfiguredLibrarySnippet(preset, element) {
   const width = formatNumber(Math.max(0.7, 1.35 * config.stretchX))
   const height = formatNumber(Math.max(0.35, 0.62 * config.stretchY))
   const circuitComponent = circuitTikzComponent(preset, config)
+  if (!shouldUseConfiguredLibrarySnippet(preset, config, { hasCircuitComponent: Boolean(circuitComponent) })) {
+    return null
+  }
 
   if (circuitComponent) {
     const end = circuitEndPoint(config)

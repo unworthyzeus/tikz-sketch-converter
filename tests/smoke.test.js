@@ -79,6 +79,11 @@ test('object resize uses the bottom-right handle without recentering', () => {
 
 test('telecommunications and circuit palettes include requested domains', () => {
   assert.match(paletteSource, /telecom-transmitter-chain/)
+  assert.match(paletteSource, /telecom-ofdm-transmitter/)
+  assert.match(paletteSource, /telecom-ofdm-receiver/)
+  assert.match(paletteSource, /telecom-awgn-channel/)
+  assert.match(paletteSource, /telecom-mimo-link/)
+  assert.match(paletteSource, /rf-front-end/)
   assert.match(paletteSource, /telecom-qpsk-mod/)
   assert.match(paletteSource, /telecom-superhet/)
   assert.match(paletteSource, /telecom-matched-filter/)
@@ -90,6 +95,10 @@ test('telecommunications and circuit palettes include requested domains', () => 
   assert.match(paletteSource, /circuit-controlled-vsource/)
   assert.match(paletteSource, /circuit-transmission-line/)
   assert.match(paletteSource, /circuit-voltmeter/)
+  assert.match(paletteSource, /circuit-opamp-lowpass/)
+  assert.match(paletteSource, /circuit-common-emitter/)
+  assert.match(paletteSource, /circuit-inverting-amplifier/)
+  assert.match(paletteSource, /circuit-rlc-parallel/)
 })
 
 test('circuit palette ids and previews resolve to circuit symbols', () => {
