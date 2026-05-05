@@ -8,10 +8,10 @@ Made by Guillem Moreno Garcia.
 
 - SVG canvas with a publication-oriented visual style, grid, axes, snapping, selection, moving, undo, and redo.
 - Tools for freehand paths, lines, configurable arrows, rectangles, ellipses, editable text labels, sweep erasing, and math functions.
-- Function sampler for expressions such as `sin(x)`, `cos(2*x)`, `0.2*x^2 - 2`, `exp(-x^2)`.
+- Function sampler for expressions such as `sin(x)`, `cos(2*x)`, `0.2*x^2 - 2`, `exp(-x^2)`, with PGFPlots axis export modes including semilog, loglog, and polar.
 - Insertable diagram blocks for circuits, Gantt schedules, ML pipelines, and dense DL networks.
 - LaTeX symbol picker with searchable Greek letters, relations, AMS operators, arrows, calculus symbols, set notation, delimiters, accents, alphabets, units, and ML notation. Accent commands wrap the current label or selected symbol instead of inserting a fixed placeholder.
-- Searchable, draggable TikZ object palette with concrete items such as resistors, capacitors, sources, diodes, transistors, op amps, logic gates, PGFPlots axes, error bars, scatter plots, bar charts, histograms, heatmaps, automata states, matrices, commutative diagrams, flowchart shapes, neural layers, CNN stacks, transformer blocks, pipelines, Gantt bars, Petri nets, trees, angle markers, Venn diagrams, and brace annotations.
+- Searchable, draggable TikZ object palette with concrete items such as resistors, capacitors, sources, diodes, transistors, op amps, logic gates, PGFPlots axes, error bars, constellation modulation presets, scatter plots, bar charts, histograms, heatmaps, automata states, matrices, commutative diagrams, flowchart shapes, neural layers, CNN stacks, transformer blocks, pipelines, Gantt bars, Petri nets, trees, angle markers, Venn diagrams, and brace annotations.
 - Each dropped object carries its required package and TikZ library dependencies automatically, including `circuitikz`, `pgfplots`, `arrows.meta`, `positioning`, `matrix`, `automata`, `angles`, `quotes`, and `decorations.pathreplacing`.
 - Custom TikZ snippet blocks for any package or library that is not represented by a built-in preset yet.
 - Live TikZ generation with monochrome export, optional `figure` wrapper, caption/label fields, copy, and prominent `.TeX` download.

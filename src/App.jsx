@@ -52,7 +52,13 @@ import {
   libraryProfileFieldKeysForPreset,
   libraryProfileSectionSpecsForPreset,
 } from './libraryObjectProfiles'
-import { applyLibraryPlotDataTable, libraryAddPlotTikzOptions } from './libraryPlotOptions'
+import {
+  applyLibraryPlotDataTable,
+  applyLibraryPlotModulation,
+  applyPgfplotsAxisMode,
+  functionPgfplotsAxisSettings,
+  libraryAddPlotTikzOptions,
+} from './libraryPlotOptions'
 import { shouldUseConfiguredLibrarySnippet } from './librarySnippetConfig'
 import { objectPreviewBadges, terminalPreviewLabels } from './objectPreview'
 import {
@@ -2931,8 +2937,20 @@ function applyLibraryConfigToSnippet(lines, preset, element) {
   const graphOptions = libraryGraphTikzOptions(config)
   const ganttOptions = libraryGanttTikzOptions(config)
   let nextLines = lines
-  nextLines = injectTikzOptionsIntoLines(nextLines, axisOptions, ['\\begin{axis}', '\\begin{polaraxis}', '\\begin{semilogyaxis}', '\\begin{groupplot}'])
+  nextLines = applyPgfplotsAxisMode(nextLines, config, {
+    xMode: Object.hasOwn(element.config ?? {}, 'xMode'),
+    yMode: Object.hasOwn(element.config ?? {}, 'yMode'),
+  })
+  nextLines = injectTikzOptionsIntoLines(nextLines, axisOptions, [
+    '\\begin{axis}',
+    '\\begin{semilogxaxis}',
+    '\\begin{semilogyaxis}',
+    '\\begin{loglogaxis}',
+    '\\begin{polaraxis}',
+    '\\begin{groupplot}',
+  ])
   nextLines = injectTikzOptionsIntoLines(nextLines, addPlotOptions, ['\\addplot3', '\\addplot+', '\\addplot'])
+  nextLines = applyLibraryPlotModulation(nextLines, preset.id, config)
   nextLines = applyLibraryPlotDataTable(nextLines, config.dataTable)
   nextLines = injectTikzOptionsIntoLines(nextLines, matrixOptions, ['\\matrix'])
   nextLines = injectTikzOptionsIntoLines(nextLines, ganttOptions, ['\\begin{ganttchart}'])
@@ -3521,6 +3539,7 @@ function buildTikz(elements, exportOptions = {}) {
       const graphBounds = elementBounds(element)
       const features = functionFeaturePoints(element)
       const primaryColor = ensureColor(element.stroke)
+      const axisSettings = functionPgfplotsAxisSettings(functionOptions)
       const featureMarks = [
         ...(functionOptions.showXIntercepts ? features.xIntercepts.slice(0, 8).map((point) => ({ ...point, label: '$x_0$' })) : []),
         ...(functionOptions.showYIntercept && features.yIntercept ? [{ ...features.yIntercept, label: '$y_0$' }] : []),
@@ -3541,8 +3560,8 @@ function buildTikz(elements, exportOptions = {}) {
         const axisOptions = [
           `width=${functionOptions.axisWidth ?? '7cm'}`,
           `height=${functionOptions.axisHeight ?? '4.5cm'}`,
-          functionOptions.axisType === 'semilogxaxis' || functionOptions.logX ? 'xmode=log' : '',
-          functionOptions.axisType === 'semilogyaxis' || functionOptions.logY ? 'ymode=log' : '',
+          axisSettings.xMode === 'log' ? 'xmode=log' : '',
+          axisSettings.yMode === 'log' ? 'ymode=log' : '',
           `xlabel={${formatTikzNodeText(functionOptions.xLabel)}}`,
           `ylabel={${formatTikzNodeText(functionOptions.yLabel)}}`,
           functionOptions.showGraphGrid && functionOptions.gridStyle !== 'none' ? `grid=${functionOptions.gridStyle}` : '',
@@ -3558,7 +3577,7 @@ function buildTikz(elements, exportOptions = {}) {
           functionOptions.clip ? 'clip=true' : 'clip=false',
           functionOptions.axisOptions?.trim() ?? '',
         ].filter(Boolean)
-        pictureLines.push(`${linePrefix}\\begin{axis}[${axisOptions.join(', ')}]`)
+        pictureLines.push(`${linePrefix}\\begin{${axisSettings.environment}}[${axisOptions.join(', ')}]`)
         const makeAddplotOptions = (series) =>
           [
             `draw=${ensureColor(series.color)}`,
@@ -3605,7 +3624,7 @@ function buildTikz(elements, exportOptions = {}) {
             pictureLines.push(`${linePrefix}  \\draw[densely dashed, color=gray!55] (axis cs:${formatNumber(point.x)},${formatNumber(worldBounds.minY)}) -- (axis cs:${formatNumber(point.x)},${formatNumber(worldBounds.maxY)});`)
           })
         }
-        pictureLines.push(`${linePrefix}\\end{axis}`)
+        pictureLines.push(`${linePrefix}\\end{${axisSettings.environment}}`)
       } else {
         if (functionOptions.showGraphFrame) {
           pictureLines.push(
@@ -8930,6 +8949,8 @@ function App() {
                           <option value="axis">axis</option>
                           <option value="semilogxaxis">semilog x</option>
                           <option value="semilogyaxis">semilog y</option>
+                          <option value="loglogaxis">loglog</option>
+                          <option value="polaraxis">polar</option>
                         </select>
                       </label>
                       <label className="field">

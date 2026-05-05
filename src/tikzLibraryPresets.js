@@ -313,7 +313,7 @@ export const libraryPresets = [
     height: 2.4,
     preview: 'shapes',
     packages: ['\\usepackage{tikz}'],
-    libraries: ['shapes.geometric', 'shapes.symbols', 'shapes.multipart'],
+    libraries: ['shapes.geometric', 'shapes.symbols', 'shapes.multipart', 'positioning'],
     snippet: [
       '\\node[draw=__COLOR__, diamond, aspect=2] at (0,0) {Decision};',
       '\\node[draw=__COLOR__, cloud, cloud puffs=8, right=1.7cm] at (0,0) {Cloud};',
@@ -331,7 +331,7 @@ export const libraryPresets = [
     height: 2.4,
     preview: 'decorations',
     packages: ['\\usepackage{tikz}'],
-    libraries: ['decorations.pathmorphing', 'decorations.pathreplacing', 'decorations.markings'],
+    libraries: ['decorations.pathmorphing', 'decorations.pathreplacing', 'decorations.markings', 'arrows.meta', 'positioning'],
     snippet: [
       '\\draw[draw=__COLOR__, decorate, decoration={snake, amplitude=1.2mm, segment length=4mm}] (0,0) -- (4,0);',
       '\\draw[draw=__COLOR__, decorate, decoration={brace, amplitude=5pt}] (0,-0.7) -- (4,-0.7) node[midway, below=6pt] {span};',

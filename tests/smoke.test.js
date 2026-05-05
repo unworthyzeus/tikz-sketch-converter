@@ -135,6 +135,8 @@ test('library objects expose advanced configurable TikZ metadata', () => {
   assert.match(appSource, /Metadata exportable/)
   assert.match(appSource, /applyLibraryConfigToSnippet/)
   assert.match(appSource, /libraryAxisTikzOptions/)
+  assert.match(appSource, /applyPgfplotsAxisMode/)
+  assert.match(appSource, /applyLibraryPlotModulation/)
   assert.match(appSource, /libraryObjectMetadata/)
   assert.match(appSource, /spiceLike/)
 })

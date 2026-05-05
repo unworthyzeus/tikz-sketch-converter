@@ -16,6 +16,9 @@ export function configDrivenRequirements(config = {}) {
   if (config.shapeVariant === 'ellipse') libraries.add('shapes.geometric')
   if (config.shapeVariant === 'split') libraries.add('shapes.multipart')
 
+  if (Number(config.extraNodes) > 0 && config.connectNodes !== false) libraries.add('arrows.meta')
+  if (config.nodeShape === 'diamond' || config.nodeShape === 'ellipse') libraries.add('shapes.geometric')
+
   if (hasText(config.colormap)) pgfplotsLibraries.add('colormaps')
 
   return {

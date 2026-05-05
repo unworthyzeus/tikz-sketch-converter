@@ -21,3 +21,23 @@ test('configDrivenRequirements adds shape and PGFPlots libraries for advanced va
   assert.deepEqual(configDrivenRequirements({ shapeVariant: 'split' }).libraries, ['shapes.multipart'])
   assert.deepEqual(configDrivenRequirements({ colormap: 'viridis' }).pgfplotsLibraries, ['colormaps'])
 })
+
+test('configDrivenRequirements covers generated extra node connectors and shapes', () => {
+  assert.deepEqual(
+    configDrivenRequirements({
+      extraNodes: 2,
+      connectNodes: true,
+      nodeShape: 'diamond',
+    }).libraries,
+    ['arrows.meta', 'shapes.geometric'],
+  )
+
+  assert.deepEqual(
+    configDrivenRequirements({
+      extraNodes: 2,
+      connectNodes: false,
+      nodeShape: 'ellipse',
+    }).libraries,
+    ['shapes.geometric'],
+  )
+})

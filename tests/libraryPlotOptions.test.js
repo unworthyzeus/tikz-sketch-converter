@@ -2,6 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   applyLibraryPlotDataTable,
+  applyLibraryPlotModulation,
+  applyPgfplotsAxisMode,
+  functionPgfplotsAxisSettings,
+  pgfplotsAxisEnvironmentForModes,
   libraryAddPlotTikzOptions,
   parseLibraryPlotDataTable,
 } from '../src/libraryPlotOptions.js'
@@ -88,4 +92,81 @@ test('libraryAddPlotTikzOptions emits error bars only when enabled', () => {
       errorBarOptions: '/pgfplots/error bars/y dir=both',
     }).includes('/pgfplots/error bars/y dir=both'),
   )
+})
+
+test('pgfplotsAxisEnvironmentForModes switches semilog environments from explicit axis modes', () => {
+  assert.equal(
+    pgfplotsAxisEnvironmentForModes('semilogyaxis', { xMode: 'linear', yMode: 'linear' }, { yMode: true }),
+    'axis',
+  )
+  assert.equal(
+    pgfplotsAxisEnvironmentForModes('semilogyaxis', { xMode: 'log', yMode: 'log' }, { xMode: true }),
+    'loglogaxis',
+  )
+  assert.equal(
+    pgfplotsAxisEnvironmentForModes('semilogyaxis', { xMode: 'linear', yMode: 'log' }, {}),
+    'semilogyaxis',
+  )
+  assert.equal(
+    pgfplotsAxisEnvironmentForModes('polaraxis', { xMode: 'log', yMode: 'log' }, { xMode: true, yMode: true }),
+    'polaraxis',
+  )
+})
+
+test('applyPgfplotsAxisMode rewrites matching begin and end environments together', () => {
+  assert.deepEqual(
+    applyPgfplotsAxisMode(
+      ['\\begin{semilogyaxis}[grid=major]', '  \\addplot coordinates {(0,1)};', '\\end{semilogyaxis}'],
+      { xMode: 'log', yMode: 'log' },
+      { xMode: true },
+    ),
+    ['\\begin{loglogaxis}[grid=major]', '  \\addplot coordinates {(0,1)};', '\\end{loglogaxis}'],
+  )
+})
+
+test('functionPgfplotsAxisSettings maps function log toggles to the exported environment', () => {
+  assert.deepEqual(functionPgfplotsAxisSettings({ axisType: 'axis', logX: true, logY: true }), {
+    environment: 'loglogaxis',
+    xMode: 'log',
+    yMode: 'log',
+  })
+  assert.deepEqual(functionPgfplotsAxisSettings({ axisType: 'semilogyaxis', logX: true, logY: false }), {
+    environment: 'loglogaxis',
+    xMode: 'log',
+    yMode: 'log',
+  })
+  assert.deepEqual(functionPgfplotsAxisSettings({ axisType: 'polaraxis', logX: true, logY: true }), {
+    environment: 'polaraxis',
+    xMode: 'log',
+    yMode: 'log',
+  })
+})
+
+test('applyLibraryPlotModulation rewrites constellation coordinates from the modulation control', () => {
+  assert.deepEqual(
+    applyLibraryPlotModulation(
+      [
+        '\\begin{axis}[axis equal image]',
+        '  \\addplot[only marks, mark=*] coordinates {(-1,-1) (-1,1) (1,-1) (1,1)};',
+        '\\end{axis}',
+      ],
+      'plot-constellation',
+      { modulation: 'BPSK' },
+    ),
+    [
+      '\\begin{axis}[axis equal image]',
+      '  \\addplot[only marks, mark=*] coordinates {(-1,0) (1,0)};',
+      '\\end{axis}',
+    ],
+  )
+
+  const qam16 = applyLibraryPlotModulation(
+    ['\\addplot[only marks] coordinates {(-1,-1) (-1,1) (1,-1) (1,1)};'],
+    'plot-constellation',
+    { modulation: '16-QAM' },
+  )[0]
+
+  assert.equal((qam16.match(/\([^)]*\)/g) ?? []).length, 16)
+  assert.match(qam16, /\(-3,-3\)/)
+  assert.match(qam16, /\(3,3\)/)
 })

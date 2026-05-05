@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { libraryPaletteItems } from '../src/tikzPaletteItems.js'
+import { libraryPresets } from '../src/tikzLibraryPresets.js'
 
 function paletteItem(id) {
   return libraryPaletteItems.find((item) => item.id === id)
@@ -83,4 +84,48 @@ test('paper-ready plot and object snippets expose exact configuration tokens', (
   assert.match(snippetText('plot-ber'), /E_b\/N_0/)
   assert.match(snippetText('plot-eye'), /UI/)
   assert.match(snippetText('plot-spectrogram'), /colormap/)
+})
+
+test('palette and preset metadata declare snippet-driven TikZ libraries exactly once', () => {
+  const libraryRules = [
+    ['arrows.meta', /Stealth|Latex|Triangle|\\arrow\{Stealth\}/],
+    ['circuits.logic.IEC', /gate IEC/],
+    ['automata', /\bstate\b/],
+    ['matrix', /matrix of/],
+    ['fit', /\bfit=\{/],
+    ['positioning', /\b(?:right|left|above|below)\s*=\s*[-.\d][^,\]]*/],
+    ['decorations.pathreplacing', /decoration=\{brace|decorate[^\\]*(?:brace)/],
+    ['patterns', /\bpattern=/],
+    ['shadows', /drop shadow/],
+    ['shapes.callouts', /callout/],
+    ['shapes.geometric', /\b(?:diamond|ellipse|cylinder)\b/],
+    ['shapes.multipart', /rectangle split/],
+    ['shapes.symbols', /\bcloud\b/],
+    ['graphs', /\\graph\b/],
+    ['mindmap', /mindmap/],
+    ['spy', /spy using outlines/],
+    ['backgrounds', /on background layer/],
+  ]
+
+  const metadataIssues = []
+  const allItems = [...libraryPaletteItems, ...libraryPresets]
+  const metadataKeys = ['packages', 'libraries', 'pgfplotsLibraries', 'afterPreamble']
+
+  allItems.forEach((item) => {
+    metadataKeys.forEach((key) => {
+      const values = item[key] ?? []
+      const duplicates = [...new Set(values.filter((value, index) => values.indexOf(value) !== index))]
+      duplicates.forEach((value) => metadataIssues.push(`${item.id} duplicates ${key}: ${value}`))
+    })
+
+    const snippet = item.snippet?.join('\n') ?? ''
+    const libraries = new Set(item.libraries ?? [])
+    libraryRules.forEach(([library, pattern]) => {
+      if (pattern.test(snippet) && !libraries.has(library)) {
+        metadataIssues.push(`${item.id} missing ${library}`)
+      }
+    })
+  })
+
+  assert.deepEqual(metadataIssues, [])
 })

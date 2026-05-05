@@ -50,6 +50,83 @@ function tableLinesFor(prefix, rows) {
   ]
 }
 
+const axisModeEnvironments = new Set(['axis', 'semilogxaxis', 'semilogyaxis', 'loglogaxis'])
+const pgfplotsEnvironments = new Set([...axisModeEnvironments, 'polaraxis'])
+
+function hasExplicitAxisMode(explicitModes = {}) {
+  return Boolean(explicitModes.xMode || explicitModes.yMode)
+}
+
+export function pgfplotsAxisEnvironmentForModes(currentEnvironment, config = {}, explicitModes = {}) {
+  if (!axisModeEnvironments.has(currentEnvironment) || !hasExplicitAxisMode(explicitModes)) {
+    return currentEnvironment
+  }
+
+  const xLog = config.xMode === 'log'
+  const yLog = config.yMode === 'log'
+  if (xLog && yLog) return 'loglogaxis'
+  if (xLog) return 'semilogxaxis'
+  if (yLog) return 'semilogyaxis'
+  return 'axis'
+}
+
+export function applyPgfplotsAxisMode(lines, config = {}, explicitModes = {}) {
+  if (!hasExplicitAxisMode(explicitModes)) return lines
+
+  return lines.map((line) =>
+    line.replace(/\\(begin|end)\{(axis|semilogxaxis|semilogyaxis|loglogaxis)\}/g, (match, boundary, environment) => {
+      const nextEnvironment = pgfplotsAxisEnvironmentForModes(environment, config, explicitModes)
+      return `\\${boundary}{${nextEnvironment}}`
+    }),
+  )
+}
+
+export function functionPgfplotsAxisSettings(options = {}) {
+  const requestedEnvironment = pgfplotsEnvironments.has(options.axisType) ? options.axisType : 'axis'
+  const xMode = options.logX || requestedEnvironment === 'semilogxaxis' || requestedEnvironment === 'loglogaxis' ? 'log' : 'linear'
+  const yMode = options.logY || requestedEnvironment === 'semilogyaxis' || requestedEnvironment === 'loglogaxis' ? 'log' : 'linear'
+
+  return {
+    environment: pgfplotsAxisEnvironmentForModes(requestedEnvironment, { xMode, yMode }, { xMode: true, yMode: true }),
+    xMode,
+    yMode,
+  }
+}
+
+function constellationCoordinatesForModulation(value = '') {
+  const key = `${value ?? ''}`.trim().toUpperCase().replace(/\s+/g, '').replaceAll('_', '-')
+  if (key === 'BPSK' || key === '2-PSK') return [[-1, 0], [1, 0]]
+  if (key === 'QPSK' || key === '4-QAM' || key === '4QAM') return [[-1, -1], [-1, 1], [1, -1], [1, 1]]
+  if (key === '8-PSK' || key === '8PSK') {
+    return Array.from({ length: 8 }, (_, index) => {
+      const angle = (index * Math.PI) / 4
+      return [Math.cos(angle), Math.sin(angle)]
+    })
+  }
+  if (key === '16-QAM' || key === '16QAM') {
+    return [-3, -1, 1, 3].flatMap((x) => [-3, -1, 1, 3].map((y) => [x, y]))
+  }
+  return null
+}
+
+function coordinateList(points) {
+  return points.map(([x, y]) => `(${formatNumber(x)},${formatNumber(y)})`).join(' ')
+}
+
+export function applyLibraryPlotModulation(lines, presetId, config = {}) {
+  if (presetId !== 'plot-constellation') return lines
+
+  const coordinates = constellationCoordinatesForModulation(config.modulation)
+  if (!coordinates?.length) return lines
+
+  let replaced = false
+  return lines.map((line) => {
+    if (replaced || !/\\addplot(?:3|\+)?\b/.test(line) || !line.includes('coordinates')) return line
+    replaced = true
+    return line.replace(/coordinates\s*\{[^}]*\}/, `coordinates {${coordinateList(coordinates)}}`)
+  })
+}
+
 export function applyLibraryPlotDataTable(lines, dataTable) {
   const rows = parseLibraryPlotDataTable(dataTable)
   if (!rows.length) return lines
