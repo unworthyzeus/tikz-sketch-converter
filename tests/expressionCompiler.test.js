@@ -23,3 +23,19 @@ test('compileExpression rejects mistyped helper names instead of aliasing them',
 
   assert.throws(() => compileExpression('nin(2, x)'), /Nombre no permitido: nin/)
 })
+
+test('compileExpression treats a leading negative base with mathematical exponent precedence', () => {
+  const { compileExpression } = loadExpressionCompiler()
+
+  assert.equal(compileExpression('-x^2')(2), -4)
+  assert.equal(compileExpression('(-x)^2')(2), 4)
+  assert.equal(compileExpression('-sin(x)^2')(Math.PI / 2), -1)
+})
+
+test('compileExpression accepts common implicit multiplication notation', () => {
+  const { compileExpression } = loadExpressionCompiler()
+
+  assert.equal(compileExpression('2x + 3pi')(4), 8 + 3 * Math.PI)
+  assert.equal(compileExpression('2(x + 1)')(3), 8)
+  assert.equal(compileExpression('(x + 1)(x - 1)')(5), 24)
+})

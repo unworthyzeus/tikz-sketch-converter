@@ -95,6 +95,18 @@ test('composite circuits expose circuit labels instead of generic plot controls'
 })
 
 test('telecom signal chains and RF blocks have different exact controls', () => {
+  assert.equal(libraryObjectProfileForPreset(preset('telecom-ofdm-pilot-estimator')).id, 'telecomOfdm')
+  assert.deepEqual(fieldKeys('telecom-ofdm-pilot-estimator').slice(0, 8), [
+    'inputLabel',
+    'outputLabel',
+    'blockLabels',
+    'signalLabel',
+    'carrierLabel',
+    'modulation',
+    'branchCount',
+    'noiseLabel',
+  ])
+
   assert.equal(libraryObjectProfileForPreset(preset('telecom-awgn-channel')).id, 'telecomChannel')
   assert.deepEqual(fieldKeys('telecom-awgn-channel').slice(0, 8), [
     'inputLabel',

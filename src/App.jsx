@@ -1619,6 +1619,182 @@ const mathFunctionHelpers = {
   tri: (value) => Math.max(1 - Math.abs(value), 0),
 }
 
+function tokenizeMathExpression(source) {
+  const tokens = []
+  let index = 0
+
+  while (index < source.length) {
+    const char = source[index]
+    if (/\s/.test(char)) {
+      index += 1
+      continue
+    }
+
+    if (/[0-9.]/.test(char)) {
+      const start = index
+      let hasDigits = false
+
+      while (index < source.length && /[0-9]/.test(source[index])) {
+        hasDigits = true
+        index += 1
+      }
+
+      if (source[index] === '.') {
+        index += 1
+        while (index < source.length && /[0-9]/.test(source[index])) {
+          hasDigits = true
+          index += 1
+        }
+      }
+
+      const exponentStart = index
+      if (source[index] === 'e') {
+        let next = index + 1
+        if (source[next] === '+' || source[next] === '-') next += 1
+        if (/[0-9]/.test(source[next])) {
+          index = next + 1
+          while (index < source.length && /[0-9]/.test(source[index])) index += 1
+        } else {
+          index = exponentStart
+        }
+      }
+
+      if (!hasDigits) throw new Error('Expresion matematica invalida')
+      tokens.push({ type: 'number', value: Number(source.slice(start, index)) })
+      continue
+    }
+
+    if (/[a-z]/.test(char)) {
+      const start = index
+      index += 1
+      while (index < source.length && /[a-z0-9]/.test(source[index])) index += 1
+      tokens.push({ type: 'name', value: source.slice(start, index) })
+      continue
+    }
+
+    if ('+-*/^%(),'.includes(char)) {
+      tokens.push({ type: char, value: char })
+      index += 1
+      continue
+    }
+
+    throw new Error('Expresion matematica invalida')
+  }
+
+  tokens.push({ type: 'end' })
+  return tokens
+}
+
+function tokenStartsPrimary(token) {
+  return token.type === 'number' || token.type === 'name' || token.type === '('
+}
+
+class MathExpressionParser {
+  constructor(tokens, xValue) {
+    this.tokens = tokens
+    this.xValue = xValue
+    this.index = 0
+  }
+
+  current() {
+    return this.tokens[this.index]
+  }
+
+  match(type) {
+    if (this.current().type !== type) return false
+    this.index += 1
+    return true
+  }
+
+  consume(type) {
+    if (this.match(type)) return
+    throw new Error('Expresion matematica invalida')
+  }
+
+  parse() {
+    const value = this.parseAdditive()
+    if (this.current().type !== 'end') throw new Error('Expresion matematica invalida')
+    return value
+  }
+
+  parseAdditive() {
+    let value = this.parseMultiplicative()
+    while (this.current().type === '+' || this.current().type === '-') {
+      if (this.match('+')) {
+        value += this.parseMultiplicative()
+      } else {
+        this.consume('-')
+        value -= this.parseMultiplicative()
+      }
+    }
+    return value
+  }
+
+  parseMultiplicative() {
+    let value = this.parseUnary()
+    while (this.current().type === '*' || this.current().type === '/' || this.current().type === '%' || tokenStartsPrimary(this.current())) {
+      if (this.match('*')) {
+        value *= this.parseUnary()
+      } else if (this.match('/')) {
+        value /= this.parseUnary()
+      } else if (this.match('%')) {
+        value %= this.parseUnary()
+      } else {
+        value *= this.parseUnary()
+      }
+    }
+    return value
+  }
+
+  parseUnary() {
+    if (this.match('+')) return this.parseUnary()
+    if (this.match('-')) return -this.parseUnary()
+    return this.parsePower()
+  }
+
+  parsePower() {
+    const base = this.parsePrimary()
+    if (this.match('^')) return Math.pow(base, this.parseUnary())
+    return base
+  }
+
+  parsePrimary() {
+    const token = this.current()
+    if (token.type === 'number') {
+      this.index += 1
+      return token.value
+    }
+
+    if (this.match('(')) {
+      const value = this.parseAdditive()
+      this.consume(')')
+      return value
+    }
+
+    if (token.type === 'name') {
+      this.index += 1
+      const name = token.value
+      if (name === 'x') return this.xValue
+      if (Object.prototype.hasOwnProperty.call(mathConstants, name)) return mathConstants[name]
+      if (!Object.prototype.hasOwnProperty.call(mathFunctionHelpers, name)) {
+        throw new Error(`Nombre no permitido: ${name}`)
+      }
+      if (!this.match('(')) throw new Error(`Funcion requiere parentesis: ${name}`)
+
+      const args = []
+      if (!this.match(')')) {
+        do {
+          args.push(this.parseAdditive())
+        } while (this.match(','))
+        this.consume(')')
+      }
+      return mathFunctionHelpers[name](...args)
+    }
+
+    throw new Error('Expresion matematica invalida')
+  }
+}
+
 function compileExpression(expression) {
   const source = expression.trim()
   if (!source) throw new Error('La expresion esta vacia')
@@ -1636,17 +1812,8 @@ function compileExpression(expression) {
   )
   if (unknown) throw new Error(`Nombre no permitido: ${unknown}`)
 
-  const jsExpression = normalized
-    .replace(/\^/g, '**')
-    .replace(/\b([a-z][a-z0-9]*)\b/g, (name) => {
-      if (name === 'x') return 'x'
-      if (Object.prototype.hasOwnProperty.call(mathConstants, name)) return `constants.${name}`
-      if (Object.prototype.hasOwnProperty.call(mathFunctionHelpers, name)) return `helpers.${name}`
-      return name
-    })
-
-  const evaluator = Function('x', 'helpers', 'constants', `"use strict"; return (${jsExpression});`)
-  return (x) => evaluator(x, mathFunctionHelpers, mathConstants)
+  const tokens = tokenizeMathExpression(normalized)
+  return (x) => new MathExpressionParser(tokens, x).parse()
 }
 
 function sampleExpressionPoints(expression, domainStart, domainEnd, sampleCount) {

@@ -688,6 +688,7 @@ const exactProfileIds = new Map([
   ['telecom-channel', 'telecomChannel'],
   ['telecom-ofdm-transmitter', 'telecomOfdm'],
   ['telecom-ofdm-receiver', 'telecomOfdm'],
+  ['telecom-ofdm-pilot-estimator', 'telecomOfdm'],
   ['telecom-mimo-link', 'telecomMimo'],
   ['telecom-mimo-tx', 'telecomMimo'],
   ['telecom-mimo-channel', 'telecomMimo'],

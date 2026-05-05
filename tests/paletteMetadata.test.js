@@ -86,6 +86,30 @@ test('paper-ready plot and object snippets expose exact configuration tokens', (
   assert.match(snippetText('plot-spectrogram'), /colormap/)
 })
 
+test('paper-ready estimation and control diagrams cover communication analysis workflows', () => {
+  const requiredIds = ['telecom-ofdm-pilot-estimator', 'telecom-adaptive-equalizer', 'plot-bode-margins']
+
+  requiredIds.forEach((id) => assert.ok(paletteItem(id), id))
+
+  ;['telecom-ofdm-pilot-estimator', 'telecom-adaptive-equalizer'].forEach((id) => {
+    const item = paletteItem(id)
+    assert.equal(item.group, 'Telecom')
+    assert.ok(item.libraries.includes('arrows.meta'), id)
+    assert.ok(item.libraries.includes('positioning'), id)
+  })
+
+  assert.equal(paletteItem('plot-bode-margins').group, 'Plots')
+  assert.ok(paletteItem('plot-bode-margins').pgfplotsLibraries.includes('groupplots'))
+
+  const snippets = requiredIds.map(snippetText).join('\n')
+  assert.match(snippets, /pilot/i)
+  assert.match(snippets, /\\hat\{H\}_k/)
+  assert.match(snippets, /LMS/)
+  assert.match(snippets, /e\[n\]/)
+  assert.match(snippets, /phase margin/i)
+  assert.match(snippets, /gain margin/i)
+})
+
 test('palette and preset metadata declare snippet-driven TikZ libraries exactly once', () => {
   const libraryRules = [
     ['arrows.meta', /Stealth|Latex|Triangle|\\arrow\{Stealth\}/],
