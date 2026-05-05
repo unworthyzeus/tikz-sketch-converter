@@ -17,3 +17,14 @@ test('function plot defaults do not duplicate the explicit series line width', (
 
   assert.equal(defaultFunctionOptions.plotOptions, '')
 })
+
+test('function plot defaults expose axis sizing and title controls', () => {
+  const { defaultFunctionOptions } = loadFunctionExportDefaults()
+
+  assert.equal(defaultFunctionOptions.axisWidth, '7cm')
+  assert.equal(defaultFunctionOptions.axisHeight, '4.5cm')
+  assert.equal(defaultFunctionOptions.axisLines, 'left')
+  assert.equal(defaultFunctionOptions.plotTitle, '')
+  assert.match(appSource, /axis lines=\$\{functionOptions\.axisLines\}/)
+  assert.match(appSource, /title=\{\$\{formatTikzNodeText\(functionOptions\.plotTitle\)\}\}/)
+})

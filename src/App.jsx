@@ -59,7 +59,7 @@ import {
   functionPgfplotsAxisSettings,
   libraryAddPlotTikzOptions,
 } from './libraryPlotOptions'
-import { shouldUseConfiguredLibrarySnippet } from './librarySnippetConfig'
+import { formatMatrixEntryRows, normalizeGanttRange, shouldUseConfiguredLibrarySnippet } from './librarySnippetConfig'
 import { objectPreviewBadges, terminalPreviewLabels } from './objectPreview'
 import {
   buildPaperChecklist,
@@ -619,8 +619,12 @@ const defaultFunctionOptions = {
   showGraphAxes: true,
   usePgfplots: true,
   axisType: 'axis',
+  axisWidth: '7cm',
+  axisHeight: '4.5cm',
+  axisLines: 'left',
   xLabel: '$x$',
   yLabel: '$f(x)$',
+  plotTitle: '',
   legend: '',
   markerStyle: 'none',
   lineStyle: 'solid',
@@ -3045,9 +3049,8 @@ function buildConfiguredLibrarySnippet(preset, element) {
   }
 
   if ((preset.preview === 'matrix' || preset.id.includes('matrix')) && config.matrixEntries.trim()) {
-    const entries = config.matrixEntries
-      .split('\n')
-      .map((line) => `  ${line.trim()} \\\\`)
+    const entries = formatMatrixEntryRows(config.matrixEntries)
+      .map((line) => `  ${line} \\\\`)
       .join('\n')
     return [
       `\\matrix[matrix of math nodes, draw=__COLOR__, line width=0.55pt, nodes={minimum width=${formatNumber(
@@ -3060,8 +3063,7 @@ function buildConfiguredLibrarySnippet(preset, element) {
 
   if (preset.id.includes('gantt') && (config.ganttStart !== 1 || config.ganttEnd !== 7 || config.ganttProgress > 0 || config.blockLabels.trim())) {
     const labels = splitNodeLabels(config.blockLabels || 'Task A, Task B, Task C', 3)
-    const start = Math.min(config.ganttStart, config.ganttEnd)
-    const end = Math.max(config.ganttStart + 1, config.ganttEnd)
+    const { start, end } = normalizeGanttRange(config.ganttStart, config.ganttEnd)
     return [
       `\\begin{ganttchart}[hgrid,vgrid,bar progress label font=\\scriptsize]{${start}}{${end}}`,
       `  \\gantttitle{${formatTikzNodeText(config.plotTitle || 'Plan')}}{${end - start + 1}} \\\\`,
@@ -3590,12 +3592,14 @@ function buildTikz(elements, exportOptions = {}) {
         ].filter(Boolean)
       if (functionOptions.usePgfplots) {
         const axisOptions = [
-          `width=${functionOptions.axisWidth ?? '7cm'}`,
-          `height=${functionOptions.axisHeight ?? '4.5cm'}`,
+          `width=${functionOptions.axisWidth || '7cm'}`,
+          `height=${functionOptions.axisHeight || '4.5cm'}`,
+          functionOptions.axisLines ? `axis lines=${functionOptions.axisLines}` : '',
           axisSettings.xMode === 'log' ? 'xmode=log' : '',
           axisSettings.yMode === 'log' ? 'ymode=log' : '',
           `xlabel={${formatTikzNodeText(functionOptions.xLabel)}}`,
           `ylabel={${formatTikzNodeText(functionOptions.yLabel)}}`,
+          functionOptions.plotTitle?.trim() ? `title={${formatTikzNodeText(functionOptions.plotTitle)}}` : '',
           functionOptions.showGraphGrid && functionOptions.gridStyle !== 'none' ? `grid=${functionOptions.gridStyle}` : '',
           functionOptions.xTicks?.trim() ? `xtick={${functionOptions.xTicks.trim()}}` : '',
           functionOptions.yTicks?.trim() ? `ytick={${functionOptions.yTicks.trim()}}` : '',
@@ -8991,6 +8995,47 @@ function App() {
                           onChange={(event) => updateSelectedFunctionOptions({ markerStyle: event.target.value })}
                         >
                           {functionMarkerOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>Ancho eje</span>
+                        <input
+                          value={selectedFunctionOptions.axisWidth}
+                          onChange={(event) => updateSelectedFunctionOptions({ axisWidth: event.target.value })}
+                          placeholder="7cm, 0.8\\linewidth"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Alto eje</span>
+                        <input
+                          value={selectedFunctionOptions.axisHeight}
+                          onChange={(event) => updateSelectedFunctionOptions({ axisHeight: event.target.value })}
+                          placeholder="4.5cm"
+                        />
+                      </label>
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>Titulo eje</span>
+                        <input
+                          value={selectedFunctionOptions.plotTitle}
+                          onChange={(event) => updateSelectedFunctionOptions({ plotTitle: event.target.value })}
+                          placeholder="Response, training loss..."
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Axis lines</span>
+                        <select
+                          value={selectedFunctionOptions.axisLines}
+                          onChange={(event) => updateSelectedFunctionOptions({ axisLines: event.target.value })}
+                        >
+                          {axisLineOptions.map((option) => (
                             <option key={option.value} value={option.value}>
                               {option.label}
                             </option>

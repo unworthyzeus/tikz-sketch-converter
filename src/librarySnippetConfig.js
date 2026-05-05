@@ -15,6 +15,25 @@ function hasText(value) {
   return `${value ?? ''}`.trim().length > 0
 }
 
+export function formatMatrixEntryRows(value = '') {
+  return `${value ?? ''}`
+    .split(/\n/)
+    .flatMap((line) => line.split(/\\\\/))
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+export function normalizeGanttRange(startValue, endValue) {
+  const startNumber = Number(startValue)
+  const endNumber = Number(endValue)
+  const first = Number.isFinite(startNumber) ? Math.round(startNumber) : 1
+  const second = Number.isFinite(endNumber) ? Math.round(endNumber) : first + 1
+  const start = Math.min(first, second)
+  const end = Math.max(start + 1, Math.max(first, second))
+
+  return { start, end }
+}
+
 export function shouldUseConfiguredLibrarySnippet(preset = {}, config = {}, capabilities = {}) {
   if (capabilities.hasCircuitComponent) return true
   if (preset.id === 'shape-callout') return true

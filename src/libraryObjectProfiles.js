@@ -9,6 +9,59 @@ const plotAxisStyleFields = [
   'enlargeLimits',
 ]
 
+const commonProfileSections = [
+  {
+    id: 'commonPaperStyle',
+    title: 'Paper style',
+    fields: [
+      'lineCap',
+      'lineJoin',
+      'drawOpacity',
+      'textOpacity',
+      'dashPattern',
+      'roundedCorners',
+      'shadow',
+      'pattern',
+    ],
+  },
+  {
+    id: 'commonTextNode',
+    title: 'Text and node',
+    fields: [
+      'align',
+      'anchor',
+      'fontSize',
+      'fontSeries',
+      'innerSep',
+      'outerSep',
+      'minWidth',
+      'minHeight',
+      'textWidth',
+    ],
+  },
+  {
+    id: 'commonMetadata',
+    title: 'Export metadata',
+    fields: ['paperRole', 'datasetTag', 'referenceName', 'metadataJson'],
+  },
+]
+
+function sectionsWithCommonControls(sections = []) {
+  const seen = new Set(sections.flatMap((section) => section.fields))
+  const merged = sections.map((section) => ({
+    ...section,
+    fields: [...section.fields],
+  }))
+
+  commonProfileSections.forEach((section) => {
+    const fields = section.fields.filter((field) => !seen.has(field))
+    fields.forEach((field) => seen.add(field))
+    if (fields.length) merged.push({ ...section, fields })
+  })
+
+  return merged
+}
+
 const exactProfiles = {
   plotBer: {
     id: 'plotBer',
@@ -700,10 +753,7 @@ export function libraryObjectProfileForPreset(preset = {}) {
 }
 
 export function libraryProfileSectionSpecsForPreset(preset = {}) {
-  return libraryObjectProfileForPreset(preset).sections.map((section) => ({
-    ...section,
-    fields: [...section.fields],
-  }))
+  return sectionsWithCommonControls(libraryObjectProfileForPreset(preset).sections)
 }
 
 export function libraryProfileDefaultConfig(preset = {}) {

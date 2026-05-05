@@ -16,6 +16,12 @@ function fieldKeys(id) {
   return libraryProfileSectionSpecsForPreset(preset(id)).flatMap((section) => section.fields)
 }
 
+function assertCommonObjectControls(keys) {
+  ;['lineCap', 'drawOpacity', 'dashPattern', 'fontSize', 'referenceName', 'metadataJson'].forEach((key) => {
+    assert.equal(keys.includes(key), true, `missing ${key}`)
+  })
+}
+
 const plotAxisLimitFields = ['xmin', 'xmax', 'ymin', 'ymax']
 const plotAxisStyleFields = [
   'xLabelStyle',
@@ -29,7 +35,8 @@ const plotAxisStyleFields = [
 
 test('BER plots expose an exact semilog communications profile', () => {
   assert.equal(libraryObjectProfileForPreset(preset('plot-ber')).id, 'plotBer')
-  assert.deepEqual(fieldKeys('plot-ber'), [
+  const keys = fieldKeys('plot-ber')
+  assert.deepEqual(keys.slice(0, 27), [
     'axisWidth',
     'axisHeight',
     'xMode',
@@ -49,6 +56,7 @@ test('BER plots expose an exact semilog communications profile', () => {
     'samples',
     'addplotExtraOptions',
   ])
+  assertCommonObjectControls(keys)
   assert.equal(libraryProfileFieldKeysForPreset(preset('plot-ber')).has('terminalStyle'), false)
   assert.equal(libraryProfileDefaultConfig(preset('plot-ber')).yMode, 'log')
   assert.equal(libraryProfileDefaultConfig(preset('plot-ber')).gridMode, 'major')
@@ -69,7 +77,8 @@ test('constellation and spectrogram plots expose different plot-specific control
 
 test('composite circuits expose circuit labels instead of generic plot controls', () => {
   assert.equal(libraryObjectProfileForPreset(preset('circuit-inverting-amplifier')).id, 'opampComposite')
-  assert.deepEqual(fieldKeys('circuit-inverting-amplifier'), [
+  const keys = fieldKeys('circuit-inverting-amplifier')
+  assert.deepEqual(keys.slice(0, 10), [
     'inputLabel',
     'outputLabel',
     'feedbackLabel',
@@ -81,12 +90,13 @@ test('composite circuits expose circuit labels instead of generic plot controls'
     'netName',
     'referenceName',
   ])
+  assertCommonObjectControls(keys)
   assert.equal(libraryProfileFieldKeysForPreset(preset('circuit-inverting-amplifier')).has('colormap'), false)
 })
 
 test('telecom signal chains and RF blocks have different exact controls', () => {
   assert.equal(libraryObjectProfileForPreset(preset('telecom-awgn-channel')).id, 'telecomChannel')
-  assert.deepEqual(fieldKeys('telecom-awgn-channel'), [
+  assert.deepEqual(fieldKeys('telecom-awgn-channel').slice(0, 8), [
     'inputLabel',
     'outputLabel',
     'channelLabel',
@@ -98,7 +108,7 @@ test('telecom signal chains and RF blocks have different exact controls', () => 
   ])
 
   assert.equal(libraryObjectProfileForPreset(preset('rf-front-end')).id, 'rfChain')
-  assert.deepEqual(fieldKeys('rf-front-end'), [
+  assert.deepEqual(fieldKeys('rf-front-end').slice(0, 7), [
     'inputLabel',
     'outputLabel',
     'blockLabels',
@@ -107,4 +117,11 @@ test('telecom signal chains and RF blocks have different exact controls', () => 
     'noiseLabel',
     'terminalNames',
   ])
+})
+
+test('profile sections keep exact controls first without duplicating common object fields', () => {
+  libraryPaletteItems.forEach((item) => {
+    const keys = fieldKeys(item.id)
+    assert.deepEqual([...new Set(keys)], keys, item.id)
+  })
 })
