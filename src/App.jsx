@@ -2093,7 +2093,7 @@ function resizeElementToBounds(element, nextBounds) {
 }
 
 function escapeTikzText(text) {
-  return text.replace(/[\\{}_%$#&]/g, (match) => {
+  return `${text ?? ''}`.replace(/[\\{}_%$#&]/g, (match) => {
     const replacements = {
       '\\': '\\textbackslash{}',
       '{': '\\{',
@@ -2109,9 +2109,21 @@ function escapeTikzText(text) {
   })
 }
 
-function formatTikzNodeText(text) {
-  if (/[\\$]/.test(text)) return text
+function formatTikzTextSegment(text) {
+  if (!text) return ''
+  if (/\\/.test(text)) return text
   return escapeTikzText(text)
+}
+
+function formatTikzNodeText(text) {
+  const value = `${text ?? ''}`
+  if (!value.includes('$')) return /\\/.test(value) ? value : escapeTikzText(value)
+
+  const parts = value.split(/(\$[^$]+\$)/g)
+  if (parts.length === 1) return value
+  return parts
+    .map((part) => (part.startsWith('$') && part.endsWith('$') ? part : formatTikzTextSegment(part)))
+    .join('')
 }
 
 function indentLatex(lines, spaces = 2) {

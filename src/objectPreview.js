@@ -28,7 +28,7 @@ export function objectPreviewBadges(preset = {}, config = {}, maxBadges = 4) {
 
 export function terminalPreviewLabels(value = '', count = 0) {
   const configured = `${value ?? ''}`
-    .split(',')
+    .split(/[,;\n]+/)
     .map((item) => item.trim())
     .filter(Boolean)
 

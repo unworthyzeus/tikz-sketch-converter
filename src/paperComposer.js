@@ -90,6 +90,12 @@ const positiveNumber = (value, fallback) => {
   return number && number > 0 ? number : fallback
 }
 
+const nonNegativeNumber = (value, fallback) => {
+  if (value === '') return fallback
+  const number = finiteNumber(value)
+  return number !== null && number >= 0 ? number : fallback
+}
+
 const roundCm = (value) => Number(value.toFixed(4))
 
 const paperTargetById = (id) => paperTargets.find((target) => target.id === id) ?? paperTargets[0]
@@ -127,7 +133,7 @@ export function resolvePaperComposer(settings = {}) {
   const hasFixedSize = target.id !== 'content'
   const widthCm = hasFixedSize ? positiveNumber(settings.paperWidthCm, target.widthCm) : null
   const heightCm = hasFixedSize ? positiveNumber(settings.paperHeightCm, target.heightCm) : null
-  const rawMarginCm = positiveNumber(settings.paperMarginCm, target.marginCm ?? 0.25)
+  const rawMarginCm = nonNegativeNumber(settings.paperMarginCm, target.marginCm ?? 0.25)
   const maxMargin = widthCm && heightCm ? Math.max(0, Math.min(widthCm, heightCm) / 2 - 0.05) : rawMarginCm
   const marginCm = hasFixedSize ? roundCm(Math.min(rawMarginCm, maxMargin)) : 0
   const isCustomOverride =
@@ -263,11 +269,23 @@ export function buildPaperWrapperPreview(settings = {}) {
   const label = String(settings.label ?? '').trim() || 'fig:...'
 
   if (exportPreset === 'standalone') {
-    return ['\\documentclass[tikz,border=4pt]{standalone}', '\\begin{document}', '  \\begin{tikzpicture} ...', '\\end{document}']
+    return [
+      '\\documentclass[tikz,border=4pt]{standalone}',
+      '\\begin{document}',
+      '  \\begin{tikzpicture} ...',
+      '  \\end{tikzpicture}',
+      '\\end{document}',
+    ]
   }
 
   if (exportPreset === 'beamer') {
-    return ['\\begin{frame}{TikZ sketch}', '  \\centering', '  \\begin{tikzpicture} ...', '\\end{frame}']
+    return [
+      '\\begin{frame}{TikZ sketch}',
+      '  \\centering',
+      '  \\begin{tikzpicture} ...',
+      '  \\end{tikzpicture}',
+      '\\end{frame}',
+    ]
   }
 
   if (exportPreset === 'snippet' || settings.wrapFigure === false) {
@@ -278,6 +296,7 @@ export function buildPaperWrapperPreview(settings = {}) {
     '\\begin{figure}[htbp]',
     '  \\centering',
     '  \\begin{tikzpicture} ...',
+    '  \\end{tikzpicture}',
     `  \\caption{${caption}}`,
     `  \\label{${label}}`,
     '\\end{figure}',

@@ -41,6 +41,12 @@ test('resolvePaperComposer marks preset dimension overrides as custom size', () 
   assert.equal(composer.displaySize, '12.3 x 6 cm / 4.84 x 2.36 in')
 })
 
+test('resolvePaperComposer allows an explicit zero safe margin', () => {
+  const composer = resolvePaperComposer({ paperTarget: 'ieee-column', paperMarginCm: 0 })
+
+  assert.equal(composer.marginCm, 0)
+})
+
 test('buildPaperGuide centers the paper frame and safe-area panels in canvas world units', () => {
   const composer = resolvePaperComposer({
     paperTarget: 'ieee-column',
@@ -113,11 +119,25 @@ test('buildPaperWrapperPreview mirrors the active export wrapper', () => {
     '\\begin{figure}[htbp]',
     '  \\centering',
     '  \\begin{tikzpicture} ...',
+    '  \\end{tikzpicture}',
     '  \\caption{Result}',
     '  \\label{fig:result}',
     '\\end{figure}',
   ])
-  assert.deepEqual(buildPaperWrapperPreview({ exportPreset: 'beamer' })[0], '\\begin{frame}{TikZ sketch}')
+  assert.deepEqual(buildPaperWrapperPreview({ exportPreset: 'beamer' }), [
+    '\\begin{frame}{TikZ sketch}',
+    '  \\centering',
+    '  \\begin{tikzpicture} ...',
+    '  \\end{tikzpicture}',
+    '\\end{frame}',
+  ])
+  assert.deepEqual(buildPaperWrapperPreview({ exportPreset: 'standalone' }), [
+    '\\documentclass[tikz,border=4pt]{standalone}',
+    '\\begin{document}',
+    '  \\begin{tikzpicture} ...',
+    '  \\end{tikzpicture}',
+    '\\end{document}',
+  ])
   assert.deepEqual(buildPaperWrapperPreview({ exportPreset: 'snippet' }), ['\\begin{tikzpicture} ...', '\\end{tikzpicture}'])
 })
 

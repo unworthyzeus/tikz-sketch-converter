@@ -34,6 +34,7 @@ test('objectPreviewBadges falls back to object title and trims empty metadata', 
 
 test('terminalPreviewLabels uses configured terminal names when available', () => {
   assert.deepEqual(terminalPreviewLabels('in, out', 2), ['in', 'out'])
+  assert.deepEqual(terminalPreviewLabels('gate; drain\nsource', 3), ['gate', 'drain', 'source'])
   assert.deepEqual(terminalPreviewLabels('D, G, S', 2), ['D', 'G'])
   assert.deepEqual(terminalPreviewLabels('', 3), ['1', '2', '3'])
 })
