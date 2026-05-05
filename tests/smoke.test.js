@@ -35,6 +35,9 @@ test('function plots support multi-series styling and marked points', () => {
   assert.match(appSource, /functionLineStyleSvg/)
   assert.match(appSource, /parseMarkedFunctionPoints/)
   assert.match(appSource, /markedPoints/)
+  assert.match(appSource, /xmin/)
+  assert.match(appSource, /xLabelStyle/)
+  assert.match(appSource, /legendStyle/)
   assert.match(appSource, /addFunctionSeries/)
   assert.match(appSource, /addFunctionToSelectedGraph/)
   assert.match(appSource, /showGraphFrame/)
@@ -139,6 +142,8 @@ test('library objects expose advanced configurable TikZ metadata', () => {
   assert.match(appSource, /applyLibraryPlotModulation/)
   assert.match(appSource, /libraryObjectMetadata/)
   assert.match(appSource, /spiceLike/)
+  assert.match(appSource, /gridLineStyle/)
+  assert.match(appSource, /enlargeLimits/)
 })
 
 test('TODO tracks the major product areas', () => {

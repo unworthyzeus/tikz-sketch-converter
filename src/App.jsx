@@ -370,6 +370,10 @@ const objectConfigSections = [
       { key: 'gridMode', label: 'Grid', type: 'select', options: gridModeOptions },
       { key: 'xMode', label: 'X mode', type: 'select', options: axisModeOptions },
       { key: 'yMode', label: 'Y mode', type: 'select', options: axisModeOptions },
+      { key: 'xmin', label: 'xmin', type: 'text', placeholder: '-1, 0, 1e-6' },
+      { key: 'xmax', label: 'xmax', type: 'text', placeholder: '1, 10, 2*pi' },
+      { key: 'ymin', label: 'ymin', type: 'text', placeholder: '0, 1e-6' },
+      { key: 'ymax', label: 'ymax', type: 'text', placeholder: '1, 1e2' },
       { key: 'plotDomain', label: 'Domain', type: 'text', placeholder: '-2:2' },
       { key: 'samples', label: 'Samples', type: 'number', min: 2, max: 1000, step: 1 },
       { key: 'xlabel', label: 'xlabel', type: 'text', placeholder: '$x$' },
@@ -393,6 +397,13 @@ const objectConfigSections = [
       { key: 'constPlot', label: 'Const plot', type: 'checkbox' },
       { key: 'xtick', label: 'xtick', type: 'text', placeholder: '0,1,2' },
       { key: 'ytick', label: 'ytick', type: 'text', placeholder: '-1,0,1' },
+      { key: 'xLabelStyle', label: 'xlabel style', type: 'text', placeholder: 'font=\\small' },
+      { key: 'yLabelStyle', label: 'ylabel style', type: 'text', placeholder: 'rotate=-90' },
+      { key: 'tickLabelStyle', label: 'Tick label style', type: 'text', placeholder: 'font=\\scriptsize' },
+      { key: 'legendStyle', label: 'Legend style', type: 'text', placeholder: 'draw=none, fill=none' },
+      { key: 'axisLineStyle', label: 'Axis line style', type: 'text', placeholder: 'line width=.45pt' },
+      { key: 'gridLineStyle', label: 'Grid style', type: 'text', placeholder: 'dashed, gray!30' },
+      { key: 'enlargeLimits', label: 'Enlarge limits', type: 'text', placeholder: 'false, {abs=0.1}' },
       { key: 'axisExtraOptions', label: 'Axis extra', type: 'text', placeholder: 'minor tick num=1' },
       { key: 'addplotExtraOptions', label: 'Addplot extra', type: 'text', placeholder: 'forget plot, thick' },
       { key: 'errorBars', label: 'Error bars', type: 'checkbox' },
@@ -614,9 +625,19 @@ const defaultFunctionOptions = {
   markerStyle: 'none',
   lineStyle: 'solid',
   gridStyle: 'major',
+  xmin: '',
+  xmax: '',
+  ymin: '',
+  ymax: '',
   xTicks: '',
   yTicks: '',
   tickLabelStyle: 'font=\\scriptsize',
+  xLabelStyle: '',
+  yLabelStyle: '',
+  legendStyle: '',
+  axisLineStyle: '',
+  gridLineStyle: '',
+  enlargeLimits: '',
   legendPos: 'north east',
   legendColumns: 1,
   colormap: '',
@@ -986,6 +1007,10 @@ function defaultLibraryConfig(preset = {}) {
     gridMode: 'none',
     xMode: 'linear',
     yMode: 'linear',
+    xmin: '',
+    xmax: '',
+    ymin: '',
+    ymax: '',
     plotDomain: '',
     samples: 120,
     xlabel: '',
@@ -1009,6 +1034,13 @@ function defaultLibraryConfig(preset = {}) {
     constPlot: false,
     xtick: '',
     ytick: '',
+    xLabelStyle: '',
+    yLabelStyle: '',
+    tickLabelStyle: '',
+    legendStyle: '',
+    axisLineStyle: '',
+    gridLineStyle: '',
+    enlargeLimits: '',
     axisExtraOptions: '',
     addplotExtraOptions: '',
     errorBars: false,
@@ -3567,7 +3599,6 @@ function buildTikz(elements, exportOptions = {}) {
           functionOptions.showGraphGrid && functionOptions.gridStyle !== 'none' ? `grid=${functionOptions.gridStyle}` : '',
           functionOptions.xTicks?.trim() ? `xtick={${functionOptions.xTicks.trim()}}` : '',
           functionOptions.yTicks?.trim() ? `ytick={${functionOptions.yTicks.trim()}}` : '',
-          functionOptions.tickLabelStyle?.trim() ? `tick label style={${functionOptions.tickLabelStyle.trim()}}` : '',
           hasFunctionLegend ? `legend pos=${functionOptions.legendPos || 'north east'}` : '',
           ...advancedPgfplotsAxisOptions({
             ...functionOptions,
@@ -9023,6 +9054,42 @@ function App() {
                     </div>
                     <div className="field-pair">
                       <label className="field">
+                        <span>xmin</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).xmin}
+                          onChange={(event) => updateSelectedFunctionOptions({ xmin: event.target.value })}
+                          placeholder="-1, 0, 1e-6"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>xmax</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).xmax}
+                          onChange={(event) => updateSelectedFunctionOptions({ xmax: event.target.value })}
+                          placeholder="1, 10, 2*pi"
+                        />
+                      </label>
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>ymin</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).ymin}
+                          onChange={(event) => updateSelectedFunctionOptions({ ymin: event.target.value })}
+                          placeholder="0, 1e-6"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>ymax</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).ymax}
+                          onChange={(event) => updateSelectedFunctionOptions({ ymax: event.target.value })}
+                          placeholder="1, 1e2"
+                        />
+                      </label>
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
                         <span>Legend pos</span>
                         <select
                           value={functionOptionsFor(selectedElement).legendPos}
@@ -9087,6 +9154,60 @@ function App() {
                         onChange={(event) => updateSelectedFunctionOptions({ tickLabelStyle: event.target.value })}
                       />
                     </label>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>xlabel style</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).xLabelStyle}
+                          onChange={(event) => updateSelectedFunctionOptions({ xLabelStyle: event.target.value })}
+                          placeholder="font=\\small"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>ylabel style</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).yLabelStyle}
+                          onChange={(event) => updateSelectedFunctionOptions({ yLabelStyle: event.target.value })}
+                          placeholder="rotate=-90"
+                        />
+                      </label>
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>Legend style</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).legendStyle}
+                          onChange={(event) => updateSelectedFunctionOptions({ legendStyle: event.target.value })}
+                          placeholder="draw=none, fill=none"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Enlarge limits</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).enlargeLimits}
+                          onChange={(event) => updateSelectedFunctionOptions({ enlargeLimits: event.target.value })}
+                          placeholder="false, {abs=0.1}"
+                        />
+                      </label>
+                    </div>
+                    <div className="field-pair">
+                      <label className="field">
+                        <span>Axis line style</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).axisLineStyle}
+                          onChange={(event) => updateSelectedFunctionOptions({ axisLineStyle: event.target.value })}
+                          placeholder="line width=.45pt"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Grid style</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).gridLineStyle}
+                          onChange={(event) => updateSelectedFunctionOptions({ gridLineStyle: event.target.value })}
+                          placeholder="dashed, gray!30"
+                        />
+                      </label>
+                    </div>
                     {functionOptionsFor(selectedElement).errorBars && (
                       <label className="field">
                         <span>Opciones error bars</span>

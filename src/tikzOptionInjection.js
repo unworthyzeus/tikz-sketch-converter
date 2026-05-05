@@ -3,16 +3,42 @@ function optionText(options = []) {
 }
 
 function matchingCommand(trimmed, commands) {
-  return commands.find((command) => trimmed.startsWith(command))
+  return commands.find((command) => {
+    if (!trimmed.startsWith(command)) return false
+    const nextChar = trimmed.at(command.length) ?? ''
+    return !/[A-Za-z@]/.test(nextChar)
+  })
 }
 
 function optionCloseIndex(text, openIndex) {
   let braceDepth = 0
+  let bracketDepth = 0
+  let inMath = false
+  let escaped = false
   for (let index = openIndex + 1; index < text.length; index += 1) {
     const char = text[index]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+    if (char === '$') {
+      inMath = !inMath
+      continue
+    }
+    if (inMath) continue
+
     if (char === '{') braceDepth += 1
     if (char === '}') braceDepth = Math.max(0, braceDepth - 1)
-    if (char === ']' && braceDepth === 0) return index
+    if (char === '[') bracketDepth += 1
+    if (char === ']') {
+      if (braceDepth === 0 && bracketDepth === 0) return index
+      bracketDepth = Math.max(0, bracketDepth - 1)
+    }
   }
   return -1
 }

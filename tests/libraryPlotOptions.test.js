@@ -170,3 +170,37 @@ test('applyLibraryPlotModulation rewrites constellation coordinates from the mod
   assert.match(qam16, /\(-3,-3\)/)
   assert.match(qam16, /\(3,3\)/)
 })
+
+test('applyLibraryPlotModulation rewrites split constellation coordinate blocks', () => {
+  assert.deepEqual(
+    applyLibraryPlotModulation(
+      ['  \\addplot[only marks, mark=*]', '    coordinates {(-1,-1) (-1,1) (1,-1) (1,1)};', '  \\addlegendentry{QPSK}'],
+      'plot-constellation',
+      { modulation: 'BPSK' },
+    ),
+    ['  \\addplot[only marks, mark=*]', '    coordinates {(-1,0) (1,0)};', '  \\addlegendentry{QPSK}'],
+  )
+})
+
+test('applyLibraryPlotModulation replaces multiline constellation coordinate bodies', () => {
+  assert.deepEqual(
+    applyLibraryPlotModulation(
+      ['  \\addplot[only marks, mark=*]', '    coordinates {', '      (-1,-1) (-1,1)', '      (1,-1) (1,1)', '    };'],
+      'plot-constellation',
+      { modulation: 'BPSK' },
+    ),
+    ['  \\addplot[only marks, mark=*]', '    coordinates {(-1,0) (1,0)};'],
+  )
+})
+
+test('applyLibraryPlotModulation supports dense square QAM presets', () => {
+  const qam64 = applyLibraryPlotModulation(
+    ['\\addplot[only marks] coordinates {(-1,-1) (-1,1) (1,-1) (1,1)};'],
+    'plot-constellation',
+    { modulation: '64-QAM' },
+  )[0]
+
+  assert.equal((qam64.match(/\([^)]*\)/g) ?? []).length, 64)
+  assert.match(qam64, /\(-7,-7\)/)
+  assert.match(qam64, /\(7,7\)/)
+})

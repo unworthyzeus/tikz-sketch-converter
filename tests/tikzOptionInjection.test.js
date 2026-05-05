@@ -29,3 +29,22 @@ test('injects one-line commands without changing commands that have no options',
 
   assert.deepEqual(result, ['\\addplot[draw=black, smooth, mark=*] coordinates {(0,0)};', '\\node at (0,0) {x};'])
 })
+
+test('keeps nested bracket options intact when injecting node styling', () => {
+  const result = injectTikzOptionsIntoLines(
+    ['\\node[label={[xshift=2pt]right:$x,y$}, draw=black] at (0,0) {A};'],
+    ['fill=white'],
+    ['\\node'],
+  )
+
+  assert.deepEqual(result, ['\\node[label={[xshift=2pt]right:$x,y$}, draw=black, fill=white] at (0,0) {A};'])
+})
+
+test('does not inject into macros that only share a command prefix', () => {
+  const result = injectTikzOptionsIntoLines(['\\nodepart{second}Body', '\\drawedge (a) -- (b);'], ['draw=red'], [
+    '\\node',
+    '\\draw',
+  ])
+
+  assert.deepEqual(result, ['\\nodepart{second}Body', '\\drawedge (a) -- (b);'])
+})

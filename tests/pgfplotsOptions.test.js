@@ -18,3 +18,34 @@ test('advancedPgfplotsAxisOptions emits optional axis controls predictably', () 
 test('advancedPgfplotsAxisOptions omits default values', () => {
   assert.deepEqual(advancedPgfplotsAxisOptions({ minorTicks: 0, legendColumns: 1 }), [])
 })
+
+test('advancedPgfplotsAxisOptions emits bounds and style controls', () => {
+  assert.deepEqual(
+    advancedPgfplotsAxisOptions({
+      xmin: '-1',
+      xmax: '1',
+      ymin: '1e-6',
+      ymax: 1,
+      xLabelStyle: 'font=\\small',
+      yLabelStyle: 'rotate=-90',
+      tickLabelStyle: 'font=\\scriptsize',
+      legendStyle: 'draw=none, fill=none',
+      axisLineStyle: 'line width=.45pt',
+      gridLineStyle: 'dashed, gray!30',
+      enlargeLimits: 'false',
+    }),
+    [
+      'xmin=-1',
+      'xmax=1',
+      'ymin=1e-6',
+      'ymax=1',
+      'xlabel style={font=\\small}',
+      'ylabel style={rotate=-90}',
+      'tick label style={font=\\scriptsize}',
+      'legend style={draw=none, fill=none}',
+      'axis line style={line width=.45pt}',
+      'grid style={dashed, gray!30}',
+      'enlargelimits=false',
+    ],
+  )
+})

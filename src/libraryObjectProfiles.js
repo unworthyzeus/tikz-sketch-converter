@@ -1,3 +1,14 @@
+const plotAxisLimitFields = ['xmin', 'xmax', 'ymin', 'ymax']
+const plotAxisStyleFields = [
+  'xLabelStyle',
+  'yLabelStyle',
+  'tickLabelStyle',
+  'legendStyle',
+  'axisLineStyle',
+  'gridLineStyle',
+  'enlargeLimits',
+]
+
 const exactProfiles = {
   plotBer: {
     id: 'plotBer',
@@ -24,12 +35,14 @@ const exactProfiles = {
           'xMode',
           'yMode',
           'gridMode',
+          ...plotAxisLimitFields,
           'minorTicks',
           'xlabel',
           'ylabel',
           'plotTitle',
           'legendPos',
           'legendColumns',
+          ...plotAxisStyleFields,
           'markStyle',
           'plotSmooth',
           'plotDomain',
@@ -59,7 +72,19 @@ const exactProfiles = {
       {
         id: 'constellationAxis',
         title: 'Constellation axis',
-        fields: ['axisWidth', 'axisHeight', 'axisLines', 'axisEqual', 'gridMode', 'xlabel', 'ylabel', 'xtick', 'ytick'],
+        fields: [
+          'axisWidth',
+          'axisHeight',
+          'axisLines',
+          'axisEqual',
+          'gridMode',
+          ...plotAxisLimitFields,
+          'xlabel',
+          'ylabel',
+          'xtick',
+          'ytick',
+          ...plotAxisStyleFields,
+        ],
       },
       {
         id: 'constellationSymbols',
@@ -87,7 +112,18 @@ const exactProfiles = {
       {
         id: 'spectrogramAxis',
         title: 'Time-frequency axis',
-        fields: ['axisWidth', 'axisHeight', 'xlabel', 'ylabel', 'colorbar', 'colormap', 'viewAzimuth', 'viewElevation'],
+        fields: [
+          'axisWidth',
+          'axisHeight',
+          ...plotAxisLimitFields,
+          'xlabel',
+          'ylabel',
+          'colorbar',
+          'colormap',
+          'viewAzimuth',
+          'viewElevation',
+          ...plotAxisStyleFields,
+        ],
       },
       {
         id: 'spectrogramSurface',
@@ -112,7 +148,19 @@ const exactProfiles = {
       {
         id: 'spectrumAxis',
         title: 'Frequency axis',
-        fields: ['axisWidth', 'axisHeight', 'xMode', 'yMode', 'gridMode', 'minorTicks', 'xlabel', 'ylabel', 'plotTitle'],
+        fields: [
+          'axisWidth',
+          'axisHeight',
+          'xMode',
+          'yMode',
+          'gridMode',
+          ...plotAxisLimitFields,
+          'minorTicks',
+          'xlabel',
+          'ylabel',
+          'plotTitle',
+          ...plotAxisStyleFields,
+        ],
       },
       {
         id: 'spectrumTrace',
@@ -138,7 +186,16 @@ const exactProfiles = {
       {
         id: 'eyeAxis',
         title: 'Eye axis',
-        fields: ['axisWidth', 'axisHeight', 'gridMode', 'xlabel', 'ylabel', 'plotTitle'],
+        fields: [
+          'axisWidth',
+          'axisHeight',
+          'gridMode',
+          ...plotAxisLimitFields,
+          'xlabel',
+          'ylabel',
+          'plotTitle',
+          ...plotAxisStyleFields,
+        ],
       },
       {
         id: 'eyeTrace',
@@ -163,7 +220,19 @@ const exactProfiles = {
       {
         id: 'frequencyAxis',
         title: 'Frequency response axis',
-        fields: ['axisWidth', 'axisHeight', 'xMode', 'yMode', 'gridMode', 'minorTicks', 'xlabel', 'ylabel', 'plotTitle'],
+        fields: [
+          'axisWidth',
+          'axisHeight',
+          'xMode',
+          'yMode',
+          'gridMode',
+          ...plotAxisLimitFields,
+          'minorTicks',
+          'xlabel',
+          'ylabel',
+          'plotTitle',
+          ...plotAxisStyleFields,
+        ],
       },
       {
         id: 'frequencyTrace',
@@ -188,7 +257,18 @@ const exactProfiles = {
       {
         id: 'impulseAxis',
         title: 'Discrete-time axis',
-        fields: ['axisWidth', 'axisHeight', 'gridMode', 'xlabel', 'ylabel', 'plotTitle', 'xtick', 'ytick'],
+        fields: [
+          'axisWidth',
+          'axisHeight',
+          'gridMode',
+          ...plotAxisLimitFields,
+          'xlabel',
+          'ylabel',
+          'plotTitle',
+          'xtick',
+          'ytick',
+          ...plotAxisStyleFields,
+        ],
       },
       {
         id: 'impulseSamples',
@@ -213,7 +293,18 @@ const exactProfiles = {
       {
         id: 'heatmapAxis',
         title: 'Heatmap axis',
-        fields: ['axisWidth', 'axisHeight', 'xlabel', 'ylabel', 'colorbar', 'colormap', 'viewAzimuth', 'viewElevation'],
+        fields: [
+          'axisWidth',
+          'axisHeight',
+          ...plotAxisLimitFields,
+          'xlabel',
+          'ylabel',
+          'colorbar',
+          'colormap',
+          'viewAzimuth',
+          'viewElevation',
+          ...plotAxisStyleFields,
+        ],
       },
       {
         id: 'heatmapSurface',
@@ -235,7 +326,19 @@ const exactProfiles = {
       {
         id: 'statAxis',
         title: 'Statistical axis',
-        fields: ['axisWidth', 'axisHeight', 'axisLines', 'gridMode', 'xlabel', 'ylabel', 'plotTitle', 'legendPos', 'legendColumns'],
+        fields: [
+          'axisWidth',
+          'axisHeight',
+          'axisLines',
+          'gridMode',
+          ...plotAxisLimitFields,
+          'xlabel',
+          'ylabel',
+          'plotTitle',
+          'legendPos',
+          'legendColumns',
+          ...plotAxisStyleFields,
+        ],
       },
       {
         id: 'statMarks',
@@ -259,12 +362,14 @@ const exactProfiles = {
           'gridMode',
           'xMode',
           'yMode',
+          ...plotAxisLimitFields,
           'xlabel',
           'ylabel',
           'plotTitle',
           'legendPos',
           'legendColumns',
           'minorTicks',
+          ...plotAxisStyleFields,
         ],
       },
       {

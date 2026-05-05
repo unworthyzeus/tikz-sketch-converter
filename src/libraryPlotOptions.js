@@ -106,6 +106,13 @@ function constellationCoordinatesForModulation(value = '') {
   if (key === '16-QAM' || key === '16QAM') {
     return [-3, -1, 1, 3].flatMap((x) => [-3, -1, 1, 3].map((y) => [x, y]))
   }
+  const squareQamMatch = key.match(/^(\d+)-?QAM$/)
+  const order = Number(squareQamMatch?.[1])
+  const sideLength = Math.sqrt(order)
+  if (Number.isInteger(sideLength) && sideLength > 1 && sideLength <= 32) {
+    const levels = Array.from({ length: sideLength }, (_, index) => 2 * index - (sideLength - 1))
+    return levels.flatMap((x) => levels.map((y) => [x, y]))
+  }
   return null
 }
 
@@ -119,12 +126,55 @@ export function applyLibraryPlotModulation(lines, presetId, config = {}) {
   const coordinates = constellationCoordinatesForModulation(config.modulation)
   if (!coordinates?.length) return lines
 
+  const nextLines = []
   let replaced = false
-  return lines.map((line) => {
-    if (replaced || !/\\addplot(?:3|\+)?\b/.test(line) || !line.includes('coordinates')) return line
+  let pendingAddplot = false
+  let skippingOriginalCoordinates = false
+
+  lines.forEach((line) => {
+    if (skippingOriginalCoordinates) {
+      if (line.includes(';')) skippingOriginalCoordinates = false
+      return
+    }
+
+    if (replaced) {
+      nextLines.push(line)
+      return
+    }
+
+    const hasAddplot = /\\addplot(?:3|\+)?\b/.test(line)
+    const hasCoordinates = line.includes('coordinates')
+    if (!pendingAddplot && !hasAddplot) {
+      nextLines.push(line)
+      return
+    }
+
+    if (hasAddplot && !hasCoordinates) {
+      pendingAddplot = !line.includes(';')
+      nextLines.push(line)
+      return
+    }
+
+    if (!hasCoordinates) {
+      if (line.includes(';')) pendingAddplot = false
+      nextLines.push(line)
+      return
+    }
+
     replaced = true
-    return line.replace(/coordinates\s*\{[^}]*\}/, `coordinates {${coordinateList(coordinates)}}`)
+    pendingAddplot = false
+    const replacement = `coordinates {${coordinateList(coordinates)}}`
+    if (/coordinates\s*\{[^}]*\}/.test(line)) {
+      nextLines.push(line.replace(/coordinates\s*\{[^}]*\}/, replacement))
+      return
+    }
+
+    const openingMatch = line.match(/^(.*?coordinates\s*)\{/)
+    nextLines.push(openingMatch ? `${openingMatch[1]}{${coordinateList(coordinates)}};` : line)
+    skippingOriginalCoordinates = !line.includes(';')
   })
+
+  return nextLines
 }
 
 export function applyLibraryPlotDataTable(lines, dataTable) {

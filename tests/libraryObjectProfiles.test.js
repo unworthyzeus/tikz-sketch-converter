@@ -16,6 +16,17 @@ function fieldKeys(id) {
   return libraryProfileSectionSpecsForPreset(preset(id)).flatMap((section) => section.fields)
 }
 
+const plotAxisLimitFields = ['xmin', 'xmax', 'ymin', 'ymax']
+const plotAxisStyleFields = [
+  'xLabelStyle',
+  'yLabelStyle',
+  'tickLabelStyle',
+  'legendStyle',
+  'axisLineStyle',
+  'gridLineStyle',
+  'enlargeLimits',
+]
+
 test('BER plots expose an exact semilog communications profile', () => {
   assert.equal(libraryObjectProfileForPreset(preset('plot-ber')).id, 'plotBer')
   assert.deepEqual(fieldKeys('plot-ber'), [
@@ -24,12 +35,14 @@ test('BER plots expose an exact semilog communications profile', () => {
     'xMode',
     'yMode',
     'gridMode',
+    ...plotAxisLimitFields,
     'minorTicks',
     'xlabel',
     'ylabel',
     'plotTitle',
     'legendPos',
     'legendColumns',
+    ...plotAxisStyleFields,
     'markStyle',
     'plotSmooth',
     'plotDomain',
@@ -46,6 +59,7 @@ test('constellation and spectrogram plots expose different plot-specific control
   assert.equal(libraryProfileDefaultConfig(preset('plot-constellation')).axisEqual, true)
   assert.equal(fieldKeys('plot-constellation').includes('colorbar'), false)
   assert.equal(fieldKeys('plot-constellation').includes('markStyle'), true)
+  assert.equal(fieldKeys('plot-constellation').includes('tickLabelStyle'), true)
 
   assert.equal(libraryObjectProfileForPreset(preset('plot-spectrogram')).id, 'plotSpectrogram')
   assert.equal(libraryProfileDefaultConfig(preset('plot-spectrogram')).colorbar, true)

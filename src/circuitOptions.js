@@ -9,6 +9,8 @@ export function circuitDrawTikzOptions(config = {}, formatValue = defaultFormat)
   if (Number.isFinite(bipoleLength) && bipoleLength > 0) {
     options.push(`bipoles/length=${formatValue(bipoleLength)}cm`)
   }
+  if (config.circuitStyle === 'iec') options.push('european')
+  if (config.circuitStyle === 'american') options.push('american')
 
   return options
 }
