@@ -34,3 +34,13 @@ test('shape variants only replace snippets for configurable primitive presets', 
     true,
   )
 })
+
+test('telecom profile defaults do not replace designed snippets unless labels are explicit', () => {
+  const preset = { id: 'telecom-ofdm-transmitter', group: 'Telecom', preview: 'flow' }
+
+  assert.equal(shouldUseConfiguredLibrarySnippet(preset, { blockLabels: 'Bits, QAM, IFFT' }), false)
+  assert.equal(
+    shouldUseConfiguredLibrarySnippet(preset, { blockLabels: 'Bits, QAM, IFFT' }, { explicitBlockLabels: true }),
+    true,
+  )
+})

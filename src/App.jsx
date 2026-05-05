@@ -46,6 +46,12 @@ import { createEditorKeydownHandler } from './editorKeyboard'
 import { curveMarkerPoints, functionLegendEntries, functionSeriesIsRenderable, markerGlyphParts } from './functionPreview'
 import { latexSymbolGroups } from './latexSymbols'
 import { configDrivenRequirements } from './libraryRequirements'
+import {
+  libraryObjectProfileForPreset,
+  libraryProfileDefaultConfig,
+  libraryProfileFieldKeysForPreset,
+  libraryProfileSectionSpecsForPreset,
+} from './libraryObjectProfiles'
 import { shouldUseConfiguredLibrarySnippet } from './librarySnippetConfig'
 import { objectPreviewBadges, terminalPreviewLabels } from './objectPreview'
 import {
@@ -62,6 +68,7 @@ import { previewKindForPreset } from './previewKinds'
 import { rasterSafeSvgText } from './svgRasterExport'
 import { libraryPresets } from './tikzLibraryPresets'
 import { libraryPaletteItems } from './tikzPaletteItems'
+import { injectTikzOptionsIntoLines } from './tikzOptionInjection'
 import { splitTikzOptions } from './tikzOptions'
 import { clampCanvasZoom, initialCanvasZoom } from './viewportDefaults'
 
@@ -231,6 +238,20 @@ const markStyleOptions = [
   { value: '+', label: '+' },
 ]
 
+const shaderOptions = [
+  { value: '', label: 'Auto' },
+  { value: 'flat', label: 'Flat' },
+  { value: 'interp', label: 'Interpolado' },
+  { value: 'faceted', label: 'Faceted' },
+]
+
+const pointMetaOptions = [
+  { value: '', label: 'Auto' },
+  { value: 'explicit', label: 'Explicit' },
+  { value: 'x', label: 'X' },
+  { value: 'y', label: 'Y' },
+]
+
 const matrixDelimiterOptions = [
   { value: 'none', label: 'Sin delimitador' },
   { value: 'brackets', label: '[ ]' },
@@ -277,6 +298,22 @@ const objectConfigSections = [
       { key: 'minWidth', label: 'Min width cm', type: 'number', min: 0, max: 12, step: 0.1 },
       { key: 'minHeight', label: 'Min height cm', type: 'number', min: 0, max: 8, step: 0.1 },
       { key: 'textWidth', label: 'Text width cm', type: 'number', min: 0, max: 12, step: 0.1 },
+    ],
+  },
+  {
+    id: 'labelsSignals',
+    title: 'Etiquetas exactas',
+    domains: ['profile'],
+    fields: [
+      { key: 'inputLabel', label: 'Entrada', type: 'text', placeholder: '$x(t)$, $v_i$' },
+      { key: 'outputLabel', label: 'Salida', type: 'text', placeholder: '$y(t)$, $v_o$' },
+      { key: 'feedbackLabel', label: 'Feedback', type: 'text', placeholder: '$R_f$, $H(s)$' },
+      { key: 'componentLabels', label: 'Componentes', type: 'textarea', placeholder: 'R_{in}, R_f, C_f' },
+      { key: 'supplyLabel', label: 'Alimentacion', type: 'text', placeholder: '$V_{CC}$' },
+      { key: 'groundLabel', label: 'Referencia', type: 'text', placeholder: 'GND' },
+      { key: 'channelLabel', label: 'Canal / sistema', type: 'text', placeholder: '$h(t)$, $\\mathbf{H}$' },
+      { key: 'snrLabel', label: 'SNR / metrica', type: 'text', placeholder: 'SNR, $E_b/N_0$' },
+      { key: 'sampleRateLabel', label: 'Muestreo', type: 'text', placeholder: '$f_s$, UI' },
     ],
   },
   {
@@ -340,10 +377,19 @@ const objectConfigSections = [
       { key: 'reverseX', label: 'Reverse X', type: 'checkbox' },
       { key: 'reverseY', label: 'Reverse Y', type: 'checkbox' },
       { key: 'colormap', label: 'Colormap', type: 'text', placeholder: 'viridis, hot, blackwhite' },
+      { key: 'colorbar', label: 'Colorbar', type: 'checkbox' },
+      { key: 'shader', label: 'Shader', type: 'select', options: shaderOptions },
+      { key: 'viewAzimuth', label: 'View azimuth', type: 'number', min: -360, max: 360, step: 1 },
+      { key: 'viewElevation', label: 'View elevation', type: 'number', min: -360, max: 360, step: 1 },
+      { key: 'pointMeta', label: 'Point meta', type: 'select', options: pointMetaOptions },
+      { key: 'stemPlot', label: 'Stem / ycomb', type: 'checkbox' },
+      { key: 'constPlot', label: 'Const plot', type: 'checkbox' },
       { key: 'xtick', label: 'xtick', type: 'text', placeholder: '0,1,2' },
       { key: 'ytick', label: 'ytick', type: 'text', placeholder: '-1,0,1' },
       { key: 'axisExtraOptions', label: 'Axis extra', type: 'text', placeholder: 'minor tick num=1' },
       { key: 'addplotExtraOptions', label: 'Addplot extra', type: 'text', placeholder: 'forget plot, thick' },
+      { key: 'errorBarOptions', label: 'Error bars', type: 'text', placeholder: '/pgfplots/error bars/y dir=both' },
+      { key: 'dataTable', label: 'Data table', type: 'textarea', placeholder: '0,0\n1,0.8\n2,0.4' },
     ],
   },
   {
@@ -357,6 +403,8 @@ const objectConfigSections = [
       { key: 'matrixEntries', label: 'Matrix entries', type: 'textarea', placeholder: 'a & b\\\\\nc & d' },
       { key: 'edgeStyle', label: 'Edge style', type: 'select', options: edgeStyleOptions },
       { key: 'edgeLabels', label: 'Edge labels', type: 'text', placeholder: 'f,g,h' },
+      { key: 'nodeLabels', label: 'Node labels', type: 'text', placeholder: 'A, B, C' },
+      { key: 'connectNodes', label: 'Connect nodes', type: 'checkbox' },
       { key: 'nodeDistance', label: 'Node distance cm', type: 'number', min: 0, max: 6, step: 0.05 },
       { key: 'layerDistance', label: 'Layer distance cm', type: 'number', min: 0, max: 6, step: 0.05 },
       { key: 'siblingDistance', label: 'Sibling distance cm', type: 'number', min: 0, max: 6, step: 0.05 },
@@ -392,10 +440,7 @@ const objectConfigSections = [
   },
 ]
 
-const quickLibraryConfigKeys = new Set([
-  'stretchX',
-  'stretchY',
-  'label',
+const quickCircuitConfigKeys = new Set([
   'autoLabel',
   'circuitLabel',
   'circuitValue',
@@ -403,15 +448,25 @@ const quickLibraryConfigKeys = new Set([
   'circuitStyle',
   'terminalStyle',
   'terminalLength',
+])
+
+const quickExtraNodeConfigKeys = new Set([
   'extraNodes',
   'nodeSpacing',
   'nodeDirection',
   'nodeShape',
   'nodeLabels',
   'connectNodes',
+])
+
+const quickCalloutConfigKeys = new Set([
   'calloutPointerX',
   'calloutPointerY',
 ])
+
+const objectConfigFieldByKey = new Map(
+  objectConfigSections.flatMap((section) => section.fields.map((field) => [field.key, field])),
+)
 
 const latexSymbols = latexSymbolGroups.flatMap((group) =>
   group.symbols.map((symbol) => ({
@@ -859,7 +914,7 @@ function defaultShapeVariantForPreset(preset = {}) {
 
 function defaultLibraryConfig(preset = {}) {
   const circuitPrefix = circuitAutoPrefix(preset)
-  return {
+  const baseConfig = {
     stretchX: 1,
     stretchY: 1,
     label: preset.title ?? 'Object',
@@ -880,6 +935,15 @@ function defaultLibraryConfig(preset = {}) {
     minWidth: 0,
     minHeight: 0,
     textWidth: 0,
+    inputLabel: '',
+    outputLabel: '',
+    feedbackLabel: '',
+    componentLabels: '',
+    supplyLabel: '',
+    groundLabel: '',
+    channelLabel: '',
+    snrLabel: '',
+    sampleRateLabel: '',
     shapeVariant: defaultShapeVariantForPreset(preset),
     shapeAspect: 1.7,
     cloudPuffs: 11,
@@ -928,10 +992,19 @@ function defaultLibraryConfig(preset = {}) {
     reverseX: false,
     reverseY: false,
     colormap: '',
+    colorbar: false,
+    shader: '',
+    viewAzimuth: '',
+    viewElevation: '',
+    pointMeta: '',
+    stemPlot: false,
+    constPlot: false,
     xtick: '',
     ytick: '',
     axisExtraOptions: '',
     addplotExtraOptions: '',
+    errorBarOptions: '/pgfplots/error bars/y dir=both, /pgfplots/error bars/y explicit',
+    dataTable: '',
     matrixDelimiter: 'none',
     rowSep: 0,
     columnSep: 0,
@@ -956,6 +1029,7 @@ function defaultLibraryConfig(preset = {}) {
     referenceName: '',
     metadataJson: '',
   }
+  return { ...baseConfig, ...libraryProfileDefaultConfig(preset) }
 }
 
 function enumValue(value, options, fallback) {
@@ -1029,6 +1103,13 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
     minorTicks: Math.round(numberInRange(config.minorTicks, 0, 0, 20)),
     reverseX: Boolean(config.reverseX),
     reverseY: Boolean(config.reverseY),
+    colorbar: Boolean(config.colorbar),
+    shader: enumValue(config.shader, shaderOptions, ''),
+    viewAzimuth: config.viewAzimuth === '' ? '' : numberInRange(config.viewAzimuth, 0, -360, 360),
+    viewElevation: config.viewElevation === '' ? '' : numberInRange(config.viewElevation, 90, -360, 360),
+    pointMeta: enumValue(config.pointMeta, pointMetaOptions, ''),
+    stemPlot: Boolean(config.stemPlot),
+    constPlot: Boolean(config.constPlot),
     matrixDelimiter: enumValue(config.matrixDelimiter, matrixDelimiterOptions, 'none'),
     rowSep: numberInRange(config.rowSep, 0, 0, 4),
     columnSep: numberInRange(config.columnSep, 0, 0, 4),
@@ -1067,6 +1148,14 @@ function libraryConfigDomains(preset = {}) {
 }
 
 function libraryConfigSectionsForPreset(preset = {}) {
+  const profileSections = libraryProfileSectionSpecsForPreset(preset)
+    .map((section) => ({
+      ...section,
+      fields: section.fields.map((fieldKey) => objectConfigFieldByKey.get(fieldKey)).filter(Boolean),
+    }))
+    .filter((section) => section.fields.length)
+  if (profileSections.length) return profileSections
+
   const domains = libraryConfigDomains(preset)
   return objectConfigSections.filter((section) => section.domains.some((domain) => domains.has(domain)))
 }
@@ -2793,6 +2882,10 @@ function libraryAxisTikzOptions(config) {
   if (config.plotTitle.trim()) options.push(`title={${formatTikzNodeText(config.plotTitle)}}`)
   if (config.legendPos) options.push(`legend pos=${config.legendPos}`)
   options.push(...advancedPgfplotsAxisOptions(config))
+  if (config.colorbar) options.push('colorbar')
+  if (config.viewAzimuth !== '' && config.viewElevation !== '') {
+    options.push(`view={${formatNumber(config.viewAzimuth)}}{${formatNumber(config.viewElevation)}}`)
+  }
   if (config.xtick.trim()) options.push(`xtick={${config.xtick.trim()}}`)
   if (config.ytick.trim()) options.push(`ytick={${config.ytick.trim()}}`)
   if (config.colormap.trim()) options.push(`colormap/${config.colormap.trim()}`)
@@ -2806,6 +2899,10 @@ function libraryAddPlotTikzOptions(config) {
   if (config.samples !== 120) options.push(`samples=${config.samples}`)
   if (config.markStyle) options.push(`mark=${config.markStyle}`)
   if (config.plotSmooth) options.push('smooth')
+  if (config.shader) options.push(`shader=${config.shader}`)
+  if (config.pointMeta) options.push(`point meta=${config.pointMeta}`)
+  if (config.stemPlot) options.push('ycomb')
+  if (config.constPlot) options.push('const plot')
   options.push(...splitTikzOptions(config.addplotExtraOptions))
   return options
 }
@@ -2833,23 +2930,6 @@ function libraryGanttTikzOptions(config) {
   return options
 }
 
-function injectTikzOptions(line, options, commands) {
-  const optionText = options.filter(Boolean).join(', ')
-  if (!optionText) return line
-  const trimmed = line.trimStart()
-  const prefix = line.slice(0, line.length - trimmed.length)
-
-  for (const command of commands) {
-    if (!trimmed.startsWith(command)) continue
-    if (trimmed.startsWith(`${command}[`)) {
-      return `${prefix}${trimmed.replace(`${command}[`, `${command}[${optionText}, `)}`
-    }
-    return `${prefix}${trimmed.replace(command, `${command}[${optionText}]`)}`
-  }
-
-  return line
-}
-
 function applyLibraryConfigToSnippet(lines, preset, element) {
   const config = getLibraryConfig(element, preset)
   const common = libraryCommonTikzOptions(config)
@@ -2860,18 +2940,15 @@ function applyLibraryConfigToSnippet(lines, preset, element) {
   const matrixOptions = libraryMatrixTikzOptions(config)
   const graphOptions = libraryGraphTikzOptions(config)
   const ganttOptions = libraryGanttTikzOptions(config)
-
-  return lines.map((line) => {
-    let next = line
-    next = injectTikzOptions(next, axisOptions, ['\\begin{axis}', '\\begin{polaraxis}', '\\begin{semilogyaxis}', '\\begin{groupplot}'])
-    next = injectTikzOptions(next, addPlotOptions, ['\\addplot3', '\\addplot+', '\\addplot'])
-    next = injectTikzOptions(next, matrixOptions, ['\\matrix'])
-    next = injectTikzOptions(next, ganttOptions, ['\\begin{ganttchart}'])
-    next = injectTikzOptions(next, nodeOptions, ['\\node'])
-    next = injectTikzOptions(next, drawOptions, ['\\draw', '\\path'])
-    next = injectTikzOptions(next, graphOptions, ['\\graph'])
-    return next
-  })
+  let nextLines = lines
+  nextLines = injectTikzOptionsIntoLines(nextLines, axisOptions, ['\\begin{axis}', '\\begin{polaraxis}', '\\begin{semilogyaxis}', '\\begin{groupplot}'])
+  nextLines = injectTikzOptionsIntoLines(nextLines, addPlotOptions, ['\\addplot3', '\\addplot+', '\\addplot'])
+  nextLines = injectTikzOptionsIntoLines(nextLines, matrixOptions, ['\\matrix'])
+  nextLines = injectTikzOptionsIntoLines(nextLines, ganttOptions, ['\\begin{ganttchart}'])
+  nextLines = injectTikzOptionsIntoLines(nextLines, nodeOptions, ['\\node'])
+  nextLines = injectTikzOptionsIntoLines(nextLines, drawOptions, ['\\draw', '\\path'])
+  nextLines = injectTikzOptionsIntoLines(nextLines, graphOptions, ['\\graph'])
+  return nextLines
 }
 
 function buildConfiguredLibrarySnippet(preset, element) {
@@ -2880,7 +2957,12 @@ function buildConfiguredLibrarySnippet(preset, element) {
   const width = formatNumber(Math.max(0.7, 1.35 * config.stretchX))
   const height = formatNumber(Math.max(0.35, 0.62 * config.stretchY))
   const circuitComponent = circuitTikzComponent(preset, config)
-  if (!shouldUseConfiguredLibrarySnippet(preset, config, { hasCircuitComponent: Boolean(circuitComponent) })) {
+  if (
+    !shouldUseConfiguredLibrarySnippet(preset, config, {
+      hasCircuitComponent: Boolean(circuitComponent),
+      explicitBlockLabels: Boolean(element.config?.blockLabels?.trim()),
+    })
+  ) {
     return null
   }
 
@@ -3079,6 +3161,8 @@ function replaceLibraryTokens(line, element, color, fill) {
   const preset = getLibraryPreset(element)
   const config = getLibraryConfig(element, preset)
   const fillColor = fill === 'none' ? color : fill
+  const componentLabels = splitList(config.componentLabels)
+  const componentLabel = (index, fallback) => formatTikzNodeText(componentLabels[index] ?? fallback)
   const fillStyle =
     fill === 'none'
       ? 'fill=white'
@@ -3099,6 +3183,22 @@ function replaceLibraryTokens(line, element, color, fill) {
     .replaceAll('__OBJECT_HEIGHT__', formatNumber(config.stretchY))
     .replaceAll('__NODE_COUNT__', `${config.extraNodes}`)
     .replaceAll('__NODE_SPACING__', formatNumber(config.nodeSpacing))
+    .replaceAll('__INPUT_LABEL__', formatTikzNodeText(config.inputLabel))
+    .replaceAll('__OUTPUT_LABEL__', formatTikzNodeText(config.outputLabel))
+    .replaceAll('__FEEDBACK_LABEL__', formatTikzNodeText(config.feedbackLabel))
+    .replaceAll('__SUPPLY_LABEL__', formatTikzNodeText(config.supplyLabel))
+    .replaceAll('__GROUND_LABEL__', formatTikzNodeText(config.groundLabel))
+    .replaceAll('__CHANNEL_LABEL__', formatTikzNodeText(config.channelLabel))
+    .replaceAll('__NOISE_LABEL__', formatTikzNodeText(config.noiseLabel))
+    .replaceAll('__SNR_LABEL__', formatTikzNodeText(config.snrLabel))
+    .replaceAll('__CARRIER_LABEL__', formatTikzNodeText(config.carrierLabel))
+    .replaceAll('__SIGNAL_LABEL__', formatTikzNodeText(config.signalLabel))
+    .replaceAll('__MODULATION__', formatTikzNodeText(config.modulation))
+    .replaceAll('__GAIN_DB__', formatNumber(config.gainDb))
+    .replaceAll('__COMPONENT_1__', componentLabel(0, 'R_1'))
+    .replaceAll('__COMPONENT_2__', componentLabel(1, 'R_2'))
+    .replaceAll('__COMPONENT_3__', componentLabel(2, 'C_1'))
+    .replaceAll('__COMPONENT_4__', componentLabel(3, 'L_1'))
     .replaceAll('__TITLE__', formatTikzNodeText(element.title))
     .replaceAll('__GROUP__', formatTikzNodeText(element.group ?? 'TikZ'))
 }
@@ -3772,7 +3872,11 @@ function App() {
   const selectedFunctionSeries = selectedElement?.type === 'function' ? editableFunctionSeriesFor(selectedElement) : []
   const selectedLibraryConfig = selectedElement?.type === 'library' ? getLibraryConfig(selectedElement) : null
   const selectedLibraryPreset = selectedElement?.type === 'library' ? getLibraryPreset(selectedElement) : null
+  const selectedLibraryProfile = selectedLibraryPreset ? libraryObjectProfileForPreset(selectedLibraryPreset) : null
+  const selectedLibraryProfileKeys = selectedLibraryPreset ? libraryProfileFieldKeysForPreset(selectedLibraryPreset) : new Set()
   const selectedLibraryConfigSections = selectedLibraryPreset ? libraryConfigSectionsForPreset(selectedLibraryPreset) : []
+  const selectedCircuitQuickComponent =
+    selectedLibraryPreset && selectedLibraryConfig ? circuitTikzComponent(selectedLibraryPreset, selectedLibraryConfig) : ''
   const activeLabelText = selectedElement?.type === 'text' ? selectedElement.text : settings.labelText
   const tikzCode = useMemo(
     () =>
@@ -4325,6 +4429,15 @@ function App() {
     if (selectedElement?.type !== 'library') return
     updateSelected({ config: { ...getLibraryConfig(selectedElement), ...patch } })
   }
+
+  const libraryProfileIncludes = (key) => selectedLibraryProfileKeys.has(key)
+  const showExtraNodeConfig = ['extraNodes', 'nodeSpacing', 'nodeDirection', 'nodeShape', 'nodeLabels', 'connectNodes'].some(
+    libraryProfileIncludes,
+  )
+  const visibleQuickLibraryConfigKeys = new Set()
+  if (selectedCircuitQuickComponent) quickCircuitConfigKeys.forEach((key) => visibleQuickLibraryConfigKeys.add(key))
+  if (showExtraNodeConfig) quickExtraNodeConfigKeys.forEach((key) => visibleQuickLibraryConfigKeys.add(key))
+  if (selectedLibraryPreset?.id.includes('callout')) quickCalloutConfigKeys.forEach((key) => visibleQuickLibraryConfigKeys.add(key))
 
   const updateSelectedFunctionOptions = (patch) => {
     if (selectedElement?.type !== 'function') return
@@ -9078,7 +9191,7 @@ function App() {
                           onChange={(event) => updateSelectedLibraryConfig({ label: event.target.value })}
                         />
                       </label>
-                      {circuitTikzComponent(getLibraryPreset(selectedElement), selectedLibraryConfig) && (
+                      {selectedCircuitQuickComponent && (
                         <div className="circuit-config">
                           <label className="toggle">
                             <input
@@ -9163,73 +9276,77 @@ function App() {
                           </div>
                         </div>
                       )}
-                      <div className="field-pair">
-                        <label className="field">
-                          <span>Nodos extra</span>
-                          <input
-                            type="number"
-                            min="0"
-                            max="8"
-                            step="1"
-                            value={selectedLibraryConfig.extraNodes}
-                            onChange={(event) => updateSelectedLibraryConfig({ extraNodes: Number(event.target.value) })}
-                          />
-                        </label>
-                        <label className="field">
-                          <span>Separacion</span>
-                          <input
-                            type="number"
-                            min="0.25"
-                            max="3"
-                            step="0.05"
-                            value={selectedLibraryConfig.nodeSpacing}
-                            onChange={(event) => updateSelectedLibraryConfig({ nodeSpacing: Number(event.target.value) })}
-                          />
-                        </label>
-                      </div>
-                      <div className="field-pair">
-                        <label className="field">
-                          <span>Direccion</span>
-                          <select
-                            value={selectedLibraryConfig.nodeDirection}
-                            onChange={(event) => updateSelectedLibraryConfig({ nodeDirection: event.target.value })}
-                          >
-                            <option value="right">Derecha</option>
-                            <option value="left">Izquierda</option>
-                            <option value="down">Abajo</option>
-                            <option value="up">Arriba</option>
-                          </select>
-                        </label>
-                        <label className="field">
-                          <span>Forma nodo</span>
-                          <select
-                            value={selectedLibraryConfig.nodeShape}
-                            onChange={(event) => updateSelectedLibraryConfig({ nodeShape: event.target.value })}
-                          >
-                            {libraryNodeShapeOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-                      <label className="field">
-                        <span>Textos nodos</span>
-                        <input
-                          type="text"
-                          value={selectedLibraryConfig.nodeLabels}
-                          onChange={(event) => updateSelectedLibraryConfig({ nodeLabels: event.target.value })}
-                        />
-                      </label>
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          checked={selectedLibraryConfig.connectNodes}
-                          onChange={(event) => updateSelectedLibraryConfig({ connectNodes: event.target.checked })}
-                        />
-                        <span>Conectar nodos extra</span>
-                      </label>
+                      {showExtraNodeConfig && (
+                        <>
+                          <div className="field-pair">
+                            <label className="field">
+                              <span>Nodos extra</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="8"
+                                step="1"
+                                value={selectedLibraryConfig.extraNodes}
+                                onChange={(event) => updateSelectedLibraryConfig({ extraNodes: Number(event.target.value) })}
+                              />
+                            </label>
+                            <label className="field">
+                              <span>Separacion</span>
+                              <input
+                                type="number"
+                                min="0.25"
+                                max="3"
+                                step="0.05"
+                                value={selectedLibraryConfig.nodeSpacing}
+                                onChange={(event) => updateSelectedLibraryConfig({ nodeSpacing: Number(event.target.value) })}
+                              />
+                            </label>
+                          </div>
+                          <div className="field-pair">
+                            <label className="field">
+                              <span>Direccion</span>
+                              <select
+                                value={selectedLibraryConfig.nodeDirection}
+                                onChange={(event) => updateSelectedLibraryConfig({ nodeDirection: event.target.value })}
+                              >
+                                <option value="right">Derecha</option>
+                                <option value="left">Izquierda</option>
+                                <option value="down">Abajo</option>
+                                <option value="up">Arriba</option>
+                              </select>
+                            </label>
+                            <label className="field">
+                              <span>Forma nodo</span>
+                              <select
+                                value={selectedLibraryConfig.nodeShape}
+                                onChange={(event) => updateSelectedLibraryConfig({ nodeShape: event.target.value })}
+                              >
+                                {libraryNodeShapeOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                          <label className="field">
+                            <span>Textos nodos</span>
+                            <input
+                              type="text"
+                              value={selectedLibraryConfig.nodeLabels}
+                              onChange={(event) => updateSelectedLibraryConfig({ nodeLabels: event.target.value })}
+                            />
+                          </label>
+                          <label className="toggle">
+                            <input
+                              type="checkbox"
+                              checked={selectedLibraryConfig.connectNodes}
+                              onChange={(event) => updateSelectedLibraryConfig({ connectNodes: event.target.checked })}
+                            />
+                            <span>Conectar nodos extra</span>
+                          </label>
+                        </>
+                      )}
                       {getLibraryPreset(selectedElement).id.includes('callout') && (
                         <div className="field-pair">
                           <label className="field">
@@ -9254,11 +9371,11 @@ function App() {
                       )}
                       <div className="advanced-config">
                         <div className="advanced-config-header">
-                          <strong>Opciones avanzadas del objeto</strong>
-                          <span>{selectedLibraryConfigSections.length} grupos segun libreria/preset</span>
+                          <strong>Perfil: {selectedLibraryProfile?.title ?? 'Objeto'}</strong>
+                          <span>{selectedLibraryConfigSections.length} grupos exactos</span>
                         </div>
                         {selectedLibraryConfigSections.map((section) => {
-                          const fields = section.fields.filter((field) => !quickLibraryConfigKeys.has(field.key))
+                          const fields = section.fields.filter((field) => !visibleQuickLibraryConfigKeys.has(field.key))
                           if (!fields.length) return null
                           return (
                             <details key={section.id} className="config-details" open={section.id === 'paperStyle'}>

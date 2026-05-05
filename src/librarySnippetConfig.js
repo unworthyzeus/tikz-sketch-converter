@@ -29,7 +29,7 @@ export function shouldUseConfiguredLibrarySnippet(preset = {}, config = {}, capa
     (preset.group === 'Telecom' || `${preset.id ?? ''}`.startsWith('telecom-') || `${preset.id ?? ''}`.startsWith('rf-')) &&
     hasText(config.blockLabels)
   ) {
-    return true
+    return Boolean(capabilities.explicitBlockLabels)
   }
 
   return configurablePrimitiveIds.has(preset.id)

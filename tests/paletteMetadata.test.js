@@ -70,3 +70,17 @@ test('paper-ready circuit presets expose idiomatic circuitikz schematics', () =>
   assert.match(circuitSnippets, /q\.C/)
   assert.match(circuitSnippets, /q\.E/)
 })
+
+test('paper-ready plot and object snippets expose exact configuration tokens', () => {
+  assert.match(snippetText('circuit-inverting-amplifier'), /__INPUT_LABEL__/)
+  assert.match(snippetText('circuit-inverting-amplifier'), /__OUTPUT_LABEL__/)
+  assert.match(snippetText('circuit-inverting-amplifier'), /__COMPONENT_1__/)
+  assert.match(snippetText('telecom-awgn-channel'), /__CHANNEL_LABEL__/)
+  assert.match(snippetText('telecom-awgn-channel'), /__NOISE_LABEL__/)
+  assert.match(snippetText('rf-front-end'), /__GAIN_DB__/)
+
+  assert.match(snippetText('plot-spectrum'), /fill=__FILL__/)
+  assert.match(snippetText('plot-ber'), /E_b\/N_0/)
+  assert.match(snippetText('plot-eye'), /UI/)
+  assert.match(snippetText('plot-spectrogram'), /colormap/)
+})
