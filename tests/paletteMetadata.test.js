@@ -110,6 +110,37 @@ test('paper-ready estimation and control diagrams cover communication analysis w
   assert.match(snippets, /gain margin/i)
 })
 
+test('paper-ready coding and control diagrams cover deeper analysis workflows', () => {
+  const requiredIds = ['telecom-ofdm-resource-grid', 'telecom-ldpc-tanner', 'control-kalman-filter']
+
+  requiredIds.forEach((id) => assert.ok(paletteItem(id), id))
+
+  ;['telecom-ofdm-resource-grid', 'telecom-ldpc-tanner'].forEach((id) => {
+    const item = paletteItem(id)
+    assert.equal(item.group, 'Telecom')
+    assert.ok(item.libraries.includes('arrows.meta'), id)
+    assert.ok(item.libraries.includes('positioning'), id)
+  })
+
+  const kalman = paletteItem('control-kalman-filter')
+  assert.equal(kalman.group, 'Control')
+  assert.ok(kalman.libraries.includes('arrows.meta'))
+  assert.ok(kalman.libraries.includes('positioning'))
+
+  const snippets = requiredIds.map(snippetText).join('\n')
+  assert.match(snippets, /pilot/i)
+  assert.match(snippets, /data/i)
+  assert.match(snippets, /LDPC/)
+  assert.match(snippets, /check/i)
+  assert.match(snippets, /predict/i)
+  assert.match(snippets, /update/i)
+  assert.match(snippets, /\\nu_k/)
+  assert.match(snippets, /K_k=/)
+  assert.match(snippets, /F\\hat\{x\}/)
+  assert.match(snippets, /H\\hat\{x\}/)
+  assert.match(snippets, /\\hat\{x\}/)
+})
+
 test('palette and preset metadata declare snippet-driven TikZ libraries exactly once', () => {
   const libraryRules = [
     ['arrows.meta', /Stealth|Latex|Triangle|\\arrow\{Stealth\}/],

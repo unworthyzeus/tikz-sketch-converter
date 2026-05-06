@@ -44,6 +44,7 @@ import { writeClipboardText } from './clipboard'
 import { moveElementBy } from './elementTransforms'
 import { createEditorKeydownHandler } from './editorKeyboard'
 import { curveMarkerPoints, functionLegendEntries, functionSeriesIsRenderable, markerGlyphParts } from './functionPreview'
+import { functionDataTableRows, functionDataTableUsesYError, parseFunctionDataTable } from './functionDataTable'
 import { latexSymbolGroups } from './latexSymbols'
 import { configDrivenRequirements } from './libraryRequirements'
 import {
@@ -60,6 +61,7 @@ import {
   libraryAddPlotTikzOptions,
 } from './libraryPlotOptions'
 import { formatMatrixEntryRows, normalizeGanttRange, shouldUseConfiguredLibrarySnippet } from './librarySnippetConfig'
+import { connectorLabelTikz, splitNodeLabels } from './nodeConnectorOptions'
 import { objectPreviewBadges, terminalPreviewLabels } from './objectPreview'
 import {
   buildPaperChecklist,
@@ -1206,15 +1208,6 @@ function libraryConfigSectionsForPreset(preset = {}) {
   return objectConfigSections.filter((section) => section.domains.some((domain) => domains.has(domain)))
 }
 
-function splitNodeLabels(value, count) {
-  const labels = `${value ?? ''}`
-    .split(/[,;\n]/)
-    .map((label) => label.trim())
-    .filter(Boolean)
-
-  return Array.from({ length: count }, (_, index) => labels[index] ?? `${index + 1}`)
-}
-
 function libraryMetrics(element) {
   const preset = getLibraryPreset(element)
   const config = getLibraryConfig(element, preset)
@@ -1873,18 +1866,6 @@ function functionOptionsFor(element) {
   return { ...defaultFunctionOptions, ...(element.functionOptions ?? {}) }
 }
 
-function parsedDataTablePoints(value = '') {
-  return `${value}`
-    .split(/\n|;/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [x, y] = line.split(/[,\s]+/).map(Number)
-      return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null
-    })
-    .filter(Boolean)
-}
-
 function functionLineStyleOption(value) {
   return functionLineStyleOptions.find((option) => option.value === value) ?? functionLineStyleOptions[0]
 }
@@ -1990,8 +1971,14 @@ function sampleFunctionSeries(element, series) {
   const baseYOffset = Number(element.yOffset) || 0
   const seriesYOffset = Number(series.yOffset) || 0
   const offset = baseYOffset + seriesYOffset
-  const dataPoints = parsedDataTablePoints(series.dataTable)
-  if (dataPoints.length) return dataPoints.map((point) => ({ x: point.x + xOffset, y: point.y * yScale + offset }))
+  const dataPoints = parseFunctionDataTable(series.dataTable)
+  if (dataPoints.length) {
+    return dataPoints.map((point) => ({
+      x: point.x + xOffset,
+      y: point.y * yScale + offset,
+      yError: Number.isFinite(point.yError) ? Math.abs(point.yError * yScale) : undefined,
+    }))
+  }
 
   return sampleExpressionPoints(series.expression, element.domainStart, element.domainEnd, element.samples).map((point) =>
     point ? { x: point.x + xOffset, y: point.y * yScale + offset } : null,
@@ -3336,6 +3323,7 @@ function buildExtraNodeTikz(element, color, fill, scopeStretch = { x: 1, y: 1 })
     )
 
     if (!config.connectNodes) return
+    const edgeLabel = connectorLabelTikz(config, index, formatTikzNodeText)
     if (index === 0) {
       const anchor =
         config.nodeDirection === 'left'
@@ -3345,11 +3333,11 @@ function buildExtraNodeTikz(element, color, fill, scopeStretch = { x: 1, y: 1 })
             : config.nodeDirection === 'down'
               ? `(${formatNumber((metrics.baseWidth / 2) / scopeStretch.x)},${formatNumber(-metrics.baseHeight / scopeStretch.y)})`
               : `(${formatNumber(metrics.baseWidth / scopeStretch.x)},${formatNumber((-metrics.baseHeight / 2) / scopeStretch.y)})`
-      lines.push(`\\draw[-{Stealth}, draw=${color}!65, line width=0.45pt] ${anchor} -- (${prefix}${index});`)
+      lines.push(`\\draw[-{Stealth}, draw=${color}!65, line width=0.45pt] ${anchor} --${edgeLabel} (${prefix}${index});`)
       return
     }
 
-    lines.push(`\\draw[-{Stealth}, draw=${color}!65, line width=0.45pt] (${prefix}${index - 1}) -- (${prefix}${index});`)
+    lines.push(`\\draw[-{Stealth}, draw=${color}!65, line width=0.45pt] (${prefix}${index - 1}) --${edgeLabel} (${prefix}${index});`)
   })
 
   return lines
@@ -3791,11 +3779,14 @@ function buildTikz(elements, exportOptions = {}) {
             series.plotOptions,
           ].filter(Boolean)
         displaySeries.forEach(({ series, points }) => {
-          const dataPoints = parsedDataTablePoints(series.dataTable)
+          const dataPoints = parseFunctionDataTable(series.dataTable)
           if (dataPoints.length) {
-            const tableRows = ['x y', ...points.filter(Boolean).map((point) => `${formatNumber(point.x)} ${formatNumber(point.y)}`)]
+            const tablePoints = points.filter(Boolean)
+            const tableRows = functionDataTableRows(tablePoints)
+            const addplotOptions = makeAddplotOptions(series)
+            if (functionOptions.errorBars && functionDataTableUsesYError(tablePoints)) addplotOptions.push('y error=yerr')
             const legend = series.legend ? `\n${linePrefix}  \\addlegendentry{${formatTikzNodeText(series.legend)}}` : ''
-            pictureLines.push(`${linePrefix}  \\addplot[${makeAddplotOptions(series).join(', ')}] table[row sep=\\\\] {`)
+            pictureLines.push(`${linePrefix}  \\addplot[${addplotOptions.join(', ')}] table[row sep=\\\\] {`)
             tableRows.forEach((row) => pictureLines.push(`${linePrefix}    ${row}\\\\`))
             pictureLines.push(`${linePrefix}  };${legend}`)
             return
@@ -6480,6 +6471,22 @@ function App() {
       )
     }
     const renderFlowPreview = (kind) => {
+      if (kind.includes('kalman')) {
+        return (
+          <g>
+            {rectNode(0.1, 0.35, 0.22, 0.2, 'predict', { fontSize: 8 })}
+            {circleNode(0.46, 0.45, 0.075, 'nu', { fontSize: 8 })}
+            {rectNode(0.36, 0.16, 0.22, 0.16, 'K', { fontSize: 9 })}
+            {rectNode(0.68, 0.35, 0.22, 0.2, 'update', { fontSize: 8 })}
+            {arrow(0.32, 0.45, 0.39, 0.45, 'kalman-pred', { size: 4 })}
+            {arrow(0.54, 0.45, 0.68, 0.45, 'kalman-innov', { size: 4 })}
+            {arrow(0.47, 0.32, 0.47, 0.35, 'kalman-gain', { size: 4 })}
+            <path {...shapeCommon} d={`M ${sx(0.79)} ${sy(0.55)} L ${sx(0.79)} ${sy(0.78)} L ${sx(0.21)} ${sy(0.78)} L ${sx(0.21)} ${sy(0.55)}`} />
+            {miniText(0.5, 0.83, 'posterior feedback', { fontSize: 7 })}
+            {miniText(0.46, 0.66, 'y - Hx-', { fontSize: 7 })}
+          </g>
+        )
+      }
       if (kind.includes('shape-decision') || kind.includes('flow-decision')) return diamondNode(0.5, 0.5, 0.42, 0.42, '?')
       if (kind.includes('shapes-palette')) {
         return (
@@ -6871,6 +6878,7 @@ function App() {
       if (kind.startsWith('logic-')) return renderLogicPreview(kind)
       if (
         kind.startsWith('telecom-') ||
+        kind.startsWith('control-') ||
         kind.startsWith('rf-') ||
         kind.startsWith('shape-') ||
         kind.startsWith('flow-') ||

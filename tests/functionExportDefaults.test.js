@@ -28,3 +28,9 @@ test('function plot defaults expose axis sizing and title controls', () => {
   assert.match(appSource, /axis lines=\$\{functionOptions\.axisLines\}/)
   assert.match(appSource, /title=\{\$\{formatTikzNodeText\(functionOptions\.plotTitle\)\}\}/)
 })
+
+test('function table export wires y-error columns into PGFPlots tables', () => {
+  assert.match(appSource, /functionDataTableRows\(tablePoints\)/)
+  assert.match(appSource, /functionDataTableUsesYError\(tablePoints\)/)
+  assert.match(appSource, /y error=yerr/)
+})

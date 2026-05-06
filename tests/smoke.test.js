@@ -126,6 +126,7 @@ test('generic palette previews are semantically classified', () => {
   assert.match(appSource, /renderNetworkPreview/)
   assert.match(appSource, /renderLogicPreview/)
   assert.match(appSource, /renderFlowPreview/)
+  assert.match(appSource, /kind\.includes\('kalman'\)/)
   assert.match(appSource, /normalizeBoardElement/)
   assert.match(appSource, /map\(normalizeBoardElement\)/)
 })
