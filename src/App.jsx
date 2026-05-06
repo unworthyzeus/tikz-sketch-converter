@@ -63,6 +63,8 @@ import {
 import {
   buildBarChartSnippet,
   buildGanttChartSnippet,
+  buildModularDiagramSnippet,
+  diagramSemanticConfigChanged,
   formatMatrixEntryRows,
   shouldUseConfiguredLibrarySnippet,
 } from './librarySnippetConfig'
@@ -3165,6 +3167,7 @@ function applyLibraryConfigToSnippet(lines, preset, element) {
 
 function buildConfiguredLibrarySnippet(preset, element) {
   const config = getLibraryConfig(element, preset)
+  const defaultConfig = defaultLibraryConfig(preset)
   const label = formatTikzNodeText(config.label || element.title)
   const width = formatNumber(Math.max(0.7, 1.35 * config.stretchX))
   const height = formatNumber(Math.max(0.35, 0.62 * config.stretchY))
@@ -3173,6 +3176,7 @@ function buildConfiguredLibrarySnippet(preset, element) {
     !shouldUseConfiguredLibrarySnippet(preset, config, {
       hasCircuitComponent: Boolean(circuitComponent),
       explicitBlockLabels: Boolean(element.config?.blockLabels?.trim()),
+      explicitModularDiagramConfig: diagramSemanticConfigChanged(preset, config, defaultConfig),
     })
   ) {
     return null
@@ -3248,6 +3252,9 @@ function buildConfiguredLibrarySnippet(preset, element) {
     if (config.gainDb) lines.push(`\\node at (0,-0.55) {${formatNumber(config.gainDb)} dB};`)
     return lines
   }
+
+  const modularDiagram = buildModularDiagramSnippet(preset, config, { formatText: formatTikzNodeText })
+  if (modularDiagram) return modularDiagram
 
   const simpleNodeShapes = {
     'shape-process': 'rectangle',

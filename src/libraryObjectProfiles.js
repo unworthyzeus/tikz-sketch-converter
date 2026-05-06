@@ -101,6 +101,7 @@ const exactProfiles = {
           'plotDomain',
           'samples',
           'addplotExtraOptions',
+          'dataTable',
         ],
       },
     ],
@@ -142,7 +143,7 @@ const exactProfiles = {
       {
         id: 'constellationSymbols',
         title: 'Symbols',
-        fields: ['modulation', 'markStyle', 'addplotExtraOptions', 'datasetTag'],
+        fields: ['modulation', 'markStyle', 'dataTable', 'addplotExtraOptions', 'datasetTag'],
       },
     ],
   },
@@ -233,7 +234,7 @@ const exactProfiles = {
       {
         id: 'spectrogramSurface',
         title: 'Surface rendering',
-        fields: ['shader', 'pointMeta', 'samples', 'axisExtraOptions', 'addplotExtraOptions'],
+        fields: ['shader', 'pointMeta', 'samples', 'dataTable', 'axisExtraOptions', 'addplotExtraOptions'],
       },
     ],
   },
@@ -270,7 +271,7 @@ const exactProfiles = {
       {
         id: 'spectrumTrace',
         title: 'Trace',
-        fields: ['plotSmooth', 'plotDomain', 'samples', 'markStyle', 'addplotExtraOptions'],
+        fields: ['plotSmooth', 'plotDomain', 'samples', 'markStyle', 'dataTable', 'addplotExtraOptions'],
       },
     ],
   },
@@ -305,7 +306,7 @@ const exactProfiles = {
       {
         id: 'eyeTrace',
         title: 'Traces',
-        fields: ['plotSmooth', 'samples', 'drawOpacity', 'addplotExtraOptions', 'datasetTag'],
+        fields: ['plotSmooth', 'samples', 'drawOpacity', 'dataTable', 'addplotExtraOptions', 'datasetTag'],
       },
     ],
   },
@@ -342,7 +343,7 @@ const exactProfiles = {
       {
         id: 'frequencyTrace',
         title: 'Trace',
-        fields: ['plotSmooth', 'plotDomain', 'samples', 'markStyle', 'addplotExtraOptions'],
+        fields: ['plotSmooth', 'plotDomain', 'samples', 'markStyle', 'dataTable', 'addplotExtraOptions'],
       },
     ],
   },
@@ -378,7 +379,7 @@ const exactProfiles = {
       {
         id: 'impulseSamples',
         title: 'Samples',
-        fields: ['stemPlot', 'markStyle', 'addplotExtraOptions', 'datasetTag'],
+        fields: ['stemPlot', 'markStyle', 'dataTable', 'addplotExtraOptions', 'datasetTag'],
       },
     ],
   },
@@ -414,7 +415,7 @@ const exactProfiles = {
       {
         id: 'heatmapSurface',
         title: 'Cells',
-        fields: ['shader', 'pointMeta', 'axisExtraOptions', 'addplotExtraOptions'],
+        fields: ['shader', 'pointMeta', 'dataTable', 'axisExtraOptions', 'addplotExtraOptions'],
       },
     ],
   },
@@ -669,7 +670,7 @@ const exactProfiles = {
       {
         id: 'telecomBlock',
         title: 'Telecom block',
-        fields: ['inputLabel', 'outputLabel', 'signalLabel', 'carrierLabel', 'modulation', 'gainDb', 'noiseLabel', 'terminalNames'],
+        fields: ['inputLabel', 'outputLabel', 'blockLabels', 'signalLabel', 'carrierLabel', 'modulation', 'branchCount', 'gainDb', 'noiseLabel', 'terminalNames'],
       },
     ],
   },
@@ -693,7 +694,125 @@ const exactProfiles = {
       {
         id: 'graphLayout',
         title: 'Graph layout',
-        fields: ['nodeDistance', 'layerDistance', 'siblingDistance', 'edgeStyle', 'edgeLabels', 'nodeLabels', 'connectNodes'],
+        fields: ['nodeLabels', 'edgeLabels', 'connectNodes', 'branchCount', 'nodeDistance', 'layerDistance', 'siblingDistance', 'edgeStyle', 'blockLabels'],
+      },
+    ],
+  },
+  flowDiagram: {
+    id: 'flowDiagram',
+    title: 'Flow diagram',
+    defaults: {
+      branchCount: 3,
+    },
+    sections: [
+      {
+        id: 'flowStructure',
+        title: 'Flow structure',
+        fields: ['blockLabels', 'edgeLabels', 'inputLabel', 'outputLabel', 'signalLabel', 'branchCount', 'nodeDistance', 'nodeLabels'],
+      },
+    ],
+  },
+  mlDiagram: {
+    id: 'mlDiagram',
+    title: 'ML/DL diagram',
+    defaults: {
+      branchCount: 3,
+    },
+    sections: [
+      {
+        id: 'mlStructure',
+        title: 'Model structure',
+        fields: ['blockLabels', 'nodeLabels', 'edgeLabels', 'inputLabel', 'outputLabel', 'branchCount', 'layerDistance', 'nodeDistance', 'datasetTag'],
+      },
+    ],
+  },
+  controlLoopDiagram: {
+    id: 'controlLoopDiagram',
+    title: 'Control loop',
+    defaults: {
+      branchCount: 4,
+    },
+    sections: [
+      {
+        id: 'controlLoop',
+        title: 'Loop semantics',
+        fields: ['blockLabels', 'edgeLabels', 'inputLabel', 'outputLabel', 'feedbackLabel', 'signalLabel', 'nodeDistance', 'referenceName'],
+      },
+    ],
+  },
+  commutativeDiagram: {
+    id: 'commutativeDiagram',
+    title: 'Commutative diagram',
+    defaults: {},
+    sections: [
+      {
+        id: 'commutativeLayout',
+        title: 'Objects and arrows',
+        fields: ['nodeLabels', 'edgeLabels', 'nodeDistance', 'layerDistance', 'referenceName'],
+      },
+    ],
+  },
+  setDiagram: {
+    id: 'setDiagram',
+    title: 'Set diagram',
+    defaults: {},
+    sections: [
+      {
+        id: 'setLabels',
+        title: 'Sets',
+        fields: ['nodeLabels', 'blockLabels', 'datasetTag', 'referenceName'],
+      },
+    ],
+  },
+  sequenceDiagram: {
+    id: 'sequenceDiagram',
+    title: 'Sequence diagram',
+    defaults: {
+      branchCount: 2,
+    },
+    sections: [
+      {
+        id: 'sequenceMessages',
+        title: 'Actors and messages',
+        fields: ['nodeLabels', 'edgeLabels', 'branchCount', 'nodeDistance', 'referenceName'],
+      },
+    ],
+  },
+  usecaseDiagram: {
+    id: 'usecaseDiagram',
+    title: 'Use case diagram',
+    defaults: {},
+    sections: [
+      {
+        id: 'usecaseActors',
+        title: 'Actor and cases',
+        fields: ['inputLabel', 'blockLabels', 'nodeLabels', 'referenceName'],
+      },
+    ],
+  },
+  entityDiagram: {
+    id: 'entityDiagram',
+    title: 'ER diagram',
+    defaults: {},
+    sections: [
+      {
+        id: 'entityRelation',
+        title: 'Entities and relation',
+        fields: ['blockLabels', 'matrixEntries', 'nodeLabels', 'referenceName'],
+      },
+    ],
+  },
+  panelDiagram: {
+    id: 'panelDiagram',
+    title: 'Paper panels',
+    defaults: {
+      branchCount: 3,
+    },
+    sections: [
+      {
+        id: 'panelLayout',
+        title: 'Panel layout',
+        fields: ['blockLabels', 'nodeLabels', 'branchCount', 'paperRole', 'datasetTag', 'referenceName'],
       },
     ],
   },
@@ -734,6 +853,14 @@ const exactProfileIds = new Map([
   ['plot-eye', 'plotEye'],
   ['plot-frequency-response', 'plotFrequencyResponse'],
   ['plot-impulse-response', 'plotImpulseResponse'],
+  ['commutative-square', 'commutativeDiagram'],
+  ['math-comm-triangle', 'commutativeDiagram'],
+  ['math-venn', 'setDiagram'],
+  ['uml-sequence', 'sequenceDiagram'],
+  ['uml-usecase', 'usecaseDiagram'],
+  ['er-entity', 'entityDiagram'],
+  ['paper-multi-panel', 'panelDiagram'],
+  ['control-kalman-filter', 'controlLoopDiagram'],
   ['circuit-inverting-amplifier', 'opampComposite'],
   ['circuit-opamp-lowpass', 'opampComposite'],
   ['circuit-opamp-filter', 'opampComposite'],
@@ -797,8 +924,15 @@ function profileIdForPreset(preset = {}) {
   if (group === 'telecom' || id.startsWith('telecom-')) return 'telecomBlock'
   if (preview === 'matrix' || text.includes('matrix') || text.includes('table')) return 'matrixObject'
   if (preview === 'network' || text.includes('graph') || text.includes('automata') || text.includes('petri')) return 'graphObject'
-  if (group === 'shapes' || preview === 'flow' || text.includes('shape') || text.includes('flow')) return 'shapeObject'
-  if (group === 'annotation' || group === 'paper' || text.includes('annot')) return 'paperObject'
+  if (group === 'control') return 'controlLoopDiagram'
+  if (group === 'paper' || text.includes('multi-panel')) return 'panelDiagram'
+  if (group === 'flow') return 'flowDiagram'
+  if (group === 'ml / dl' || preview === 'cube' || text.includes('pipeline')) return 'mlDiagram'
+  if (group === 'uml') return 'flowDiagram'
+  if (group === 'er') return 'entityDiagram'
+  if (group === 'shapes' || text.includes('shape')) return 'shapeObject'
+  if (preview === 'flow' || text.includes('flow')) return 'flowDiagram'
+  if (group === 'annotation' || text.includes('annot')) return 'paperObject'
   return 'paperObject'
 }
 

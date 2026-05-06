@@ -6,6 +6,7 @@ import {
   libraryProfileFieldKeysForPreset,
   libraryProfileSectionSpecsForPreset,
 } from '../src/libraryObjectProfiles.js'
+import { diagramPaletteItems } from '../src/paletteTaxonomy.js'
 import { libraryPaletteItems } from '../src/tikzPaletteItems.js'
 
 function preset(id) {
@@ -105,6 +106,57 @@ test('bar chart and gantt diagrams expose semantic bar editors', () => {
   ])
   assert.equal(libraryProfileDefaultConfig(preset('gantt-paper')).barCount, 3)
   assert.match(libraryProfileDefaultConfig(preset('gantt-paper')).ganttTasks, /prep,1,2/)
+})
+
+test('every common diagram exposes at least one diagram-specific semantic editor', () => {
+  const semanticKeys = new Set([
+    'barCount',
+    'barData',
+    'ganttStart',
+    'ganttEnd',
+    'ganttProgress',
+    'ganttTasks',
+    'blockLabels',
+    'nodeLabels',
+    'edgeLabels',
+    'matrixEntries',
+    'dataTable',
+    'inputLabel',
+    'outputLabel',
+    'componentLabels',
+    'circuitLabel',
+    'circuitValue',
+    'terminalNames',
+    'channelLabel',
+    'noiseLabel',
+    'signalLabel',
+    'carrierLabel',
+    'modulation',
+    'branchCount',
+    'xlabel',
+    'ylabel',
+    'plotDomain',
+    'samples',
+  ])
+  const missing = diagramPaletteItems(libraryPaletteItems)
+    .map((item) => ({
+      id: item.id,
+      profileId: libraryObjectProfileForPreset(item).id,
+      semanticFields: [...libraryProfileFieldKeysForPreset(item)].filter((key) => semanticKeys.has(key)),
+    }))
+    .filter((entry) => entry.semanticFields.length === 0)
+    .map(({ id, profileId }) => `${id}:${profileId}`)
+
+  assert.deepEqual(missing, [])
+})
+
+test('plot diagram profiles expose editable data sources when that makes sense', () => {
+  const missing = diagramPaletteItems(libraryPaletteItems)
+    .filter((item) => item.preview === 'plot' && item.id !== 'plot-bar')
+    .filter((item) => !libraryProfileFieldKeysForPreset(item).has('dataTable'))
+    .map((item) => item.id)
+
+  assert.deepEqual(missing, [])
 })
 
 test('composite circuits expose circuit labels instead of generic plot controls', () => {

@@ -4,6 +4,8 @@ import {
   barChartRowsForConfig,
   buildBarChartSnippet,
   buildGanttChartSnippet,
+  buildModularDiagramSnippet,
+  diagramSemanticConfigChanged,
   formatMatrixEntryRows,
   ganttTaskRowsForConfig,
   normalizeGanttRange,
@@ -132,4 +134,85 @@ test('bar and gantt config switch common diagrams to generated editable snippets
     shouldUseConfiguredLibrarySnippet({ id: 'plot-bar', group: 'Plots', preview: 'plot' }, { barCount: 5 }),
     true,
   )
+})
+
+test('semantic changes switch non-bar common diagrams to modular generated snippets', () => {
+  const flowPreset = { id: 'ml-pipeline', group: 'ML / DL', preview: 'flow' }
+  const defaults = { blockLabels: '', inputLabel: '', outputLabel: '', nodeLabels: 'A, B, C', connectNodes: true }
+
+  assert.equal(diagramSemanticConfigChanged(flowPreset, defaults, defaults), false)
+  assert.equal(
+    diagramSemanticConfigChanged(
+      flowPreset,
+      { ...defaults, blockLabels: 'Raw IQ, Synchronize, Demodulate', inputLabel: 'samples' },
+      defaults,
+    ),
+    true,
+  )
+  assert.equal(
+    shouldUseConfiguredLibrarySnippet(
+      flowPreset,
+      { blockLabels: 'Raw IQ, Synchronize, Demodulate' },
+      { explicitModularDiagramConfig: true },
+    ),
+    true,
+  )
+})
+
+test('flow, graph, paper and control diagrams build semantically editable snippets', () => {
+  const formatText = (value) => value
+
+  const flow = buildModularDiagramSnippet(
+    { id: 'ml-pipeline', group: 'ML / DL', preview: 'flow' },
+    {
+      blockLabels: 'Raw IQ, Synchronize, Demodulate',
+      inputLabel: 'samples',
+      outputLabel: 'bits',
+      edgeLabels: 'aligned, symbols',
+      branchCount: 3,
+    },
+    { formatText },
+  ).join('\n')
+  assert.match(flow, /Raw IQ/)
+  assert.match(flow, /Synchronize/)
+  assert.match(flow, /samples/)
+  assert.match(flow, /bits/)
+  assert.match(flow, /aligned/)
+
+  const graph = buildModularDiagramSnippet(
+    { id: 'graph-directed', group: 'Graph', preview: 'network' },
+    {
+      nodeLabels: 'UE, gNB, Core',
+      edgeLabels: 'uplink, backhaul',
+      connectNodes: true,
+    },
+    { formatText },
+  ).join('\n')
+  assert.match(graph, /\(n0\).*UE/)
+  assert.match(graph, /\(n1\).*gNB/)
+  assert.match(graph, /uplink/)
+
+  const paper = buildModularDiagramSnippet(
+    { id: 'paper-multi-panel', group: 'Paper', preview: 'flow' },
+    { blockLabels: 'raw input, latent map, final output' },
+    { formatText },
+  ).join('\n')
+  assert.match(paper, /raw input/)
+  assert.match(paper, /latent map/)
+  assert.match(paper, /Panel A/)
+
+  const control = buildModularDiagramSnippet(
+    { id: 'control-kalman-filter', group: 'Control', preview: 'flow' },
+    {
+      blockLabels: 'Predict, Innovation, Gain, Update',
+      inputLabel: 'posterior',
+      outputLabel: 'posterior feedback',
+      edgeLabels: 'prior, residual, gain, posterior',
+    },
+    { formatText },
+  ).join('\n')
+  assert.match(control, /Predict/)
+  assert.match(control, /Innovation/)
+  assert.match(control, /posterior feedback/)
+  assert.match(control, /residual/)
 })
