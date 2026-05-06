@@ -287,7 +287,7 @@ const rawLibraryPaletteItems = [
     height: 2.7,
     stroke: '#111111',
     preview: 'flow',
-    packages: ['\\usepackage{tikz}'],
+    packages: ['\\usepackage{tikz}', '\\usepackage{pgfgantt}'],
     snippet: [
       '\\draw[draw=__COLOR__, line width=0.5pt] (0,0) rectangle (4.8,-1.8);',
       '\\foreach \\x in {1,2,3,4} \\draw[draw=__COLOR__!25, line width=0.3pt] (\\x,0) -- (\\x,-1.8);',

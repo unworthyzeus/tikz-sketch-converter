@@ -60,7 +60,12 @@ import {
   functionPgfplotsAxisSettings,
   libraryAddPlotTikzOptions,
 } from './libraryPlotOptions'
-import { formatMatrixEntryRows, normalizeGanttRange, shouldUseConfiguredLibrarySnippet } from './librarySnippetConfig'
+import {
+  buildBarChartSnippet,
+  buildGanttChartSnippet,
+  formatMatrixEntryRows,
+  shouldUseConfiguredLibrarySnippet,
+} from './librarySnippetConfig'
 import { connectorLabelTikz, splitNodeLabels } from './nodeConnectorOptions'
 import { objectPreviewBadges, terminalPreviewLabels } from './objectPreview'
 import {
@@ -437,9 +442,12 @@ const objectConfigSections = [
     title: 'Gantt / Telecom / RF',
     domains: ['gantt', 'telecom'],
     fields: [
+      { key: 'barCount', label: 'Numero barras', type: 'number', min: 1, max: 20, step: 1 },
+      { key: 'barData', label: 'Datos barras', type: 'textarea', placeholder: 'A,2\nB,3.5\nC,2.8' },
       { key: 'ganttStart', label: 'Gantt inicio', type: 'number', min: 0, max: 999, step: 1 },
       { key: 'ganttEnd', label: 'Gantt fin', type: 'number', min: 1, max: 999, step: 1 },
       { key: 'ganttProgress', label: 'Progress %', type: 'number', min: 0, max: 100, step: 1 },
+      { key: 'ganttTasks', label: 'Tareas y rangos', type: 'textarea', placeholder: 'Spec,1,2,100\nBuild,2,5,60\nTest,5,7,20' },
       { key: 'blockLabels', label: 'Labels bloques', type: 'text', placeholder: 'Bits, Map, RF' },
       { key: 'signalLabel', label: 'Signal label', type: 'text', placeholder: 'x(t), s[n]' },
       { key: 'carrierLabel', label: 'Carrier', type: 'text', placeholder: 'f_c' },
@@ -1062,9 +1070,12 @@ function defaultLibraryConfig(preset = {}) {
     nodeDistance: 0,
     layerDistance: 0,
     siblingDistance: 0,
+    barCount: 3,
+    barData: '',
     ganttStart: 1,
     ganttEnd: 7,
     ganttProgress: 0,
+    ganttTasks: '',
     blockLabels: '',
     signalLabel: '',
     carrierLabel: '',
@@ -1166,6 +1177,7 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
     nodeDistance: numberInRange(config.nodeDistance, 0, 0, 6),
     layerDistance: numberInRange(config.layerDistance, 0, 0, 6),
     siblingDistance: numberInRange(config.siblingDistance, 0, 0, 6),
+    barCount: Math.round(numberInRange(config.barCount, 3, 1, 20)),
     ganttStart: Math.round(numberInRange(config.ganttStart, 1, 0, 999)),
     ganttEnd: Math.round(numberInRange(config.ganttEnd, 7, 1, 999)),
     ganttProgress: Math.round(numberInRange(config.ganttProgress, 0, 0, 100)),
@@ -3216,18 +3228,9 @@ function buildConfiguredLibrarySnippet(preset, element) {
     ]
   }
 
-  if (preset.id.includes('gantt') && (config.ganttStart !== 1 || config.ganttEnd !== 7 || config.ganttProgress > 0 || config.blockLabels.trim())) {
-    const labels = splitNodeLabels(config.blockLabels || 'Task A, Task B, Task C', 3)
-    const { start, end } = normalizeGanttRange(config.ganttStart, config.ganttEnd)
-    return [
-      `\\begin{ganttchart}[hgrid,vgrid,bar progress label font=\\scriptsize]{${start}}{${end}}`,
-      `  \\gantttitle{${formatTikzNodeText(config.plotTitle || 'Plan')}}{${end - start + 1}} \\\\`,
-      `  \\ganttbar[progress=${config.ganttProgress}]{${formatTikzNodeText(labels[0])}}{${start}}{${Math.min(end, start + 1)}} \\\\`,
-      `  \\ganttbar[progress=${Math.max(0, config.ganttProgress - 20)}]{${formatTikzNodeText(labels[1])}}{${Math.min(end, start + 1)}}{${Math.min(end, start + 3)}} \\\\`,
-      `  \\ganttbar[progress=${Math.max(0, config.ganttProgress - 40)}]{${formatTikzNodeText(labels[2])}}{${Math.min(end, start + 3)}}{${end}}`,
-      '\\end{ganttchart}',
-    ]
-  }
+  if (preset.id === 'plot-bar') return buildBarChartSnippet(config, { formatText: formatTikzNodeText })
+
+  if (preset.id.includes('gantt')) return buildGanttChartSnippet(config, { formatText: formatTikzNodeText })
 
   if ((preset.group === 'Telecom' || preset.id.startsWith('telecom-') || preset.id.startsWith('rf-')) && config.blockLabels.trim()) {
     const labels = splitNodeLabels(config.blockLabels, Math.max(1, config.branchCount))
@@ -9757,11 +9760,11 @@ function App() {
                           <strong>Perfil: {selectedLibraryProfile?.title ?? 'Objeto'}</strong>
                           <span>{selectedLibraryConfigSections.length} grupos exactos</span>
                         </div>
-                        {selectedLibraryConfigSections.map((section) => {
+                        {selectedLibraryConfigSections.map((section, sectionIndex) => {
                           const fields = section.fields.filter((field) => !visibleQuickLibraryConfigKeys.has(field.key))
                           if (!fields.length) return null
                           return (
-                            <details key={section.id} className="config-details" open={section.id === 'paperStyle'}>
+                            <details key={section.id} className="config-details" open={sectionIndex === 0 || section.id === 'paperStyle'}>
                               <summary>{section.title}</summary>
                               <div className="object-option-grid">{fields.map(renderLibraryConfigField)}</div>
                             </details>

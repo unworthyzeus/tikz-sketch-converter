@@ -146,6 +146,58 @@ const exactProfiles = {
       },
     ],
   },
+  plotBar: {
+    id: 'plotBar',
+    title: 'Bar chart',
+    defaults: {
+      axisWidth: 5,
+      axisHeight: 3.2,
+      gridMode: 'major',
+      ymin: '0',
+      ylabel: 'value',
+      barCount: 3,
+      barData: 'A,2\nB,3.5\nC,2.8',
+    },
+    sections: [
+      {
+        id: 'barChartBars',
+        title: 'Barras',
+        fields: [
+          'barCount',
+          'barData',
+          'axisWidth',
+          'axisHeight',
+          'gridMode',
+          'ymin',
+          'ymax',
+          'xlabel',
+          'ylabel',
+          'plotTitle',
+          'axisExtraOptions',
+          'addplotExtraOptions',
+        ],
+      },
+    ],
+  },
+  ganttTimeline: {
+    id: 'ganttTimeline',
+    title: 'Gantt timeline',
+    defaults: {
+      barCount: 3,
+      ganttStart: 1,
+      ganttEnd: 7,
+      ganttProgress: 0,
+      plotTitle: 'Plan',
+      ganttTasks: 'prep,1,2\ntrain,2,5\nwrite,5,7',
+    },
+    sections: [
+      {
+        id: 'ganttBars',
+        title: 'Barras Gantt',
+        fields: ['barCount', 'ganttStart', 'ganttEnd', 'ganttProgress', 'plotTitle', 'ganttTasks', 'datasetTag'],
+      },
+    ],
+  },
   plotSpectrogram: {
     id: 'plotSpectrogram',
     title: 'Time-frequency heatmap',
@@ -672,6 +724,8 @@ const exactProfiles = {
 }
 
 const exactProfileIds = new Map([
+  ['gantt-paper', 'ganttTimeline'],
+  ['plot-bar', 'plotBar'],
   ['plot-ber', 'plotBer'],
   ['plot-constellation', 'plotConstellation'],
   ['plot-spectrogram', 'plotSpectrogram'],

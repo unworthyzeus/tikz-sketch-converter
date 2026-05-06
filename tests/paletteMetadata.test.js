@@ -31,6 +31,12 @@ test('native TikZ electrical preset activates the IEC circuit style', () => {
   assert.match(snippet, /\\end\{scope\}/)
 })
 
+test('editable Gantt bars declare pgfgantt for configured timeline export', () => {
+  const gantt = paletteItem('gantt-paper')
+
+  assert.ok(gantt?.packages.includes('\\usepackage{pgfgantt}'))
+})
+
 test('paper-ready telecom presets expose common signal-chain diagrams', () => {
   const requiredTelecomIds = [
     'telecom-ofdm-transmitter',

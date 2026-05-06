@@ -75,6 +75,38 @@ test('constellation and spectrogram plots expose different plot-specific control
   assert.equal(fieldKeys('plot-spectrogram').includes('markStyle'), false)
 })
 
+test('bar chart and gantt diagrams expose semantic bar editors', () => {
+  assert.equal(libraryObjectProfileForPreset(preset('plot-bar')).id, 'plotBar')
+  assert.deepEqual(fieldKeys('plot-bar').slice(0, 11), [
+    'barCount',
+    'barData',
+    'axisWidth',
+    'axisHeight',
+    'gridMode',
+    'ymin',
+    'ymax',
+    'xlabel',
+    'ylabel',
+    'plotTitle',
+    'axisExtraOptions',
+  ])
+  assert.equal(libraryProfileDefaultConfig(preset('plot-bar')).barCount, 3)
+  assert.match(libraryProfileDefaultConfig(preset('plot-bar')).barData, /A,2/)
+
+  assert.equal(libraryObjectProfileForPreset(preset('gantt-paper')).id, 'ganttTimeline')
+  assert.deepEqual(fieldKeys('gantt-paper').slice(0, 7), [
+    'barCount',
+    'ganttStart',
+    'ganttEnd',
+    'ganttProgress',
+    'plotTitle',
+    'ganttTasks',
+    'datasetTag',
+  ])
+  assert.equal(libraryProfileDefaultConfig(preset('gantt-paper')).barCount, 3)
+  assert.match(libraryProfileDefaultConfig(preset('gantt-paper')).ganttTasks, /prep,1,2/)
+})
+
 test('composite circuits expose circuit labels instead of generic plot controls', () => {
   assert.equal(libraryObjectProfileForPreset(preset('circuit-inverting-amplifier')).id, 'opampComposite')
   const keys = fieldKeys('circuit-inverting-amplifier')
