@@ -141,6 +141,41 @@ test('paper-ready coding and control diagrams cover deeper analysis workflows', 
   assert.match(snippets, /\\hat\{x\}/)
 })
 
+test('technical diagrams avoid nonportable or semantically reversed snippets', () => {
+  const allPaletteText = libraryPaletteItems.map((item) => item.snippet.join('\n')).join('\n')
+
+  assert.doesNotMatch(allPaletteText, /contour gnuplot/)
+  assert.doesNotMatch(allPaletteText, /\\hline/)
+  assert.doesNotMatch(allPaletteText, /\(n\\x\)/)
+  assert.doesNotMatch(allPaletteText, /n\d+\.\d+/)
+
+  libraryPaletteItems.forEach((item) => {
+    item.snippet.forEach((line, lineIndex) => {
+      if (line.includes('\\\\') && line.includes('\\node[')) {
+        assert.match(line, /align\s*=/, `${item.id}:${lineIndex} multiline node needs align`)
+      }
+    })
+  })
+
+  assert.match(snippetText('plot-boxplot'), /boxplot prepared/)
+  assert.ok(paletteItem('plot-boxplot').pgfplotsLibraries.includes('statistics'))
+  assert.match(snippetText('plot-contour'), /coordinates \{\(-1\.4,0\)/)
+  assert.ok(paletteItem('uml-class').libraries.includes('shapes.multipart'))
+  assert.match(snippetText('uml-class'), /rectangle split/)
+  assert.match(snippetText('dl-rnn-cell'), /h_\{t-1\}/)
+
+  assert.match(snippetText('telecom-awgn-channel'), /\$\(sum\.north\)\+\(0,\.72\)\$.*-- \(sum\.north\)/)
+  assert.match(snippetText('telecom-channel'), /\$\(s\.north\)\+\(0,0\.7\)\$.*-- \(s\.north\)/)
+  assert.match(snippetText('telecom-adaptive-equalizer'), /d\[n\].*-- node\[right, font=\\scriptsize\] \{\$\+\$\} \(err\.north\)/s)
+  assert.match(snippetText('telecom-adaptive-equalizer'), /\(zbranch\) \|-/)
+  assert.match(snippetText('telecom-feedback-loop'), /\$-\$/)
+  assert.doesNotMatch(snippetText('rf-splitter'), /\\Sigma/)
+  assert.match(snippetText('rf-sparameter'), /a_1/)
+  assert.match(snippetText('rf-sparameter'), /b_1/)
+  assert.match(snippetText('rf-sparameter'), /a_2/)
+  assert.match(snippetText('rf-sparameter'), /b_2/)
+})
+
 test('palette and preset metadata declare snippet-driven TikZ libraries exactly once', () => {
   const libraryRules = [
     ['arrows.meta', /Stealth|Latex|Triangle|\\arrow\{Stealth\}/],
@@ -161,6 +196,13 @@ test('palette and preset metadata declare snippet-driven TikZ libraries exactly 
     ['spy', /spy using outlines/],
     ['backgrounds', /on background layer/],
   ]
+  const pgfplotsLibraryRules = [
+    ['colormaps', /colormap/],
+    ['fillbetween', /fill between/],
+    ['groupplots', /\\begin\{groupplot\}|\\nextgroupplot/],
+    ['polar', /\\begin\{polaraxis\}/],
+    ['statistics', /boxplot prepared|boxplot\/draw direction/],
+  ]
 
   const metadataIssues = []
   const allItems = [...libraryPaletteItems, ...libraryPresets]
@@ -178,6 +220,13 @@ test('palette and preset metadata declare snippet-driven TikZ libraries exactly 
     libraryRules.forEach(([library, pattern]) => {
       if (pattern.test(snippet) && !libraries.has(library)) {
         metadataIssues.push(`${item.id} missing ${library}`)
+      }
+    })
+
+    const pgfplotsLibraries = new Set(item.pgfplotsLibraries ?? [])
+    pgfplotsLibraryRules.forEach(([library, pattern]) => {
+      if (pattern.test(snippet) && !pgfplotsLibraries.has(library)) {
+        metadataIssues.push(`${item.id} missing pgfplots ${library}`)
       }
     })
   })
