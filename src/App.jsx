@@ -77,6 +77,7 @@ import { previewKindForPreset } from './previewKinds'
 import { rasterSafeSvgText } from './svgRasterExport'
 import { libraryPresets } from './tikzLibraryPresets'
 import { libraryPaletteItems } from './tikzPaletteItems'
+import { diagramPaletteItems, filterPaletteItems, objectPaletteItems, paletteGroupsFor } from './paletteTaxonomy'
 import { injectTikzOptionsIntoLines } from './tikzOptionInjection'
 import { splitTikzOptions } from './tikzOptions'
 import { clampCanvasZoom, initialCanvasZoom } from './viewportDefaults'
@@ -4027,6 +4028,8 @@ function App() {
   const [functionError, setFunctionError] = useState('')
   const [librarySearch, setLibrarySearch] = useState('')
   const [libraryGroup, setLibraryGroup] = useState('All')
+  const [diagramSearch, setDiagramSearch] = useState('')
+  const [diagramGroup, setDiagramGroup] = useState('All')
   const [symbolSearch, setSymbolSearch] = useState('')
   const [symbolsOpen, setSymbolsOpen] = useState(false)
   const [, setKatexReady] = useState(Boolean(katexRenderer))
@@ -4131,30 +4134,16 @@ function App() {
   const paperWrapperPreview = useMemo(() => buildPaperWrapperPreview(settings), [settings])
   const figureWrapperControls = useMemo(() => figureWrapperControlsState(settings), [settings])
   const inferredNets = useMemo(() => inferCircuitNets(elements.filter((element) => !element.hidden)), [elements])
-  const paletteGroups = useMemo(() => ['All', ...Array.from(new Set(libraryPaletteItems.map((preset) => preset.group))).sort()], [])
+  const reusableDiagramItems = useMemo(() => diagramPaletteItems(libraryPaletteItems), [])
+  const reusableObjectItems = useMemo(() => objectPaletteItems(libraryPaletteItems), [])
+  const diagramGroups = useMemo(() => paletteGroupsFor(reusableDiagramItems), [reusableDiagramItems])
+  const visibleDiagramItems = useMemo(() => {
+    return filterPaletteItems(reusableDiagramItems, { group: diagramGroup, search: diagramSearch })
+  }, [diagramGroup, diagramSearch, reusableDiagramItems])
+  const paletteGroups = useMemo(() => paletteGroupsFor(reusableObjectItems), [reusableObjectItems])
   const visiblePaletteItems = useMemo(() => {
-    const query = librarySearch.trim().toLowerCase()
-
-    return libraryPaletteItems.filter((preset) => {
-      const matchesGroup = libraryGroup === 'All' || preset.group === libraryGroup
-      const matchesSearch =
-        !query ||
-        [
-          preset.title,
-          preset.group,
-          preset.description,
-          ...(preset.tags ?? []),
-          ...(preset.libraries ?? []),
-          ...(preset.pgfplotsLibraries ?? []),
-          ...(preset.packages ?? []),
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(query)
-
-      return matchesGroup && matchesSearch
-    })
-  }, [libraryGroup, librarySearch])
+    return filterPaletteItems(reusableObjectItems, { group: libraryGroup, search: librarySearch })
+  }, [libraryGroup, librarySearch, reusableObjectItems])
   const visibleLatexSymbols = useMemo(() => {
     const query = symbolSearch.trim().toLowerCase()
     if (!query) return latexSymbols
@@ -8565,6 +8554,47 @@ function App() {
               )
             })}
           </div>
+          <div className="panel-subtitle">Diagramas comunes</div>
+          <label className="field">
+            <span>Buscar diagrama</span>
+            <input
+              type="search"
+              value={diagramSearch}
+              onChange={(event) => setDiagramSearch(event.target.value)}
+              placeholder="OFDM, Kalman, UML, Bode..."
+            />
+          </label>
+          <div className="library-filter-row" aria-label="Filtrar diagramas comunes">
+            {diagramGroups.map((group) => (
+              <button
+                key={group}
+                type="button"
+                className={`filter-chip ${diagramGroup === group ? 'is-active' : ''}`}
+                onClick={() => setDiagramGroup(group)}
+              >
+                {group}
+              </button>
+            ))}
+          </div>
+          <div className="library-grid diagram-library-grid">
+            {visibleDiagramItems.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="library-button diagram-library-button"
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = 'copy'
+                  event.dataTransfer.setData('application/x-tikz-palette-item', preset.id)
+                }}
+                onClick={() => addLibraryPreset(preset)}
+              >
+                <strong>{preset.title}</strong>
+                <span>{preset.group} diagram</span>
+                <small>{preset.description}</small>
+              </button>
+            ))}
+          </div>
         </section>
 
         <section className="panel-section library-section">
@@ -8578,7 +8608,7 @@ function App() {
               type="search"
               value={librarySearch}
               onChange={(event) => setLibrarySearch(event.target.value)}
-              placeholder="resistor, axis, estado, matrix..."
+              placeholder="resistor, gate, antenna, shape..."
             />
           </label>
           <div className="library-filter-row" aria-label="Filtrar objetos TikZ">

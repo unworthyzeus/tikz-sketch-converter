@@ -57,9 +57,11 @@ export const libraryPresets = [
     packages: ['\\usepackage{tikz}'],
     libraries: ['circuits.ee.IEC'],
     snippet: [
+      '\\begin{scope}[circuit ee IEC]',
       '\\draw[draw=__COLOR__] (0,0) to [resistor={info=$R_1$}] (2,0) to [capacitor={info=$C$}] (4,0);',
       '\\draw[draw=__COLOR__] (0,-1) to [inductor={info=$L$}] (2,-1) to [diode={info=$D$}] (4,-1);',
       '\\node[font=\\scriptsize, text=__COLOR__] at (2,-1.65) {TikZ circuits.ee.IEC};',
+      '\\end{scope}',
     ],
   },
   {

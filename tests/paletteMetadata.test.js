@@ -11,11 +11,24 @@ function snippetText(id) {
   return paletteItem(id)?.snippet?.join('\n') ?? ''
 }
 
+function presetItem(id) {
+  return libraryPresets.find((item) => item.id === id)
+}
+
 test('spectrogram plot declares colormaps as a PGFPlots library', () => {
   const spectrogram = paletteItem('plot-spectrogram')
 
   assert.deepEqual(spectrogram?.pgfplotsLibraries, ['colormaps'])
   assert.equal(spectrogram?.libraries?.includes('colormaps'), false)
+})
+
+test('native TikZ electrical preset activates the IEC circuit style', () => {
+  const preset = presetItem('tikz-ee-iec')
+  const snippet = preset?.snippet?.join('\n') ?? ''
+
+  assert.ok(preset?.libraries.includes('circuits.ee.IEC'))
+  assert.match(snippet, /\\begin\{scope\}\[circuit ee IEC\]/)
+  assert.match(snippet, /\\end\{scope\}/)
 })
 
 test('paper-ready telecom presets expose common signal-chain diagrams', () => {
@@ -139,6 +152,43 @@ test('paper-ready coding and control diagrams cover deeper analysis workflows', 
   assert.match(snippets, /F\\hat\{x\}/)
   assert.match(snippets, /H\\hat\{x\}/)
   assert.match(snippets, /\\hat\{x\}/)
+})
+
+test('common telecom diagram palette covers frame, FEC, link-budget, sync and MIMO-OFDM workflows', () => {
+  const requiredIds = [
+    'telecom-ofdm-transceiver',
+    'telecom-5g-nr-frame',
+    'telecom-mimo-ofdm-downlink',
+    'telecom-fec-chain',
+    'telecom-link-budget-chain',
+    'telecom-synchronization-loop',
+  ]
+
+  requiredIds.forEach((id) => {
+    const item = paletteItem(id)
+    assert.ok(item, id)
+    assert.equal(item.group, 'Telecom')
+    assert.equal(item.paletteKind, 'diagram')
+    assert.ok(item.libraries.includes('arrows.meta'), id)
+    assert.ok(item.libraries.includes('positioning'), id)
+  })
+
+  const snippets = requiredIds.map(snippetText).join('\n')
+  assert.match(snippets, /OFDM TX/i)
+  assert.match(snippets, /OFDM RX/i)
+  assert.match(snippets, /5G NR frame/i)
+  assert.match(snippets, /PDCCH/i)
+  assert.match(snippets, /PDSCH/i)
+  assert.match(snippets, /layers/i)
+  assert.match(snippets, /precoder/i)
+  assert.match(snippets, /per-antenna OFDM/i)
+  assert.match(snippets, /CRC/i)
+  assert.match(snippets, /FEC/i)
+  assert.match(snippets, /LLR/i)
+  assert.match(snippets, /Path loss/i)
+  assert.match(snippets, /G_t/i)
+  assert.match(snippets, /CFO/i)
+  assert.match(snippets, /timing/i)
 })
 
 test('technical diagrams avoid nonportable or semantically reversed snippets', () => {

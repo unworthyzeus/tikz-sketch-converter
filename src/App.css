@@ -372,6 +372,15 @@ textarea:focus-visible {
   letter-spacing: 0;
 }
 
+.panel-subtitle {
+  color: #4b5563;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
 .color-row {
   display: flex;
   flex-wrap: wrap;
@@ -799,6 +808,18 @@ textarea:focus-visible {
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.diagram-library-grid {
+  max-height: 260px;
+}
+
+.diagram-library-button {
+  min-height: 86px;
+}
+
+.diagram-library-button span {
+  color: #0f766e;
 }
 
 .library-button small {
@@ -1552,6 +1573,7 @@ html[data-theme='dark'] .overlap-menu button {
 html[data-theme='dark'] .topbar p,
 html[data-theme='dark'] .status-strip,
 html[data-theme='dark'] .panel-title,
+html[data-theme='dark'] .panel-subtitle,
 html[data-theme='dark'] .field span,
 html[data-theme='dark'] .toggle span,
 html[data-theme='dark'] .paper-composer-head span,
@@ -1634,6 +1656,14 @@ html[data-theme='dark'] .library-button,
 html[data-theme='dark'] .filter-chip,
 html[data-theme='dark'] .help-tabs button {
   color: #d7dce4;
+}
+
+html[data-theme='dark'] .library-button span {
+  color: #a5adbb;
+}
+
+html[data-theme='dark'] .diagram-library-button span {
+  color: #7dd3c7;
 }
 
 html[data-theme='dark'] .tool-button:hover,
