@@ -3430,7 +3430,9 @@ function replaceLibraryTokens(line, element, color, fill) {
     .replaceAll('__COMPONENT_1__', componentLabel(0, 'R_1'))
     .replaceAll('__COMPONENT_2__', componentLabel(1, 'R_2'))
     .replaceAll('__COMPONENT_3__', componentLabel(2, 'C_1'))
-    .replaceAll('__COMPONENT_4__', componentLabel(3, 'L_1'))
+    .replaceAll('__COMPONENT_4__', componentLabel(3, 'R_4'))
+    .replaceAll('__COMPONENT_5__', componentLabel(4, 'R_B'))
+    .replaceAll('__COMPONENT_6__', componentLabel(5, 'C_o'))
     .replaceAll('__TITLE__', formatTikzNodeText(element.title))
     .replaceAll('__GROUP__', formatTikzNodeText(element.group ?? 'TikZ'))
 }
@@ -5710,30 +5712,37 @@ function App() {
       fontFamily: '"Times New Roman", Georgia, serif',
       textAnchor: 'middle',
     }
+    const previewKey = (...parts) =>
+      parts
+        .map((part) => `${part ?? ''}`.replace(/[^A-Za-z0-9._-]+/g, '-'))
+        .join('-')
     const terminalLabel = (x, y, text) => (
       <text x={sx(x)} y={sy(y)} {...labelStyle}>
         {text}
       </text>
     )
-    const miniText = (x, y, text, props = {}) => (
-      <text x={sx(x)} y={sy(y)} {...labelStyle} {...props}>
-        {text}
-      </text>
-    )
+    const miniText = (x, y, text, props = {}) => {
+      const { key, ...textProps } = props
+      return (
+        <text key={key ?? previewKey('text', x, y, text)} x={sx(x)} y={sy(y)} {...labelStyle} {...textProps}>
+          {text}
+        </text>
+      )
+    }
     const rectNode = (x, y, w, h, text, props = {}) => (
-      <g key={props.key}>
+      <g key={props.key ?? previewKey('rect', x, y, w, h, text)}>
         <rect {...filledShapeCommon} x={sx(x)} y={sy(y)} width={baseWidth * w} height={baseHeight * h} rx={props.rx ?? 3} />
         {text && miniText(x + w / 2, y + h / 2 + 0.035, text, { fontSize: props.fontSize ?? 10 })}
       </g>
     )
-    const diamondNode = (cx, cy, w, h, text) => (
-      <g>
+    const diamondNode = (cx, cy, w, h, text, props = {}) => (
+      <g key={props.key ?? previewKey('diamond', cx, cy, w, h, text)}>
         <path {...filledShapeCommon} d={`M ${sx(cx)} ${sy(cy - h / 2)} L ${sx(cx + w / 2)} ${sy(cy)} L ${sx(cx)} ${sy(cy + h / 2)} L ${sx(cx - w / 2)} ${sy(cy)} Z`} />
         {text && miniText(cx, cy + 0.035, text, { fontSize: 10 })}
       </g>
     )
     const circleNode = (cx, cy, r, text, props = {}) => (
-      <g key={props.key}>
+      <g key={props.key ?? previewKey('circle', cx, cy, r, text)}>
         <circle {...filledShapeCommon} cx={sx(cx)} cy={sy(cy)} r={Math.max(5, Math.min(baseWidth, baseHeight) * r)} />
         {text && miniText(cx, cy + 0.035, text, { fontSize: props.fontSize ?? 10 })}
       </g>

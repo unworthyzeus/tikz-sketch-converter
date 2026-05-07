@@ -532,7 +532,7 @@ const rawLibraryPaletteItems = [
       'Wheatstone bridge',
       'Four-resistor measurement bridge',
       'circuit',
-      ['\\draw[draw=__COLOR__, line width=0.65pt] (0,0) to[R,l=$R_1$] (1.4,1.1) to[R,l=$R_2$] (2.8,0) to[R,l=$R_4$] (1.4,-1.1) to[R,l=$R_3$] (0,0);', '\\draw[draw=__COLOR__, line width=0.55pt] (1.4,1.1) -- (1.4,-1.1);', '\\node[right] at (2.9,0) {$V_o$};'],
+      ['\\draw[draw=__COLOR__, line width=0.65pt] (0,0) to[R,l=__COMPONENT_1__] (1.4,1.1) to[R,l=__COMPONENT_2__] (2.8,0) to[R,l=__COMPONENT_4__] (1.4,-1.1) to[R,l=__COMPONENT_3__] (0,0);', '\\draw[draw=__COLOR__, line width=0.55pt] (1.4,1.1) -- (1.4,-1.1);', '\\node[right] at (2.9,0) {__OUTPUT_LABEL__};'],
     ],
     [
       'circuit-rlc-series',
@@ -540,7 +540,7 @@ const rawLibraryPaletteItems = [
       'RLC series',
       'Series resistor inductor capacitor',
       'circuit',
-      ['\\draw[draw=__COLOR__, line width=0.65pt] (0,0) to[R,l=$R$] (1.2,0) to[L,l=$L$] (2.4,0) to[C,l=$C$] (3.6,0);'],
+      ['\\draw[draw=__COLOR__, line width=0.65pt] (0,0) to[R,l=__COMPONENT_1__] (1.2,0) to[L,l=__COMPONENT_2__] (2.4,0) to[C,l=__COMPONENT_3__] (3.6,0);'],
     ],
     [
       'circuit-opamp-filter',
@@ -548,7 +548,7 @@ const rawLibraryPaletteItems = [
       'Op-amp filter',
       'Active RC filter sketch',
       'opamp',
-      ['\\node[op amp, draw=__COLOR__, line width=0.65pt] (op) at (2,-0.6) {};', '\\draw[draw=__COLOR__, line width=0.65pt] (0,0) to[R,l=$R$] (op.-);', '\\draw[draw=__COLOR__, line width=0.65pt] (op.-) to[C,l=$C$] ++(0,-1.1) node[ground] {};', '\\draw[draw=__COLOR__, line width=0.65pt] (op.out) -- ++(0.8,0) node[right] {$v_o$};', '\\draw[draw=__COLOR__, line width=0.65pt] (op.+) -- ++(-0.3,0) node[ground] {};'],
+      ['\\node[op amp, draw=__COLOR__, line width=0.65pt] (op) at (2,-0.6) {};', '\\draw[draw=__COLOR__, line width=0.65pt] (-1,0) node[left] {__INPUT_LABEL__} to[R,l=__COMPONENT_1__] (op.-);', '\\draw[draw=__COLOR__, line width=0.65pt] (op.-) to[C,l=__COMPONENT_2__] ++(0,-1.1) node[ground] {__GROUND_LABEL__};', '\\draw[draw=__COLOR__, line width=0.65pt] (op.out) -- ++(0.8,0) node[right] {__OUTPUT_LABEL__};', '\\draw[draw=__COLOR__, line width=0.65pt] (op.+) -- ++(-0.3,0) node[ground] {__GROUND_LABEL__};'],
     ],
     [
       'circuit-differential-pair',
@@ -556,7 +556,7 @@ const rawLibraryPaletteItems = [
       'Differential pair',
       'Two-transistor analog pair',
       'differential-pair',
-      ['\\node[npn, draw=__COLOR__, line width=0.65pt] (q1) at (0,0) {};', '\\node[npn, draw=__COLOR__, line width=0.65pt] (q2) at (1.8,0) {};', '\\draw[draw=__COLOR__, line width=0.55pt] (q1.E) -- (0.9,-0.9) -- (q2.E);', '\\draw[draw=__COLOR__, line width=0.55pt] (0.9,-0.9) to[I,l=$I_T$] (0.9,-2.0);'],
+      ['\\node[npn, draw=__COLOR__, line width=0.65pt] (q1) at (0,0) {}; \\node[font=\\scriptsize] at (q1.north) {__COMPONENT_1__};', '\\node[npn, draw=__COLOR__, line width=0.65pt] (q2) at (1.8,0) {}; \\node[font=\\scriptsize] at (q2.north) {__COMPONENT_2__};', '\\draw[draw=__COLOR__, line width=0.55pt] (q1.E) -- (0.9,-0.9) -- (q2.E);', '\\draw[draw=__COLOR__, line width=0.55pt] (0.9,-0.9) to[I,l=__COMPONENT_3__] (0.9,-2.0);'],
     ],
     [
       'logic-mux',
@@ -767,11 +767,11 @@ const rawLibraryPaletteItems = [
       'npn',
       [
         '\\node[npn, draw=__COLOR__, line width=0.65pt] (q) at (1.2,0) {};',
-        '\\draw[draw=__COLOR__, line width=0.65pt] (-1,0) node[left] {$v_i$} to[C,l=$C_{in}$] (q.B);',
-        '\\draw[draw=__COLOR__, line width=0.65pt] (q.C) to[R,l=$R_C$] ++(0,1.25) node[vcc] {$V_{CC}$};',
-        '\\draw[draw=__COLOR__, line width=0.65pt] (q.E) to[R,l=$R_E$] ++(0,-1.1) node[ground] {};',
-        '\\draw[draw=__COLOR__, line width=0.65pt] (q.C) to[C,l=$C_o$] ++(1.45,0) node[right] {$v_o$};',
-        '\\draw[draw=__COLOR__, line width=0.55pt] (q.B) to[R,l_=$R_B$] ++(0,-1.0) node[ground] {};',
+        '\\draw[draw=__COLOR__, line width=0.65pt] (-1,0) node[left] {__INPUT_LABEL__} to[C,l=__COMPONENT_1__] (q.B);',
+        '\\draw[draw=__COLOR__, line width=0.65pt] (q.C) to[R,l=__COMPONENT_2__] ++(0,1.25) node[vcc] {__SUPPLY_LABEL__};',
+        '\\draw[draw=__COLOR__, line width=0.65pt] (q.E) to[R,l=__COMPONENT_3__] ++(0,-1.1) node[ground] {__GROUND_LABEL__};',
+        '\\draw[draw=__COLOR__, line width=0.65pt] (q.C) to[C,l=__COMPONENT_4__] ++(1.45,0) node[right] {__OUTPUT_LABEL__};',
+        '\\draw[draw=__COLOR__, line width=0.55pt] (q.B) to[R,l_=__COMPONENT_5__] ++(0,-1.0) node[ground] {__GROUND_LABEL__};',
       ],
     ],
     [
@@ -781,12 +781,12 @@ const rawLibraryPaletteItems = [
       'Resonant shunt network',
       'circuit',
       [
-        '\\draw[draw=__COLOR__, line width=0.65pt] (-.8,0) node[left] {$v$} -- (0,0);',
+        '\\draw[draw=__COLOR__, line width=0.65pt] (-.8,0) node[left] {__INPUT_LABEL__} -- (0,0);',
         '\\draw[draw=__COLOR__, line width=0.65pt] (0,0) -- (2.8,0);',
-        '\\draw[draw=__COLOR__, line width=0.65pt] (0,-1.8) -- (2.8,-1.8) node[ground] {};',
-        '\\draw[draw=__COLOR__, line width=0.65pt] (.35,0) to[R,l=$R$] (.35,-1.8);',
-        '\\draw[draw=__COLOR__, line width=0.65pt] (1.4,0) to[L,l=$L$] (1.4,-1.8);',
-        '\\draw[draw=__COLOR__, line width=0.65pt] (2.45,0) to[C,l=$C$] (2.45,-1.8);',
+        '\\draw[draw=__COLOR__, line width=0.65pt] (0,-1.8) -- (2.8,-1.8) node[ground] {__GROUND_LABEL__};',
+        '\\draw[draw=__COLOR__, line width=0.65pt] (.35,0) to[R,l=__COMPONENT_1__] (.35,-1.8);',
+        '\\draw[draw=__COLOR__, line width=0.65pt] (1.4,0) to[L,l=__COMPONENT_2__] (1.4,-1.8);',
+        '\\draw[draw=__COLOR__, line width=0.65pt] (2.45,0) to[C,l=__COMPONENT_3__] (2.45,-1.8);',
       ],
     ],
     [

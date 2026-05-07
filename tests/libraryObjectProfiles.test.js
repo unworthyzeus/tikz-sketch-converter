@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   libraryObjectProfileForPreset,
@@ -7,11 +8,14 @@ import {
   libraryProfileSectionSpecsForPreset,
 } from '../src/libraryObjectProfiles.js'
 import { diagramPaletteItems } from '../src/paletteTaxonomy.js'
+import { libraryPresets } from '../src/tikzLibraryPresets.js'
 import { libraryPaletteItems } from '../src/tikzPaletteItems.js'
 import { modularDiagramKindForPreset, semanticDiagramFieldsForPreset } from '../src/librarySnippetConfig.js'
 
+const allLibraryItems = [...libraryPaletteItems, ...libraryPresets]
+
 function preset(id) {
-  return libraryPaletteItems.find((item) => item.id === id)
+  return allLibraryItems.find((item) => item.id === id)
 }
 
 function fieldKeys(id) {
@@ -107,6 +111,17 @@ test('bar chart and gantt diagrams expose semantic bar editors', () => {
   ])
   assert.equal(libraryProfileDefaultConfig(preset('gantt-paper')).barCount, 3)
   assert.match(libraryProfileDefaultConfig(preset('gantt-paper')).ganttTasks, /prep,1,2/)
+
+  assert.equal(libraryObjectProfileForPreset(preset('pgfgantt-native')).id, 'ganttTimeline')
+  assert.deepEqual(fieldKeys('pgfgantt-native').slice(0, 7), [
+    'barCount',
+    'ganttStart',
+    'ganttEnd',
+    'ganttProgress',
+    'plotTitle',
+    'ganttTasks',
+    'datasetTag',
+  ])
 })
 
 test('every common diagram exposes at least one diagram-specific semantic editor', () => {
@@ -193,14 +208,84 @@ test('non-plot non-circuit common diagrams have a modular generation path', () =
   assert.deepEqual(missing, [])
 })
 
+test('dedicated non-modular diagram strategies expose their controlling fields', () => {
+  const issues = diagramPaletteItems(allLibraryItems).flatMap((item) => {
+    if (modularDiagramKindForPreset(item)) return []
+
+    const id = `${item.id ?? ''}`.toLowerCase()
+    const group = `${item.group ?? ''}`.toLowerCase()
+    const preview = `${item.preview ?? ''}`.toLowerCase()
+    const profileId = libraryObjectProfileForPreset(item).id
+    const fields = libraryProfileFieldKeysForPreset(item)
+    const requiredFields = []
+
+    if (profileId.startsWith('plot') || profileId === 'genericPlot' || group === 'plots' || group === 'stats' || preview === 'plot') {
+      requiredFields.push(...(id === 'plot-bar' ? ['barCount', 'barData'] : ['dataTable']))
+    } else if (profileId === 'ganttTimeline' || id.includes('gantt') || preview === 'gantt') {
+      requiredFields.push('barCount', 'ganttStart', 'ganttEnd', 'ganttTasks')
+    } else if (profileId.includes('circuit') || profileId.includes('opamp') || group === 'circuit') {
+      requiredFields.push('circuitLabel', 'circuitValue', 'circuitStyle')
+    }
+
+    return requiredFields
+      .filter((field) => !fields.has(field))
+      .map((field) => `${item.id}:${profileId}:${field}`)
+  })
+
+  assert.deepEqual(issues, [])
+})
+
+test('diagram profile fields are all backed by app editor controls', () => {
+  const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const renderableFieldKeys = new Set(
+    [...appSource.matchAll(/\{\s*key:\s*['"]([^'"]+)['"]/g)].map((match) => match[1]),
+  )
+  const profileFields = new Set(
+    diagramPaletteItems(allLibraryItems).flatMap((item) =>
+      libraryProfileSectionSpecsForPreset(item).flatMap((section) => section.fields),
+    ),
+  )
+  const missing = [...profileFields].filter((field) => !renderableFieldKeys.has(field)).sort()
+
+  assert.deepEqual(missing, [])
+})
+
+test('common circuit diagrams expose tokenized labels for editable components', () => {
+  const expectedTokensById = new Map([
+    ['circuit-wheatstone', ['__COMPONENT_1__', '__COMPONENT_2__', '__COMPONENT_3__', '__COMPONENT_4__', '__OUTPUT_LABEL__']],
+    ['circuit-rlc-series', ['__COMPONENT_1__', '__COMPONENT_2__', '__COMPONENT_3__']],
+    ['circuit-opamp-filter', ['__INPUT_LABEL__', '__OUTPUT_LABEL__', '__GROUND_LABEL__', '__COMPONENT_1__', '__COMPONENT_2__']],
+    ['circuit-differential-pair', ['__COMPONENT_1__', '__COMPONENT_2__', '__COMPONENT_3__']],
+    ['circuit-inverting-amplifier', ['__INPUT_LABEL__', '__OUTPUT_LABEL__', '__GROUND_LABEL__', '__COMPONENT_1__', '__COMPONENT_2__']],
+    ['circuit-opamp-lowpass', ['__INPUT_LABEL__', '__OUTPUT_LABEL__', '__GROUND_LABEL__', '__COMPONENT_1__', '__COMPONENT_2__', '__COMPONENT_3__']],
+    ['circuit-common-emitter', ['__INPUT_LABEL__', '__OUTPUT_LABEL__', '__SUPPLY_LABEL__', '__GROUND_LABEL__', '__COMPONENT_1__', '__COMPONENT_2__', '__COMPONENT_3__', '__COMPONENT_4__', '__COMPONENT_5__']],
+    ['circuit-rlc-parallel', ['__INPUT_LABEL__', '__GROUND_LABEL__', '__COMPONENT_1__', '__COMPONENT_2__', '__COMPONENT_3__']],
+  ])
+  const issues = [...expectedTokensById.entries()].flatMap(([id, tokens]) => {
+    const item = preset(id)
+    const fields = libraryProfileFieldKeysForPreset(item)
+    const snippet = (item.snippet ?? []).join('\n')
+    const missing = []
+    if (!fields.has('componentLabels')) missing.push('componentLabels field')
+    tokens.forEach((token) => {
+      if (!snippet.includes(token)) missing.push(token)
+    })
+    return missing.map((entry) => `${id}:${entry}`)
+  })
+
+  assert.deepEqual(issues, [])
+})
+
 test('composite circuits expose circuit labels instead of generic plot controls', () => {
   assert.equal(libraryObjectProfileForPreset(preset('circuit-inverting-amplifier')).id, 'opampComposite')
   const keys = fieldKeys('circuit-inverting-amplifier')
-  assert.deepEqual(keys.slice(0, 10), [
+  assert.deepEqual(keys.slice(0, 12), [
     'inputLabel',
     'outputLabel',
     'feedbackLabel',
     'componentLabels',
+    'circuitLabel',
+    'circuitValue',
     'supplyLabel',
     'groundLabel',
     'circuitStyle',
