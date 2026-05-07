@@ -8,6 +8,7 @@ import {
   diagramSemanticConfigChanged,
   formatMatrixEntryRows,
   ganttTaskRowsForConfig,
+  modularDiagramKindForPreset,
   normalizeGanttRange,
   shouldUseConfiguredLibrarySnippet,
 } from '../src/librarySnippetConfig.js'
@@ -395,6 +396,42 @@ test('OFDM, FEC, channel, feedback, MIMO-link and RF diagrams have specialized m
   assert.match(rf, /LO/)
   assert.match(rf, /15 dB/)
   assert.match(rf, /NF=2 dB/)
+})
+
+test('matrix-like common diagrams keep modular snippets before generic matrix fallback', () => {
+  const formatText = (value) => value
+
+  const squarePreset = { id: 'commutative-square', group: 'Math', preview: 'matrix' }
+  assert.equal(modularDiagramKindForPreset(squarePreset), 'commutative')
+  const square = buildModularDiagramSnippet(
+    squarePreset,
+    {
+      nodeLabels: 'A,B,C,D',
+      edgeLabels: 'f,g,h,k',
+      nodeDistance: 1.8,
+      layerDistance: 1.1,
+    },
+    { formatText },
+  ).join('\n')
+  assert.match(square, /\(n0\).*A/)
+  assert.match(square, /node\[above, font=\\scriptsize\] \{f\}/)
+  assert.match(square, /node\[below, font=\\scriptsize\] \{k\}/)
+
+  const classPreset = { id: 'uml-class', group: 'UML', preview: 'matrix' }
+  assert.equal(modularDiagramKindForPreset(classPreset), 'class-diagram')
+  const umlClass = buildModularDiagramSnippet(
+    classPreset,
+    {
+      blockLabels: 'Model, + weights: Tensor, + train(): void',
+      nodeLabels: 'Model',
+      matrixEntries: '+ weights: Tensor\n+ train(): void',
+    },
+    { formatText },
+  ).join('\n')
+  assert.match(umlClass, /rectangle split parts=3/)
+  assert.match(umlClass, /\\textbf\{Model\}/)
+  assert.match(umlClass, /\\nodepart\{second\}\+ weights: Tensor/)
+  assert.match(umlClass, /\\nodepart\{third\}\+ train\(\): void/)
 })
 
 test('semantic change detection includes specialized diagram counts and rows', () => {

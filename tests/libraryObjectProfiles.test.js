@@ -8,6 +8,7 @@ import {
 } from '../src/libraryObjectProfiles.js'
 import { diagramPaletteItems } from '../src/paletteTaxonomy.js'
 import { libraryPaletteItems } from '../src/tikzPaletteItems.js'
+import { modularDiagramKindForPreset, semanticDiagramFieldsForPreset } from '../src/librarySnippetConfig.js'
 
 function preset(id) {
   return libraryPaletteItems.find((item) => item.id === id)
@@ -154,6 +155,39 @@ test('plot diagram profiles expose editable data sources when that makes sense',
   const missing = diagramPaletteItems(libraryPaletteItems)
     .filter((item) => item.preview === 'plot' && item.id !== 'plot-bar')
     .filter((item) => !libraryProfileFieldKeysForPreset(item).has('dataTable'))
+    .map((item) => item.id)
+
+  assert.deepEqual(missing, [])
+})
+
+test('modular diagram semantic fields are exposed by their editing profile', () => {
+  const missing = diagramPaletteItems(libraryPaletteItems)
+    .filter((item) => modularDiagramKindForPreset(item))
+    .map((item) => ({
+      id: item.id,
+      missingFields: semanticDiagramFieldsForPreset(item).filter((field) => !libraryProfileFieldKeysForPreset(item).has(field)),
+    }))
+    .filter((entry) => entry.missingFields.length)
+
+  assert.deepEqual(missing, [])
+})
+
+test('non-plot non-circuit common diagrams have a modular generation path', () => {
+  const missing = diagramPaletteItems(libraryPaletteItems)
+    .filter((item) => {
+      const group = `${item.group ?? ''}`.toLowerCase()
+      const preview = `${item.preview ?? ''}`.toLowerCase()
+      const id = `${item.id ?? ''}`.toLowerCase()
+      return (
+        group !== 'plots' &&
+        group !== 'stats' &&
+        group !== 'circuit' &&
+        group !== 'planning' &&
+        preview !== 'plot' &&
+        !id.includes('gantt')
+      )
+    })
+    .filter((item) => !modularDiagramKindForPreset(item))
     .map((item) => item.id)
 
   assert.deepEqual(missing, [])

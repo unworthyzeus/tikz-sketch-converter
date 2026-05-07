@@ -96,13 +96,14 @@ export function modularDiagramKindForPreset(preset = {}) {
     return 'mimo-link'
   }
   if (id === 'rf-front-end' || id === 'telecom-superhet') return 'rf-chain'
+  if (id === 'commutative-square' || id === 'math-comm-triangle') return 'commutative'
+  if (id === 'uml-class') return 'class-diagram'
   if (id.includes('gantt') || preview === 'plot' || group === 'plots' || group === 'stats') return null
   if (group === 'circuit' || text.includes('circuit')) return null
   if (preview === 'matrix' || text.includes('matrix') || text.includes('confusion')) return null
   if (id === 'paper-multi-panel' || group === 'paper') return 'panel'
   if (id === 'control-kalman-filter' || group === 'control') return 'control'
   if (id === 'math-venn') return 'set'
-  if (id === 'commutative-square' || id === 'math-comm-triangle') return 'commutative'
   if (id === 'uml-sequence') return 'sequence'
   if (id === 'uml-usecase') return 'usecase'
   if (group === 'er') return 'entity'
@@ -121,7 +122,7 @@ export function semanticDiagramFieldsForPreset(preset = {}) {
     case 'resource-grid':
       return ['symbolCount', 'subcarrierCount', 'pilotSpacing', 'blockLabels', 'inputLabel', 'outputLabel']
     case 'link-budget':
-      return ['budgetRows', 'matrixEntries', 'inputLabel', 'outputLabel', 'gainDb']
+      return ['budgetRows', 'inputLabel', 'outputLabel', 'gainDb']
     case 'tanner':
       return ['variableCount', 'checkCount', 'edgeLabels', 'nodeLabels', 'blockLabels']
     case 'mimo-ofdm':
@@ -149,12 +150,14 @@ export function semanticDiagramFieldsForPreset(preset = {}) {
       return ['antennaCount', 'branchCount', 'inputLabel', 'outputLabel', 'channelLabel', 'blockLabels', 'modulation', 'noiseLabel']
     case 'rf-chain':
       return ['blockLabels', 'inputLabel', 'outputLabel', 'carrierLabel', 'gainDb', 'noiseLabel', 'terminalNames']
+    case 'class-diagram':
+      return ['nodeLabels', 'matrixEntries', 'blockLabels']
     case 'control':
       return ['blockLabels', 'edgeLabels', 'inputLabel', 'outputLabel', 'feedbackLabel', 'nodeDistance']
     case 'network':
       return ['nodeLabels', 'edgeLabels', 'blockLabels', 'connectNodes', 'branchCount', 'nodeDistance', 'layerDistance']
     case 'panel':
-      return ['blockLabels', 'nodeLabels', 'matrixEntries', 'branchCount']
+      return ['blockLabels', 'nodeLabels', 'branchCount']
     case 'set':
       return ['nodeLabels', 'blockLabels']
     case 'commutative':
@@ -560,6 +563,36 @@ function buildLinkBudgetSnippet(config = {}, { formatText = (value) => value } =
   ]
 }
 
+function splitClassMembers(rows = []) {
+  const members = rows.length ? rows : ['+ weights', '+ train()']
+  const methods = members.filter((row) => /\w\s*\(/.test(row))
+  const fields = members.filter((row) => !/\w\s*\(/.test(row))
+
+  if (!methods.length && fields.length > 1) {
+    return {
+      fields: fields.slice(0, -1),
+      methods: fields.slice(-1),
+    }
+  }
+
+  return {
+    fields: fields.length ? fields : ['+ weights'],
+    methods: methods.length ? methods : ['+ train()'],
+  }
+}
+
+function buildClassDiagramSnippet(config = {}, { formatText = (value) => value } = {}) {
+  const blocks = explicitLabels(config.blockLabels)
+  const className = explicitLabels(config.nodeLabels)[0] ?? blocks[0] ?? 'Model'
+  const rows = splitConfigRows(config.matrixEntries)
+  const members = rows.length ? rows : blocks.slice(1)
+  const { fields, methods } = splitClassMembers(members)
+
+  return [
+    `\\node[draw=__COLOR__, rectangle split, rectangle split parts=3, __FILL_STYLE__, text opacity=1, minimum width=2.35cm, align=left] (class) at (0,0) {\\textbf{${formatText(className)}}\\nodepart{second}${fields.map(formatText).join('\\\\')}\\nodepart{third}${methods.map(formatText).join('\\\\')}};`,
+  ]
+}
+
 function ofdmChainDefaults(preset = {}) {
   const id = `${preset.id ?? ''}`.toLowerCase()
   if (id.includes('receiver')) {
@@ -818,6 +851,8 @@ export function buildModularDiagramSnippet(preset = {}, config = {}, options = {
       return buildMimoLinkSnippet(config, options)
     case 'rf-chain':
       return buildRfChainSnippet(preset, config, options)
+    case 'class-diagram':
+      return buildClassDiagramSnippet(config, options)
     case 'control':
       return buildControlDiagramSnippet(config, options)
     case 'network':
