@@ -187,6 +187,11 @@ test('telecom signal chains and RF blocks have different exact controls', () => 
     'signalLabel',
     'carrierLabel',
     'modulation',
+    'symbolCount',
+    'subcarrierCount',
+  ])
+  assert.deepEqual(fieldKeys('telecom-ofdm-pilot-estimator').slice(8, 11), [
+    'pilotSpacing',
     'branchCount',
     'noiseLabel',
   ])
@@ -212,6 +217,86 @@ test('telecom signal chains and RF blocks have different exact controls', () => 
     'gainDb',
     'noiseLabel',
     'terminalNames',
+  ])
+})
+
+test('more telecom diagrams expose chain, loop and antenna-specific editors', () => {
+  assert.equal(libraryObjectProfileForPreset(preset('telecom-ofdm-transceiver')).id, 'telecomOfdm')
+  assert.equal(fieldKeys('telecom-ofdm-transceiver').includes('symbolCount'), true)
+  assert.equal(fieldKeys('telecom-ofdm-transceiver').includes('pilotSpacing'), true)
+
+  assert.equal(libraryObjectProfileForPreset(preset('telecom-fec-chain')).id, 'fecChain')
+  assert.deepEqual(fieldKeys('telecom-fec-chain').slice(0, 8), [
+    'inputLabel',
+    'outputLabel',
+    'blockLabels',
+    'signalLabel',
+    'modulation',
+    'branchCount',
+    'noiseLabel',
+    'datasetTag',
+  ])
+
+  assert.equal(libraryObjectProfileForPreset(preset('telecom-synchronization-loop')).id, 'feedbackLoop')
+  assert.deepEqual(fieldKeys('telecom-synchronization-loop').slice(0, 9), [
+    'inputLabel',
+    'outputLabel',
+    'feedbackLabel',
+    'blockLabels',
+    'edgeLabels',
+    'signalLabel',
+    'carrierLabel',
+    'nodeDistance',
+    'referenceName',
+  ])
+
+  assert.equal(libraryObjectProfileForPreset(preset('telecom-mimo-link')).id, 'telecomMimo')
+  assert.equal(fieldKeys('telecom-mimo-link').includes('antennaCount'), true)
+})
+
+test('specialized matrix and telecom diagrams expose purpose-built modular controls', () => {
+  assert.equal(libraryObjectProfileForPreset(preset('ml-confusion')).id, 'confusionMatrix')
+  assert.deepEqual(fieldKeys('ml-confusion').slice(0, 5), [
+    'classLabels',
+    'matrixEntries',
+    'inputLabel',
+    'outputLabel',
+    'datasetTag',
+  ])
+
+  assert.equal(libraryObjectProfileForPreset(preset('telecom-ofdm-resource-grid')).id, 'telecomResourceGrid')
+  assert.deepEqual(fieldKeys('telecom-ofdm-resource-grid').slice(0, 7), [
+    'symbolCount',
+    'subcarrierCount',
+    'pilotSpacing',
+    'blockLabels',
+    'inputLabel',
+    'outputLabel',
+    'datasetTag',
+  ])
+
+  assert.equal(libraryObjectProfileForPreset(preset('telecom-5g-nr-frame')).id, 'telecomResourceGrid')
+  assert.equal(libraryObjectProfileForPreset(preset('telecom-ldpc-tanner')).id, 'tannerGraph')
+  assert.deepEqual(fieldKeys('telecom-ldpc-tanner').slice(0, 6), [
+    'variableCount',
+    'checkCount',
+    'edgeLabels',
+    'nodeLabels',
+    'blockLabels',
+    'datasetTag',
+  ])
+
+  assert.equal(libraryObjectProfileForPreset(preset('telecom-mimo-ofdm-downlink')).id, 'mimoOfdmDiagram')
+  assert.equal(fieldKeys('telecom-mimo-ofdm-downlink').includes('antennaCount'), true)
+  assert.equal(fieldKeys('telecom-mimo-ofdm-downlink').includes('channelLabel'), true)
+
+  assert.equal(libraryObjectProfileForPreset(preset('telecom-link-budget')).id, 'linkBudgetTable')
+  assert.deepEqual(fieldKeys('telecom-link-budget').slice(0, 5), [
+    'budgetRows',
+    'inputLabel',
+    'outputLabel',
+    'gainDb',
+    'datasetTag',
   ])
 })
 

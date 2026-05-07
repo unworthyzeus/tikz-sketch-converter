@@ -430,6 +430,8 @@ const objectConfigSections = [
       { key: 'rowSep', label: 'Row sep cm', type: 'number', min: 0, max: 4, step: 0.05 },
       { key: 'columnSep', label: 'Column sep cm', type: 'number', min: 0, max: 4, step: 0.05 },
       { key: 'matrixEntries', label: 'Matrix entries', type: 'textarea', placeholder: 'a & b\\\\\nc & d' },
+      { key: 'classLabels', label: 'Class labels', type: 'text', placeholder: 'negative, positive' },
+      { key: 'budgetRows', label: 'Budget rows', type: 'textarea', placeholder: 'Tx power,23 dBm\nPath loss,-128 dB\nRx power,-90 dBm' },
       { key: 'edgeStyle', label: 'Edge style', type: 'select', options: edgeStyleOptions },
       { key: 'edgeLabels', label: 'Edge labels', type: 'text', placeholder: 'f,g,h' },
       { key: 'nodeLabels', label: 'Node labels', type: 'text', placeholder: 'A, B, C' },
@@ -455,6 +457,12 @@ const objectConfigSections = [
       { key: 'carrierLabel', label: 'Carrier', type: 'text', placeholder: 'f_c' },
       { key: 'modulation', label: 'Modulation', type: 'text', placeholder: 'QPSK, OFDM, 16-QAM' },
       { key: 'branchCount', label: 'Ramas/antenas', type: 'number', min: 1, max: 16, step: 1 },
+      { key: 'symbolCount', label: 'OFDM symbols', type: 'number', min: 1, max: 28, step: 1 },
+      { key: 'subcarrierCount', label: 'Subcarriers', type: 'number', min: 1, max: 64, step: 1 },
+      { key: 'pilotSpacing', label: 'Pilot spacing', type: 'number', min: 1, max: 16, step: 1 },
+      { key: 'variableCount', label: 'LDPC variables', type: 'number', min: 1, max: 16, step: 1 },
+      { key: 'checkCount', label: 'LDPC checks', type: 'number', min: 1, max: 12, step: 1 },
+      { key: 'antennaCount', label: 'Antennas', type: 'number', min: 1, max: 12, step: 1 },
       { key: 'gainDb', label: 'Gain dB', type: 'number', min: -120, max: 120, step: 0.5 },
       { key: 'noiseLabel', label: 'Noise label', type: 'text', placeholder: 'n(t)' },
     ],
@@ -885,6 +893,7 @@ function circuitAutoPrefix(preset = {}) {
 }
 
 function circuitTikzComponent(preset = {}, config = {}) {
+  if (preset.group !== 'Circuit') return ''
   const key = `${preset.id ?? ''} ${preset.title ?? ''}`.toLowerCase()
   const style = config.circuitStyle
   if (key.includes('resistor')) return style === 'american' ? 'R' : 'R'
@@ -1067,6 +1076,8 @@ function defaultLibraryConfig(preset = {}) {
     rowSep: 0,
     columnSep: 0,
     matrixEntries: '',
+    classLabels: '',
+    budgetRows: '',
     edgeStyle: 'solid',
     edgeLabels: '',
     nodeDistance: 0,
@@ -1083,6 +1094,12 @@ function defaultLibraryConfig(preset = {}) {
     carrierLabel: '',
     modulation: '',
     branchCount: 2,
+    symbolCount: 6,
+    subcarrierCount: 4,
+    pilotSpacing: 3,
+    variableCount: 4,
+    checkCount: 2,
+    antennaCount: 3,
     gainDb: 0,
     noiseLabel: '',
     paperRole: '',
@@ -1184,6 +1201,12 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
     ganttEnd: Math.round(numberInRange(config.ganttEnd, 7, 1, 999)),
     ganttProgress: Math.round(numberInRange(config.ganttProgress, 0, 0, 100)),
     branchCount: Math.round(numberInRange(config.branchCount, 2, 1, 16)),
+    symbolCount: Math.round(numberInRange(config.symbolCount, 6, 1, 28)),
+    subcarrierCount: Math.round(numberInRange(config.subcarrierCount, 4, 1, 64)),
+    pilotSpacing: Math.round(numberInRange(config.pilotSpacing, 3, 1, 16)),
+    variableCount: Math.round(numberInRange(config.variableCount, 4, 1, 16)),
+    checkCount: Math.round(numberInRange(config.checkCount, 2, 1, 12)),
+    antennaCount: Math.round(numberInRange(config.antennaCount, 3, 1, 12)),
     gainDb: numberInRange(config.gainDb, 0, -120, 120),
   }
 }
@@ -3219,6 +3242,9 @@ function buildConfiguredLibrarySnippet(preset, element) {
     ]
   }
 
+  const modularDiagram = buildModularDiagramSnippet(preset, config, { formatText: formatTikzNodeText })
+  if (modularDiagram) return modularDiagram
+
   if ((preset.preview === 'matrix' || preset.id.includes('matrix')) && config.matrixEntries.trim()) {
     const entries = formatMatrixEntryRows(config.matrixEntries)
       .map((line) => `  ${line} \\\\`)
@@ -3252,9 +3278,6 @@ function buildConfiguredLibrarySnippet(preset, element) {
     if (config.gainDb) lines.push(`\\node at (0,-0.55) {${formatNumber(config.gainDb)} dB};`)
     return lines
   }
-
-  const modularDiagram = buildModularDiagramSnippet(preset, config, { formatText: formatTikzNodeText })
-  if (modularDiagram) return modularDiagram
 
   const simpleNodeShapes = {
     'shape-process': 'rectangle',

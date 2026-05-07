@@ -117,6 +117,7 @@ test('circuit palette ids and previews resolve to circuit symbols', () => {
   assert.equal(libraryPaletteItems.find((item) => item.id === 'circuit-switch')?.preview, 'switch')
   assert.match(appSource, /key\.includes\('current source'\)\) return 'I'/)
   assert.match(appSource, /key\.includes\('controlled voltage'\).*return 'cV'/)
+  assert.match(appSource, /function circuitTikzComponent[\s\S]*if \(preset\.group !== 'Circuit'\) return ''/)
 })
 
 test('generic palette previews are semantically classified', () => {
