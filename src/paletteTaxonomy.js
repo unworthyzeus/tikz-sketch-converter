@@ -1,4 +1,4 @@
-const explicitDiagramGroups = new Set(['Automata', 'ER', 'Flow', 'Graph', 'Petri', 'Planning', 'Plots', 'Stats', 'UML'])
+const explicitDiagramGroups = new Set(['Automata', 'Control', 'ER', 'Flow', 'Graph', 'Petri', 'Planning', 'Plots', 'Stats', 'UML'])
 
 const explicitDiagramIds = new Set([
   'circuit-common-emitter',
@@ -52,6 +52,7 @@ const explicitDiagramIds = new Set([
   'telecom-synchronization-loop',
   'telecom-superhet',
   'telecom-transmitter-chain',
+  'telecom-viterbi-trellis',
 ])
 
 function paletteHaystack(preset = {}) {

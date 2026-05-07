@@ -1720,6 +1720,12 @@ function tokenStartsPrimary(token) {
   return token.type === 'number' || token.type === 'name' || token.type === '('
 }
 
+function tokenCanContinueImplicitProduct(token, previousTokenType) {
+  if (!tokenStartsPrimary(token)) return false
+  if (token.type !== 'number') return true
+  return previousTokenType === ')'
+}
+
 class MathExpressionParser {
   constructor(tokens, xValue) {
     this.tokens = tokens
@@ -1763,7 +1769,13 @@ class MathExpressionParser {
 
   parseMultiplicative() {
     let value = this.parseUnary()
-    while (this.current().type === '*' || this.current().type === '/' || this.current().type === '%' || tokenStartsPrimary(this.current())) {
+    let previousTokenType = this.tokens[this.index - 1]?.type
+    while (
+      this.current().type === '*' ||
+      this.current().type === '/' ||
+      this.current().type === '%' ||
+      tokenCanContinueImplicitProduct(this.current(), previousTokenType)
+    ) {
       if (this.match('*')) {
         value *= this.parseUnary()
       } else if (this.match('/')) {
@@ -1773,6 +1785,7 @@ class MathExpressionParser {
       } else {
         value *= this.parseUnary()
       }
+      previousTokenType = this.tokens[this.index - 1]?.type
     }
     return value
   }
@@ -3148,10 +3161,8 @@ function libraryMatrixTikzOptions(config) {
   return options
 }
 
-function libraryGanttTikzOptions(config) {
-  const options = ['hgrid', 'vgrid']
-  if (config.ganttProgress > 0) options.push(`progress=${config.ganttProgress}`)
-  return options
+function libraryGanttTikzOptions() {
+  return []
 }
 
 function applyLibraryConfigToSnippet(lines, preset, element) {

@@ -160,6 +160,28 @@ test('paper-ready coding and control diagrams cover deeper analysis workflows', 
   assert.match(snippets, /\\hat\{x\}/)
 })
 
+test('control and coding gallery adds closed-loop, observer, root-locus and trellis diagrams', () => {
+  const requiredIds = ['control-pid-loop', 'control-state-space-observer', 'plot-root-locus', 'telecom-viterbi-trellis']
+
+  requiredIds.forEach((id) => assert.ok(paletteItem(id), id))
+
+  ;['control-pid-loop', 'control-state-space-observer', 'telecom-viterbi-trellis'].forEach((id) => {
+    const item = paletteItem(id)
+    assert.equal(item.paletteKind, 'diagram')
+    assert.ok(item.libraries.includes('arrows.meta'), id)
+  })
+
+  assert.equal(paletteItem('plot-root-locus').group, 'Plots')
+  assert.equal(paletteItem('plot-root-locus').paletteKind, 'diagram')
+
+  const snippets = requiredIds.map(snippetText).join('\n')
+  assert.match(snippets, /C\(s\)/)
+  assert.match(snippets, /G\(s\)/)
+  assert.match(snippets, /\\hat\{x\}/)
+  assert.match(snippets, /root locus/i)
+  assert.match(snippets, /Viterbi/i)
+})
+
 test('common telecom diagram palette covers frame, FEC, link-budget, sync and MIMO-OFDM workflows', () => {
   const requiredIds = [
     'telecom-ofdm-transceiver',

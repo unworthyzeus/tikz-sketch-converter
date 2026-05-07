@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   barChartRowsForConfig,
@@ -12,6 +13,16 @@ import {
   normalizeGanttRange,
   shouldUseConfiguredLibrarySnippet,
 } from '../src/librarySnippetConfig.js'
+
+const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+
+function loadGanttExportOptions() {
+  const start = appSource.indexOf('function libraryGanttTikzOptions')
+  const end = appSource.indexOf('function applyLibraryConfigToSnippet')
+  assert.notEqual(start, -1)
+  assert.notEqual(end, -1)
+  return Function(`${appSource.slice(start, end)}; return { libraryGanttTikzOptions };`)()
+}
 
 test('shape variants only replace snippets for configurable primitive presets', () => {
   assert.equal(
@@ -89,6 +100,12 @@ test('gantt row config controls task count, labels, ranges and progress per bar'
   assert.match(snippet, /\\gantttitle\{Radio rollout\}\{8\}/)
   assert.equal((snippet.match(/\\ganttbar/g) ?? []).length, 4)
   assert.match(snippet, /\\ganttbar\[progress=75\]\{RF design\}\{2\}\{5\}/)
+})
+
+test('gantt generated snippets own their grid and progress options without reinjection', () => {
+  const { libraryGanttTikzOptions } = loadGanttExportOptions()
+
+  assert.deepEqual(libraryGanttTikzOptions({ ganttProgress: 60 }), [])
 })
 
 test('gantt row config keeps legacy block labels when task rows are not explicit', () => {

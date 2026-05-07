@@ -373,6 +373,16 @@ test('more telecom diagrams expose chain, loop and antenna-specific editors', ()
   assert.equal(fieldKeys('telecom-mimo-link').includes('antennaCount'), true)
 })
 
+test('telecom network diagrams expose graph layout editors', () => {
+  const keys = fieldKeys('telecom-viterbi-trellis')
+
+  assert.equal(keys.includes('nodeLabels'), true)
+  assert.equal(keys.includes('edgeLabels'), true)
+  assert.equal(keys.includes('connectNodes'), true)
+  assert.equal(keys.includes('layerDistance'), true)
+  assert.equal(keys.includes('edgeStyle'), true)
+})
+
 test('specialized matrix and telecom diagrams expose purpose-built modular controls', () => {
   assert.equal(libraryObjectProfileForPreset(preset('ml-confusion')).id, 'confusionMatrix')
   assert.deepEqual(fieldKeys('ml-confusion').slice(0, 5), [
