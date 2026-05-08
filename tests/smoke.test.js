@@ -70,6 +70,8 @@ test('paper composer controls wire journal targets to canvas guides and checklis
   assert.match(appSource, /paperWrapperPreview\.join/)
   assert.match(appSource, /Ancho paper cm/)
   assert.match(appSource, /Alto paper cm/)
+  assert.match(appSource, /<details className="paper-wrapper-preview">/)
+  assert.match(appSource, /className="code-output"[\s\S]*wrap="soft"/)
   assert.match(appSource, /figureWrapperControls\.showWrapToggle/)
   assert.match(appSource, /Mostrar guias paper/)
 })

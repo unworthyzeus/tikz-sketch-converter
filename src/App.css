@@ -1241,8 +1241,8 @@ textarea:focus-visible {
 
 .paper-composer {
   display: grid;
-  gap: 10px;
-  padding: 0 0 12px;
+  gap: 9px;
+  padding: 0 0 10px;
   border-bottom: 1px solid #d8dce4;
 }
 
@@ -1276,21 +1276,31 @@ textarea:focus-visible {
 
 .paper-wrapper-preview {
   display: grid;
-  gap: 5px;
+  gap: 6px;
 }
 
-.paper-wrapper-preview span {
+.paper-wrapper-preview summary {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
   color: #303846;
+  cursor: pointer;
   font-size: 11px;
   font-weight: 760;
+  line-height: 1.2;
+  list-style-position: inside;
+}
+
+.paper-wrapper-preview summary::marker {
+  color: #5d6675;
 }
 
 .paper-wrapper-preview code {
   display: block;
   min-width: 0;
-  max-height: 92px;
+  max-height: 78px;
   overflow: auto;
-  padding: 7px;
+  padding: 7px 8px;
   border: 1px solid #d8dce4;
   border-radius: 3px;
   background: #fbfbfc;
@@ -1346,13 +1356,14 @@ textarea:focus-visible {
   flex: 1;
   min-height: 180px;
   resize: none;
+  overflow-x: hidden;
   padding: 11px;
   background: #fbfbfc;
   color: #111111;
   font-family: var(--mono);
   font-size: 11px;
   line-height: 1.48;
-  white-space: pre;
+  white-space: pre-wrap;
 }
 
 .export-actions {

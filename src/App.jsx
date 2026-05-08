@@ -10160,10 +10160,10 @@ function App() {
                 placeholder="(a), (b), (c), (d)"
               />
             </label>
-            <div className="paper-wrapper-preview">
-              <span>Wrapper preview</span>
+            <details className="paper-wrapper-preview">
+              <summary>Wrapper preview</summary>
               <code>{paperWrapperPreview.join('\n')}</code>
-            </div>
+            </details>
             <label className="toggle export-toggle">
               <input
                 type="checkbox"
@@ -10293,7 +10293,7 @@ function App() {
             <Code2 size={18} />
             <h2>Codigo TikZ</h2>
           </div>
-          <textarea className="code-output" value={tikzCode} readOnly spellCheck="false" />
+          <textarea className="code-output" value={tikzCode} readOnly spellCheck="false" wrap="soft" />
           <div className="export-actions">
             <button type="button" className="ghost-button" onClick={restoreDemo}>
               Restaurar demo
