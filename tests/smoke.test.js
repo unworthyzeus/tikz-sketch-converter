@@ -48,6 +48,15 @@ test('function plots support multi-series styling and marked points', () => {
   assert.match(appSource, /Mas funciones en el mismo grafico/)
 })
 
+test('function plot resize uses visual axis dimensions without mutating math', () => {
+  assert.match(appSource, /resizeFunctionPlotToBounds/)
+  assert.match(appSource, /functionPreviewLayout/)
+  assert.match(appSource, /mapFunctionPointForPreview/)
+  assert.doesNotMatch(appSource, /domainStart: nextDomainStartDisplay/)
+  assert.doesNotMatch(appSource, /domainEnd: nextDomainEndDisplay/)
+  assert.doesNotMatch(appSource, /nextYScale/)
+})
+
 test('paper composer controls wire journal targets to canvas guides and checklist', () => {
   assert.match(appSource, /Paper Composer/)
   assert.match(appSource, /paper-composer-title/)

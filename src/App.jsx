@@ -43,6 +43,7 @@ import { circuitDrawTikzOptions } from './circuitOptions'
 import { writeClipboardText } from './clipboard'
 import { moveElementBy } from './elementTransforms'
 import { createEditorKeydownHandler } from './editorKeyboard'
+import { functionFrameBoundsForDataBounds, mapFunctionPointToFrame, resizeFunctionPlotToBounds } from './functionLayout'
 import { curveMarkerPoints, functionLegendEntries, functionSeriesIsRenderable, markerGlyphParts } from './functionPreview'
 import { functionDataTableRows, functionDataTableUsesYError, parseFunctionDataTable } from './functionDataTable'
 import { latexSymbolGroups } from './latexSymbols'
@@ -2067,6 +2068,30 @@ function allFunctionDisplayPoints(element) {
   return functionDisplaySeries(element).flatMap(({ points }) => points.filter(Boolean))
 }
 
+function functionDataBounds(element) {
+  const points = allFunctionDisplayPoints(element)
+  const xOffset = Number(element.xOffset) || 0
+  if (!points.length) return { minX: Number(element.domainStart) + xOffset, maxX: Number(element.domainEnd) + xOffset, minY: -1, maxY: 1 }
+  const xs = points.map((point) => point.x)
+  const ys = points.map((point) => point.y)
+  return expandFlatFunctionBounds({
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  })
+}
+
+function functionPreviewLayout(element) {
+  const dataBounds = functionDataBounds(element)
+  const frameBounds = functionFrameBoundsForDataBounds(dataBounds, functionOptionsFor(element))
+  return { dataBounds, frameBounds }
+}
+
+function mapFunctionPointForPreview(point, layout) {
+  return mapFunctionPointToFrame(point, layout.dataBounds, layout.frameBounds)
+}
+
 function expandFlatFunctionBounds(bounds) {
   const center = boundsCenter(bounds)
   const width = Math.max(0.8, bounds.maxX - bounds.minX)
@@ -2314,17 +2339,7 @@ function elementBounds(element) {
   }
 
   if (element.type === 'function') {
-    const points = allFunctionDisplayPoints(element)
-    const xOffset = Number(element.xOffset) || 0
-    if (!points.length) return { minX: Number(element.domainStart) + xOffset, maxX: Number(element.domainEnd) + xOffset, minY: -1, maxY: 1 }
-    const xs = points.map((point) => point.x)
-    const ys = points.map((point) => point.y)
-    return expandFlatFunctionBounds({
-      minX: Math.min(...xs),
-      maxX: Math.max(...xs),
-      minY: Math.min(...ys),
-      maxY: Math.max(...ys),
-    })
+    return functionPreviewLayout(element).frameBounds
   }
 
   if (element.type === 'text') {
@@ -2447,27 +2462,7 @@ function resizeElementToBounds(element, nextBounds) {
     }
   }
   if (element.type === 'function') {
-    const xScale = nextWidth / currentWidth
-    const yScaleFactor = nextHeight / currentHeight
-    const currentXOffset = Number(element.xOffset) || 0
-    const currentYOffset = Number(element.yOffset) || 0
-    const nextYScale = functionYScaleFor(element) * yScaleFactor
-    const nextYOffset = nextBounds.minY + (currentYOffset - current.minY) * yScaleFactor
-    const nextDomainStartDisplay = nextBounds.minX + (Number(element.domainStart) + currentXOffset - current.minX) * xScale
-    const nextDomainEndDisplay = nextBounds.minX + (Number(element.domainEnd) + currentXOffset - current.minX) * xScale
-    return {
-      ...element,
-      domainStart: nextDomainStartDisplay - currentXOffset,
-      domainEnd: nextDomainEndDisplay - currentXOffset,
-      xOffset: currentXOffset,
-      yOffset: nextYOffset,
-      functionOptions: {
-        ...functionOptionsFor(element),
-        yScale: Number(formatNumber(nextYScale)),
-        axisWidth: `${formatNumber(nextWidth)}cm`,
-        axisHeight: `${formatNumber(nextHeight)}cm`,
-      },
-    }
+    return resizeFunctionPlotToBounds(element, nextBounds, current, functionOptionsFor(element), formatNumber)
   }
   if (element.type === 'diagram') return resizeOriginScaledElement(element, nextBounds, currentWidth, currentHeight, nextWidth, nextHeight)
   if (element.type === 'library') return resizeLibraryElementToBounds(element, nextBounds, currentWidth, currentHeight, nextWidth, nextHeight)
@@ -3124,7 +3119,14 @@ function elementIntersectsEraser(element, point, radius = 0.24) {
   }
 
   if (element.type === 'function') {
-    return functionDisplaySeries(element).some(({ points }) => polylineHitsPoint(points.filter(Boolean), point, radius))
+    const layout = functionPreviewLayout(element)
+    return functionDisplaySeries(element).some(({ points }) =>
+      polylineHitsPoint(
+        points.map((candidate) => (candidate ? mapFunctionPointForPreview(candidate, layout) : null)).filter(Boolean),
+        point,
+        radius,
+      ),
+    )
   }
 
   if (element.type === 'text') {
@@ -3863,7 +3865,10 @@ function buildTikz(elements, exportOptions = {}) {
       const functionOptions = functionOptionsFor(element)
       const displaySeries = functionDisplaySeries(element)
       const hasFunctionLegend = displaySeries.some(({ series }) => series.legend)
-      const graphBounds = elementBounds(element)
+      const graphLayout = functionPreviewLayout(element)
+      const graphBounds = graphLayout.frameBounds
+      const graphDataBounds = graphLayout.dataBounds
+      const previewPoint = (point) => mapFunctionPointForPreview(point, graphLayout)
       const features = functionFeaturePoints(element)
       const primaryColor = ensureColor(element.stroke)
       const axisSettings = functionPgfplotsAxisSettings(functionOptions)
@@ -3963,52 +3968,64 @@ function buildTikz(elements, exportOptions = {}) {
           )
         }
         if (functionOptions.showGraphGrid) {
-          graphTicks(graphBounds.minX, graphBounds.maxX, 7).forEach((xValue) => {
+          graphTicks(graphDataBounds.minX, graphDataBounds.maxX, 7).forEach((xValue) => {
+            const start = previewPoint({ x: xValue, y: graphDataBounds.minY })
+            const end = previewPoint({ x: xValue, y: graphDataBounds.maxY })
             pictureLines.push(
-              `${linePrefix}\\draw[color=gray!18, line width=0.18pt] (${formatNumber(xValue)},${formatNumber(graphBounds.minY)}) -- (${formatNumber(xValue)},${formatNumber(graphBounds.maxY)});`,
+              `${linePrefix}\\draw[color=gray!18, line width=0.18pt] (${formatNumber(start.x)},${formatNumber(start.y)}) -- (${formatNumber(end.x)},${formatNumber(end.y)});`,
             )
           })
-          graphTicks(graphBounds.minY, graphBounds.maxY, 5).forEach((yValue) => {
+          graphTicks(graphDataBounds.minY, graphDataBounds.maxY, 5).forEach((yValue) => {
+            const start = previewPoint({ x: graphDataBounds.minX, y: yValue })
+            const end = previewPoint({ x: graphDataBounds.maxX, y: yValue })
             pictureLines.push(
-              `${linePrefix}\\draw[color=gray!18, line width=0.18pt] (${formatNumber(graphBounds.minX)},${formatNumber(yValue)}) -- (${formatNumber(graphBounds.maxX)},${formatNumber(yValue)});`,
+              `${linePrefix}\\draw[color=gray!18, line width=0.18pt] (${formatNumber(start.x)},${formatNumber(start.y)}) -- (${formatNumber(end.x)},${formatNumber(end.y)});`,
             )
           })
         }
         if (functionOptions.showGraphAxes) {
-          if (graphBounds.minY <= 0 && graphBounds.maxY >= 0) {
+          if (graphDataBounds.minY <= 0 && graphDataBounds.maxY >= 0) {
+            const start = previewPoint({ x: graphDataBounds.minX, y: 0 })
+            const end = previewPoint({ x: graphDataBounds.maxX, y: 0 })
             pictureLines.push(
-              `${linePrefix}\\draw[color=gray!60, line width=0.3pt] (${formatNumber(graphBounds.minX)},0) -- (${formatNumber(graphBounds.maxX)},0) node[right, font=\\scriptsize] {${formatTikzNodeText(functionOptions.xLabel)}};`,
+              `${linePrefix}\\draw[color=gray!60, line width=0.3pt] (${formatNumber(start.x)},${formatNumber(start.y)}) -- (${formatNumber(end.x)},${formatNumber(end.y)}) node[right, font=\\scriptsize] {${formatTikzNodeText(functionOptions.xLabel)}};`,
             )
           }
-          if (graphBounds.minX <= 0 && graphBounds.maxX >= 0) {
+          if (graphDataBounds.minX <= 0 && graphDataBounds.maxX >= 0) {
+            const start = previewPoint({ x: 0, y: graphDataBounds.minY })
+            const end = previewPoint({ x: 0, y: graphDataBounds.maxY })
             pictureLines.push(
-              `${linePrefix}\\draw[color=gray!60, line width=0.3pt] (0,${formatNumber(graphBounds.minY)}) -- (0,${formatNumber(graphBounds.maxY)}) node[above, font=\\scriptsize] {${formatTikzNodeText(functionOptions.yLabel)}};`,
+              `${linePrefix}\\draw[color=gray!60, line width=0.3pt] (${formatNumber(start.x)},${formatNumber(start.y)}) -- (${formatNumber(end.x)},${formatNumber(end.y)}) node[above, font=\\scriptsize] {${formatTikzNodeText(functionOptions.yLabel)}};`,
             )
           }
         }
         displaySeries.forEach(({ series, points }, seriesIndex) => {
           const segments = splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null)))
           segments.forEach((segment, index) => {
-            const coords = segment.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
+            const coords = segment.map(previewPoint).map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
             const comment = seriesIndex === 0 && index === 0 ? ` % f(x) = ${element.expression}` : ''
             pictureLines.push(`${linePrefix}\\draw[${directDrawOptions(series).join(', ')}] plot coordinates { ${coords} };${comment}`)
           })
         })
-        const markPoint = (point, label) =>
-          `${linePrefix}\\filldraw[fill=white, draw=${primaryColor}, line width=0.45pt] (${formatNumber(point.x)},${formatNumber(
-            point.y,
+        const markPoint = (point, label) => {
+          const mapped = previewPoint(point)
+          return `${linePrefix}\\filldraw[fill=white, draw=${primaryColor}, line width=0.45pt] (${formatNumber(mapped.x)},${formatNumber(
+            mapped.y,
           )}) circle (1.7pt)${label ? ` node[above right, font=\\scriptsize] {${formatTikzNodeText(label)}}` : ''};`
+        }
         featureMarks.forEach((point) => pictureLines.push(markPoint(point, point.label)))
         if (functionOptions.showTangent && features.tangent) {
+          const start = previewPoint(features.tangent.start)
+          const end = previewPoint(features.tangent.end)
           pictureLines.push(
-            `${linePrefix}\\draw[dashed, draw=${primaryColor}!65, line width=0.4pt] (${formatNumber(features.tangent.start.x)},${formatNumber(
-              features.tangent.start.y,
-            )}) -- (${formatNumber(features.tangent.end.x)},${formatNumber(features.tangent.end.y)});`,
+            `${linePrefix}\\draw[dashed, draw=${primaryColor}!65, line width=0.4pt] (${formatNumber(start.x)},${formatNumber(start.y)}) -- (${formatNumber(end.x)},${formatNumber(end.y)});`,
           )
         }
         if (functionOptions.showAsymptotes) {
           features.asymptotes.slice(0, 6).forEach((point) => {
-            pictureLines.push(`${linePrefix}\\draw[densely dashed, color=gray!55] (${formatNumber(point.x)},${formatNumber(worldBounds.minY)}) -- (${formatNumber(point.x)},${formatNumber(worldBounds.maxY)});`)
+            const start = previewPoint({ x: point.x, y: graphDataBounds.minY })
+            const end = previewPoint({ x: point.x, y: graphDataBounds.maxY })
+            pictureLines.push(`${linePrefix}\\draw[densely dashed, color=gray!55] (${formatNumber(start.x)},${formatNumber(start.y)}) -- (${formatNumber(end.x)},${formatNumber(end.y)});`)
           })
         }
         const legends = displaySeries.map(({ series }) => series.legend).filter(Boolean)
@@ -7504,7 +7521,8 @@ function App() {
     }
 
     if (element.type === 'function') {
-      const bounds = elementBounds(element)
+      const layout = functionPreviewLayout(element)
+      const bounds = layout.frameBounds
       const topLeft = worldToScreen({ x: bounds.minX, y: bounds.maxY })
       const bottomRight = worldToScreen({ x: bounds.maxX, y: bounds.minY })
       return (
@@ -7519,7 +7537,7 @@ function App() {
             />
           )}
           {functionDisplaySeries(element).flatMap(({ points }, seriesIndex) =>
-            splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null))).map(
+            splitDrawableSegments(points.map((point) => (point ? mapFunctionPointForPreview(point, layout) : null))).map(
               (segment, index) => (
                 <polyline
                   key={`${element.id}-hit-${seriesIndex}-${index}`}
@@ -7669,11 +7687,14 @@ function App() {
       const functionOptions = functionOptionsFor(element)
       const features = functionFeaturePoints(element)
       const displaySeries = functionDisplaySeries(element)
-      const bounds = elementBounds(element)
+      const layout = functionPreviewLayout(element)
+      const bounds = layout.frameBounds
+      const dataBounds = layout.dataBounds
+      const previewPoint = (point) => mapFunctionPointForPreview(point, layout)
       const topLeft = worldToScreen({ x: bounds.minX, y: bounds.maxY })
       const bottomRight = worldToScreen({ x: bounds.maxX, y: bounds.minY })
-      const xTicks = graphTicks(bounds.minX, bounds.maxX, 7)
-      const yTicks = graphTicks(bounds.minY, bounds.maxY, 5)
+      const xTicks = graphTicks(dataBounds.minX, dataBounds.maxX, 7)
+      const yTicks = graphTicks(dataBounds.minY, dataBounds.maxY, 5)
       const legendEntries = functionLegendEntries(displaySeries)
       const markerPoints = [
         ...(functionOptions.showXIntercepts ? features.xIntercepts.slice(0, 8).map((point) => ({ ...point, label: '$x_0$' })) : []),
@@ -7714,10 +7735,10 @@ function App() {
         )
       }
       const renderMarkerGlyph = (point, markerStyle, color, key, size = 4) =>
-        renderMarkerGlyphAt(worldToScreen(point), markerStyle, color, key, size)
+        renderMarkerGlyphAt(worldToScreen(previewPoint(point)), markerStyle, color, key, size)
 
       const renderMarker = (point, key) => {
-        const screenPoint = worldToScreen(point)
+        const screenPoint = worldToScreen(previewPoint(point))
         return (
           <g key={key} className="function-marker">
             <circle
@@ -7816,8 +7837,8 @@ function App() {
             {!halo && functionOptions.showGraphGrid && (
               <g>
                 {xTicks.map((xValue) => {
-                  const start = worldToScreen({ x: xValue, y: bounds.minY })
-                  const end = worldToScreen({ x: xValue, y: bounds.maxY })
+                  const start = worldToScreen(previewPoint({ x: xValue, y: dataBounds.minY }))
+                  const end = worldToScreen(previewPoint({ x: xValue, y: dataBounds.maxY }))
                   return (
                     <line
                       key={`gx-${xValue}`}
@@ -7832,8 +7853,8 @@ function App() {
                   )
                 })}
                 {yTicks.map((yValue) => {
-                  const start = worldToScreen({ x: bounds.minX, y: yValue })
-                  const end = worldToScreen({ x: bounds.maxX, y: yValue })
+                  const start = worldToScreen(previewPoint({ x: dataBounds.minX, y: yValue }))
+                  const end = worldToScreen(previewPoint({ x: dataBounds.maxX, y: yValue }))
                   return (
                     <line
                       key={`gy-${yValue}`}
@@ -7851,22 +7872,22 @@ function App() {
             )}
             {!halo && functionOptions.showGraphAxes && (
               <g>
-                {bounds.minY <= 0 && bounds.maxY >= 0 && (
+                {dataBounds.minY <= 0 && dataBounds.maxY >= 0 && (
                   <line
                     x1={topLeft.x}
-                    y1={worldToScreen({ x: 0, y: 0 }).y}
+                    y1={worldToScreen(previewPoint({ x: dataBounds.minX, y: 0 })).y}
                     x2={bottomRight.x}
-                    y2={worldToScreen({ x: 0, y: 0 }).y}
+                    y2={worldToScreen(previewPoint({ x: dataBounds.maxX, y: 0 })).y}
                     stroke="#94a3b8"
                     strokeWidth="1"
                     vectorEffect="non-scaling-stroke"
                   />
                 )}
-                {bounds.minX <= 0 && bounds.maxX >= 0 && (
+                {dataBounds.minX <= 0 && dataBounds.maxX >= 0 && (
                   <line
-                    x1={worldToScreen({ x: 0, y: 0 }).x}
+                    x1={worldToScreen(previewPoint({ x: 0, y: dataBounds.minY })).x}
                     y1={topLeft.y}
-                    x2={worldToScreen({ x: 0, y: 0 }).x}
+                    x2={worldToScreen(previewPoint({ x: 0, y: dataBounds.maxY })).x}
                     y2={bottomRight.y}
                     stroke="#94a3b8"
                     strokeWidth="1"
@@ -7893,7 +7914,7 @@ function App() {
         <g>
           {renderGraphChrome()}
           {displaySeries.flatMap(({ series, points }, seriesIndex) =>
-            splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null))).map(
+            splitDrawableSegments(points.map((point) => (point ? previewPoint(point) : null))).map(
               (segment, index) => (
                 <polyline
                   key={`${element.id}-segment-${seriesIndex}-${index}`}
