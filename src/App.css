@@ -1230,11 +1230,19 @@ textarea:focus-visible {
   min-height: 24px;
 }
 
+.paper-composer-title,
+.code-output-title {
+  padding-bottom: 2px;
+}
+
+.code-output-title {
+  margin-top: 4px;
+}
+
 .paper-composer {
   display: grid;
   gap: 10px;
-  padding: 10px 0 12px;
-  border-top: 1px solid #d8dce4;
+  padding: 0 0 12px;
   border-bottom: 1px solid #d8dce4;
 }
 

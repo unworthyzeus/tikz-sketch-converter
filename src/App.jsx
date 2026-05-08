@@ -68,6 +68,16 @@ import {
   formatMatrixEntryRows,
   shouldUseConfiguredLibrarySnippet,
 } from './librarySnippetConfig'
+import {
+  circuitLabelsForConfig,
+  defaultDiagramConfigForKind,
+  diagramConfigFieldSpecs,
+  diagramConfigForElement,
+  dlLayersForConfig,
+  ganttMetricsForTasks,
+  ganttTasksForConfig,
+  mlStepsForConfig,
+} from './diagramConfig'
 import { connectorLabelTikz, splitNodeLabels } from './nodeConnectorOptions'
 import { objectPreviewBadges, terminalPreviewLabels } from './objectPreview'
 import {
@@ -753,6 +763,7 @@ function makeDiagramElement(preset) {
     fillOpacity: preset.fillOpacity ?? 0.18,
     scale: preset.scale ?? 1,
     tikzOptions: preset.tikzOptions ?? '',
+    diagramConfig: defaultDiagramConfigForKind(preset.kind),
     width: 0.75,
     dashed: false,
   }
@@ -802,16 +813,21 @@ function normalizeBoardElement(element) {
   }
 
   if (element.type === 'diagram') {
+    const diagramKind = element.diagramKind ?? 'ml'
     return {
       ...element,
       id: element.id ?? createId(),
+      diagramKind,
       title: element.title ?? 'Diagrama',
       origin: element.origin ?? { x: 0, y: 0 },
       stroke: element.stroke ?? '#111111',
       fill: element.fill ?? 'none',
       fillOpacity: element.fillOpacity ?? 0.18,
+      tikzOptions: element.tikzOptions ?? '',
+      diagramConfig: diagramConfigForElement({ ...element, diagramKind }),
       width: element.width ?? 0.75,
       scale: element.scale ?? 1,
+      dashed: Boolean(element.dashed),
     }
   }
 
@@ -2626,12 +2642,7 @@ function diagramPoint(element, point) {
 
 function diagramBounds(element) {
   const scale = Number(element.scale) || 1
-  const bounds = {
-    circuit: { x: -0.45, y: -2.75, width: 5.75, height: 3.25 },
-    gantt: { x: -0.55, y: -3.1, width: 7.35, height: 3.75 },
-    ml: { x: -0.55, y: -0.85, width: 8.6, height: 1.7 },
-    dl: { x: -0.55, y: -2.25, width: 6.65, height: 4.5 },
-  }[element.diagramKind] ?? { x: -0.5, y: -0.5, width: 3, height: 2 }
+  const bounds = diagramLocalBounds(element)
 
   return {
     minX: element.origin.x + bounds.x * scale,
@@ -2639,6 +2650,49 @@ function diagramBounds(element) {
     minY: element.origin.y + bounds.y * scale,
     maxY: element.origin.y + (bounds.y + bounds.height) * scale,
   }
+}
+
+function diagramLocalBounds(element) {
+  const config = diagramConfigForElement(element)
+
+  if (element.diagramKind === 'gantt') {
+    const metrics = ganttMetricsForTasks(ganttTasksForConfig(config))
+    return {
+      x: metrics.minStart - 0.75,
+      y: -metrics.height - 0.35,
+      width: metrics.width + 1.45,
+      height: metrics.height + 1,
+    }
+  }
+
+  if (element.diagramKind === 'ml') {
+    const steps = mlStepsForConfig(config)
+    return {
+      x: -0.75,
+      y: -0.85,
+      width: Math.max(8.6, steps.length * 1.55 + 0.75),
+      height: 1.7,
+    }
+  }
+
+  if (element.diagramKind === 'dl') {
+    const layers = dlLayersForConfig(config)
+    const maxNodeY = Math.max(...layers.map((layer) => (layer.count - 1) * 0.36), 1.3)
+    const top = maxNodeY + 0.9
+    const bottom = -maxNodeY - 0.85
+    return {
+      x: -0.55,
+      y: bottom,
+      width: Math.max(6.65, (layers.length - 1) * 1.65 + 1.1),
+      height: top - bottom,
+    }
+  }
+
+  if (element.diagramKind === 'circuit') {
+    return { x: -0.75, y: -2.75, width: 6.15, height: 3.25 }
+  }
+
+  return { x: -0.5, y: -0.5, width: 3, height: 2 }
 }
 
 function tikzPoint(element, point) {
@@ -2651,21 +2705,12 @@ function tikzNodeId(element, suffix) {
   return `${element.diagramKind}${compactId}${suffix}`.replace(/[^A-Za-z0-9]/g, '')
 }
 
-function ganttTasks() {
-  return [
-    { label: 'Data', start: 0.2, end: 1.9, row: 0 },
-    { label: 'Features', start: 1.5, end: 3.1, row: 1 },
-    { label: 'Training', start: 3.0, end: 5.0, row: 2 },
-    { label: 'Eval', start: 4.7, end: 6.2, row: 3 },
-  ]
-}
-
-function mlSteps() {
-  return ['Data', 'Clean', 'Features', 'Train', 'Metrics']
-}
-
-function dlLayerCounts() {
-  return [4, 5, 3, 2]
+function diagramSvgLabelText(value) {
+  return `${value ?? ''}`
+    .replaceAll('$', '')
+    .replace(/_\{([^}]+)\}/g, '$1')
+    .replace(/\\([A-Za-z]+)/g, '$1')
+    .replace(/[{}]/g, '')
 }
 
 function buildDiagramTikz(element, ensureColor) {
@@ -2675,37 +2720,62 @@ function buildDiagramTikz(element, ensureColor) {
   const nodeFillStyle = fill === 'none' ? `fill=${color}!8` : `fill=${fill}, fill opacity=${fillOpacity}, text opacity=1`
   const markFillStyle = fill === 'none' ? `fill=${color}!10` : `fill=${fill}, fill opacity=${fillOpacity}, text opacity=1`
   const title = formatTikzNodeText(element.title)
+  const config = diagramConfigForElement(element)
 
   if (element.diagramKind === 'circuit') {
+    const labels = circuitLabelsForConfig(config)
     return [
       `  % ${element.title}`,
       `  \\draw[draw=${color}, line width=${formatNumber(element.width)}pt]`,
-      `    ${tikzPoint(element, { x: 0, y: 0 })} to[sV,l=$V_{in}$] ${tikzPoint(element, { x: 0, y: -2.4 })}`,
-      `    -- ${tikzPoint(element, { x: 4.8, y: -2.4 })} to[C,l=$C$] ${tikzPoint(element, { x: 4.8, y: 0 })}`,
-      `    -- ${tikzPoint(element, { x: 3.1, y: 0 })} to[R,l=$R$] ${tikzPoint(element, { x: 1.1, y: 0 })}`,
+      `    ${tikzPoint(element, { x: 0, y: 0 })} to[sV,l={${formatTikzNodeText(labels.sourceLabel)}}] ${tikzPoint(element, {
+        x: 0,
+        y: -2.4,
+      })}`,
+      `    -- ${tikzPoint(element, { x: 4.8, y: -2.4 })} to[C,l={${formatTikzNodeText(labels.capacitorLabel)}}] ${tikzPoint(
+        element,
+        { x: 4.8, y: 0 },
+      )}`,
+      `    -- ${tikzPoint(element, { x: 3.1, y: 0 })} to[R,l={${formatTikzNodeText(labels.resistorLabel)}}] ${tikzPoint(element, {
+        x: 1.1,
+        y: 0,
+      })}`,
       `    -- ${tikzPoint(element, { x: 0, y: 0 })};`,
-      `  \\node[anchor=west, text=${color}] at ${tikzPoint(element, { x: 5.05, y: 0 })} {$V_{out}$};`,
+      `  \\node[anchor=west, text=${color}] at ${tikzPoint(element, { x: 5.05, y: 0 })} {${formatTikzNodeText(labels.outputLabel)}};`,
     ]
   }
 
   if (element.diagramKind === 'gantt') {
+    const tasks = ganttTasksForConfig(config)
+    const metrics = ganttMetricsForTasks(tasks)
     const lines = [
       `  % ${element.title}`,
-      `  \\node[anchor=west, text=${color}, font=\\bfseries] at ${tikzPoint(element, { x: 0, y: 0.45 })} {${title}};`,
-      `  \\draw[draw=${color}!45, line width=0.45pt] ${tikzPoint(element, { x: 0, y: 0 })} rectangle ${tikzPoint(element, { x: 6.5, y: -2.75 })};`,
+      `  \\node[anchor=west, text=${color}, font=\\bfseries] at ${tikzPoint(element, { x: metrics.minStart, y: 0.45 })} {${title}};`,
+      `  \\draw[draw=${color}!45, line width=0.45pt] ${tikzPoint(element, {
+        x: metrics.minStart,
+        y: 0,
+      })} rectangle ${tikzPoint(element, { x: metrics.maxEnd, y: -metrics.height })};`,
     ]
 
-    for (let tick = 0; tick <= 6; tick += 1) {
+    const tickStart = Math.floor(metrics.minStart)
+    const tickEnd = Math.ceil(metrics.maxEnd)
+    const tickStep = Math.max(1, Math.ceil((tickEnd - tickStart) / 10))
+    for (let tick = tickStart; tick <= tickEnd; tick += tickStep) {
       lines.push(
-        `  \\draw[draw=${color}!18, line width=0.25pt] ${tikzPoint(element, { x: tick, y: 0 })} -- ${tikzPoint(element, { x: tick, y: -2.75 })};`,
-        `  \\node[font=\\scriptsize, text=${color}!75] at ${tikzPoint(element, { x: tick + 0.5, y: 0.18 })} {${tick + 1}};`,
+        `  \\draw[draw=${color}!18, line width=0.25pt] ${tikzPoint(element, { x: tick, y: 0 })} -- ${tikzPoint(element, {
+          x: tick,
+          y: -metrics.height,
+        })};`,
+        `  \\node[font=\\scriptsize, text=${color}!75] at ${tikzPoint(element, { x: tick, y: 0.18 })} {${formatNumber(tick)}};`,
       )
     }
 
-    ganttTasks().forEach((task) => {
+    tasks.forEach((task) => {
       const y = -0.45 - task.row * 0.58
       lines.push(
-        `  \\node[anchor=east, font=\\scriptsize, text=${color}] at ${tikzPoint(element, { x: -0.18, y })} {${task.label}};`,
+        `  \\node[anchor=east, font=\\scriptsize, text=${color}] at ${tikzPoint(element, {
+          x: metrics.minStart - 0.18,
+          y,
+        })} {${formatTikzNodeText(task.label)}};`,
         `  \\filldraw[${fill === 'none' ? `fill=${color}!18` : `fill=${fill}, fill opacity=${fillOpacity}`}, draw=${color}, rounded corners=1.5pt] ${tikzPoint(element, {
           x: task.start,
           y: y + 0.18,
@@ -2717,11 +2787,12 @@ function buildDiagramTikz(element, ensureColor) {
   }
 
   if (element.diagramKind === 'ml') {
+    const steps = mlStepsForConfig(config)
+    const titleX = ((steps.length - 1) * 1.55) / 2
     const lines = [
       `  % ${element.title}`,
-      `  \\node[anchor=west, text=${color}, font=\\bfseries] at ${tikzPoint(element, { x: 0, y: 0.72 })} {${title}};`,
+      `  \\node[text=${color}, font=\\bfseries] at ${tikzPoint(element, { x: titleX, y: 0.72 })} {${title}};`,
     ]
-    const steps = mlSteps()
 
     steps.forEach((step, index) => {
       const name = tikzNodeId(element, `step${index}`)
@@ -2729,7 +2800,7 @@ function buildDiagramTikz(element, ensureColor) {
         `  \\node[draw=${color}, ${nodeFillStyle}, rounded corners=2pt, minimum width=1.18cm, minimum height=0.62cm, align=center] (${name}) at ${tikzPoint(
           element,
           { x: index * 1.55, y: 0 },
-        )} {\\scriptsize ${step}};`,
+        )} {\\scriptsize ${formatTikzNodeText(step)}};`,
       )
       if (index > 0) {
         lines.push(`  \\draw[->, draw=${color}, line width=0.45pt] (${tikzNodeId(element, `step${index - 1}`)}) -- (${name});`)
@@ -2740,16 +2811,20 @@ function buildDiagramTikz(element, ensureColor) {
   }
 
   if (element.diagramKind === 'dl') {
+    const layers = dlLayersForConfig(config)
+    const maxNodeY = Math.max(...layers.map((layer) => (layer.count - 1) * 0.36), 1.3)
+    const titleX = ((layers.length - 1) * 1.65) / 2
+    const titleY = maxNodeY + 0.65
+    const labelY = -maxNodeY - 0.55
     const lines = [
       `  % ${element.title}`,
-      `  \\node[anchor=west, text=${color}, font=\\bfseries] at ${tikzPoint(element, { x: 0, y: 2.0 })} {${title}};`,
+      `  \\node[text=${color}, font=\\bfseries] at ${tikzPoint(element, { x: titleX, y: titleY })} {${title}};`,
     ]
-    const counts = dlLayerCounts()
 
-    counts.forEach((count, layerIndex) => {
+    layers.forEach((layer, layerIndex) => {
       const x = layerIndex * 1.65
-      for (let nodeIndex = 0; nodeIndex < count; nodeIndex += 1) {
-        const y = (count - 1) * 0.36 - nodeIndex * 0.72
+      for (let nodeIndex = 0; nodeIndex < layer.count; nodeIndex += 1) {
+        const y = (layer.count - 1) * 0.36 - nodeIndex * 0.72
         lines.push(
           `  \\node[circle, draw=${color}, ${markFillStyle}, minimum size=0.22cm, inner sep=0pt] (${tikzNodeId(
             element,
@@ -2759,9 +2834,9 @@ function buildDiagramTikz(element, ensureColor) {
       }
     })
 
-    counts.slice(0, -1).forEach((count, layerIndex) => {
-      for (let left = 0; left < count; left += 1) {
-        for (let right = 0; right < counts[layerIndex + 1]; right += 1) {
+    layers.slice(0, -1).forEach((layer, layerIndex) => {
+      for (let left = 0; left < layer.count; left += 1) {
+        for (let right = 0; right < layers[layerIndex + 1].count; right += 1) {
           lines.push(
             `  \\draw[draw=${color}!35, line width=0.25pt] (${tikzNodeId(element, `l${layerIndex}n${left}`)}) -- (${tikzNodeId(
               element,
@@ -2772,8 +2847,12 @@ function buildDiagramTikz(element, ensureColor) {
       }
     })
 
-    ;['Input', 'Hidden', 'Latent', 'Output'].forEach((label, index) => {
-      lines.push(`  \\node[font=\\scriptsize, text=${color}] at ${tikzPoint(element, { x: index * 1.65, y: -1.85 })} {${label}};`)
+    layers.forEach((layer, index) => {
+      lines.push(
+        `  \\node[font=\\scriptsize, text=${color}] at ${tikzPoint(element, { x: index * 1.65, y: labelY })} {${formatTikzNodeText(
+          layer.label,
+        )}};`,
+      )
     })
 
     return lines
@@ -4123,6 +4202,18 @@ function App() {
   const selectedFunctionOptions = selectedElement?.type === 'function' ? functionOptionsFor(selectedElement) : defaultFunctionOptions
   const selectedFunctionSeries = selectedElement?.type === 'function' ? editableFunctionSeriesFor(selectedElement) : []
   const selectedLibraryConfig = selectedElement?.type === 'library' ? getLibraryConfig(selectedElement) : null
+  const selectedDiagramConfig = selectedElement?.type === 'diagram' ? diagramConfigForElement(selectedElement) : null
+  const selectedDiagramConfigFields =
+    selectedElement?.type === 'diagram' ? (diagramConfigFieldSpecs[selectedElement.diagramKind] ?? []) : []
+  const selectedDiagramConfigTitle =
+    selectedElement?.type === 'diagram'
+      ? {
+          circuit: 'Labels circuito',
+          gantt: 'Barras Gantt',
+          ml: 'Labels pipeline',
+          dl: 'Labels capas',
+        }[selectedElement.diagramKind] ?? 'Labels diagrama'
+      : ''
   const selectedLibraryPreset = selectedElement?.type === 'library' ? getLibraryPreset(selectedElement) : null
   const selectedLibraryProfile = selectedLibraryPreset ? libraryObjectProfileForPreset(selectedLibraryPreset) : null
   const selectedLibraryProfileKeys = selectedLibraryPreset ? libraryProfileFieldKeysForPreset(selectedLibraryPreset) : new Set()
@@ -4666,6 +4757,11 @@ function App() {
   const updateSelectedLibraryConfig = (patch) => {
     if (selectedElement?.type !== 'library') return
     updateSelected({ config: { ...getLibraryConfig(selectedElement), ...patch } })
+  }
+
+  const updateSelectedDiagramConfig = (patch) => {
+    if (selectedElement?.type !== 'diagram') return
+    updateSelected({ diagramConfig: { ...diagramConfigForElement(selectedElement), ...patch } })
   }
 
   const libraryProfileIncludes = (key) => selectedLibraryProfileKeys.has(key)
@@ -5469,8 +5565,10 @@ function App() {
       fontWeight: 600,
     }
     const pathPoints = (points) => points.map(point).map((item) => `${item.x},${item.y}`).join(' ')
+    const config = diagramConfigForElement(element)
 
     if (element.diagramKind === 'circuit') {
+      const labels = circuitLabelsForConfig(config)
       const sourceCenter = point({ x: 0, y: -1.2 })
       const label = point({ x: 2.35, y: 0.45 })
       return (
@@ -5498,30 +5596,38 @@ function App() {
           <polyline {...lineProps} points={pathPoints([{ x: 0, y: -0.82 }, { x: 0, y: 0 }])} />
           <circle cx={sourceCenter.x} cy={sourceCenter.y} r={0.38 * diagramScale} {...lineProps} />
           <text {...smallLabelProps} x={label.x} y={label.y}>
-            R
+            {diagramSvgLabelText(labels.resistorLabel)}
           </text>
           <text {...smallLabelProps} x={point({ x: 5.25, y: -1.05 }).x} y={point({ x: 5.25, y: -1.05 }).y}>
-            C
+            {diagramSvgLabelText(labels.capacitorLabel)}
           </text>
           <text {...smallLabelProps} x={point({ x: -0.55, y: -1.2 }).x} y={point({ x: -0.55, y: -1.2 }).y}>
-            Vin
+            {diagramSvgLabelText(labels.sourceLabel)}
+          </text>
+          <text {...smallLabelProps} x={point({ x: 5.25, y: 0.15 }).x} y={point({ x: 5.25, y: 0.15 }).y} textAnchor="start">
+            {diagramSvgLabelText(labels.outputLabel)}
           </text>
         </g>
       )
     }
 
     if (element.diagramKind === 'gantt') {
-      const header = point({ x: 3.2, y: 0.5 })
+      const tasks = ganttTasksForConfig(config)
+      const metrics = ganttMetricsForTasks(tasks)
+      const header = point({ x: metrics.minStart + metrics.width / 2, y: 0.5 })
+      const tickStart = Math.floor(metrics.minStart)
+      const tickEnd = Math.ceil(metrics.maxEnd)
+      const tickStep = Math.max(1, Math.ceil((tickEnd - tickStart) / 10))
       return (
         <g>
           <text {...labelProps} x={header.x} y={header.y}>
             {element.title}
           </text>
           <rect
-            x={point({ x: 0, y: 0 }).x}
-            y={point({ x: 0, y: 0 }).y}
-            width={6.5 * diagramScale}
-            height={2.75 * diagramScale}
+            x={point({ x: metrics.minStart, y: 0 }).x}
+            y={point({ x: metrics.minStart, y: 0 }).y}
+            width={metrics.width * diagramScale}
+            height={metrics.height * diagramScale}
             fill={shapeFill}
             fillOpacity={shapeFillOpacity}
             stroke={element.stroke}
@@ -5529,17 +5635,17 @@ function App() {
             strokeWidth="1.1"
             vectorEffect="non-scaling-stroke"
           />
-          {Array.from({ length: 7 }, (_, index) => {
-            const start = point({ x: index, y: 0 })
-            const end = point({ x: index, y: -2.75 })
-            return <line key={`tick-${index}`} x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke={element.stroke} strokeOpacity="0.16" />
+          {Array.from({ length: Math.floor((tickEnd - tickStart) / tickStep) + 1 }, (_, index) => tickStart + index * tickStep).map((tick) => {
+            const start = point({ x: tick, y: 0 })
+            const end = point({ x: tick, y: -metrics.height })
+            return <line key={`tick-${tick}`} x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke={element.stroke} strokeOpacity="0.16" />
           })}
-          {ganttTasks().map((task) => {
+          {tasks.map((task, index) => {
             const y = -0.45 - task.row * 0.58
-            const labelPoint = point({ x: -0.25, y })
+            const labelPoint = point({ x: metrics.minStart - 0.25, y })
             const barStart = point({ x: task.start, y: y + 0.18 })
             return (
-              <g key={task.label}>
+              <g key={`${task.label}-${index}`}>
                 <text {...smallLabelProps} x={labelPoint.x} y={labelPoint.y} textAnchor="end">
                   {task.label}
                 </text>
@@ -5563,6 +5669,8 @@ function App() {
 
     if (element.diagramKind === 'ml') {
       const markerId = `arrow-${element.id}`
+      const steps = mlStepsForConfig(config)
+      const titleX = ((steps.length - 1) * 1.55) / 2
       return (
         <g>
           <defs>
@@ -5570,15 +5678,15 @@ function App() {
               <path d="M 0 0 L 8 4 L 0 8 z" fill={element.stroke} />
             </marker>
           </defs>
-          <text {...labelProps} x={point({ x: 3.1, y: 0.72 }).x} y={point({ x: 3.1, y: 0.72 }).y}>
+          <text {...labelProps} x={point({ x: titleX, y: 0.72 }).x} y={point({ x: titleX, y: 0.72 }).y}>
             {element.title}
           </text>
-          {mlSteps().map((step, index) => {
+          {steps.map((step, index) => {
             const center = point({ x: index * 1.55, y: 0 })
             const nextCenter = point({ x: (index + 1) * 1.55, y: 0 })
             return (
-              <g key={step}>
-                {index < mlSteps().length - 1 && (
+              <g key={`${step}-${index}`}>
+                {index < steps.length - 1 && (
                   <line
                     x1={center.x + 27 * uiScale}
                     y1={center.y}
@@ -5610,24 +5718,28 @@ function App() {
     }
 
     if (element.diagramKind === 'dl') {
-      const counts = dlLayerCounts()
-      const nodes = counts.flatMap((count, layerIndex) =>
-        Array.from({ length: count }, (_, nodeIndex) => ({
+      const layers = dlLayersForConfig(config)
+      const maxNodeY = Math.max(...layers.map((layer) => (layer.count - 1) * 0.36), 1.3)
+      const titleX = ((layers.length - 1) * 1.65) / 2
+      const titleY = maxNodeY + 0.65
+      const labelY = -maxNodeY - 0.55
+      const nodes = layers.flatMap((layer, layerIndex) =>
+        Array.from({ length: layer.count }, (_, nodeIndex) => ({
           id: `${layerIndex}-${nodeIndex}`,
           layerIndex,
           nodeIndex,
-          count,
-          point: point({ x: layerIndex * 1.65, y: (count - 1) * 0.36 - nodeIndex * 0.72 }),
+          count: layer.count,
+          point: point({ x: layerIndex * 1.65, y: (layer.count - 1) * 0.36 - nodeIndex * 0.72 }),
         })),
       )
       return (
         <g>
-          <text {...labelProps} x={point({ x: 2.5, y: 2 }).x} y={point({ x: 2.5, y: 2 }).y}>
+          <text {...labelProps} x={point({ x: titleX, y: titleY }).x} y={point({ x: titleX, y: titleY }).y}>
             {element.title}
           </text>
-          {counts.slice(0, -1).flatMap((count, layerIndex) =>
-            Array.from({ length: count }, (_, left) =>
-              Array.from({ length: counts[layerIndex + 1] }, (_, right) => {
+          {layers.slice(0, -1).flatMap((layer, layerIndex) =>
+            Array.from({ length: layer.count }, (_, left) =>
+              Array.from({ length: layers[layerIndex + 1].count }, (_, right) => {
                 const from = nodes.find((node) => node.layerIndex === layerIndex && node.nodeIndex === left).point
                 const to = nodes.find((node) => node.layerIndex === layerIndex + 1 && node.nodeIndex === right).point
                 return <line key={`${layerIndex}-${left}-${right}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={element.stroke} strokeOpacity="0.28" />
@@ -5646,11 +5758,11 @@ function App() {
               strokeWidth="1.1"
             />
           ))}
-          {['Input', 'Hidden', 'Latent', 'Output'].map((label, index) => {
-            const labelPoint = point({ x: index * 1.65, y: -1.85 })
+          {layers.map((layer, index) => {
+            const labelPoint = point({ x: index * 1.65, y: labelY })
             return (
-              <text key={label} {...smallLabelProps} x={labelPoint.x} y={labelPoint.y}>
-                {label}
+              <text key={`${layer.label}-${index}`} {...smallLabelProps} x={labelPoint.x} y={labelPoint.y}>
+                {diagramSvgLabelText(layer.label)}
               </text>
             )
           })}
@@ -8018,6 +8130,39 @@ function App() {
     )
   }
 
+  const renderDiagramConfigField = (field) => {
+    if (!selectedDiagramConfig) return null
+    const value = selectedDiagramConfig[field.key] ?? ''
+
+    if (field.type === 'textarea') {
+      return (
+        <label key={field.key} className="field object-option-wide">
+          <span>{field.label}</span>
+          <textarea
+            aria-label={field.label}
+            className="snippet-input compact"
+            value={value}
+            placeholder={field.placeholder}
+            onChange={(event) => updateSelectedDiagramConfig({ [field.key]: event.target.value })}
+          />
+        </label>
+      )
+    }
+
+    return (
+      <label key={field.key} className="field">
+        <span>{field.label}</span>
+        <input
+          aria-label={field.label}
+          type="text"
+          value={value}
+          placeholder={field.placeholder}
+          onChange={(event) => updateSelectedDiagramConfig({ [field.key]: event.target.value })}
+        />
+      </label>
+    )
+  }
+
   return (
     <main className="app-shell">
       <aside className="tool-rail" aria-label="Herramientas de dibujo">
@@ -9593,6 +9738,21 @@ function App() {
                       onChange={(event) => updateSelected({ scale: Number(event.target.value) })}
                     />
                   </label>
+                  {selectedDiagramConfig && (
+                    <div className="object-config diagram-object-config">
+                      <div className="advanced-config-header">
+                        <strong>{selectedDiagramConfigTitle}</strong>
+                        <span>Cada label queda en este objeto</span>
+                      </div>
+                      <div className="object-option-grid">{selectedDiagramConfigFields.map(renderDiagramConfigField)}</div>
+                      {selectedElement.diagramKind === 'gantt' && (
+                        <p className="selection-note">Una barra por linea: label,start,end,row. Anade filas para mas barras.</p>
+                      )}
+                      {selectedElement.diagramKind === 'dl' && (
+                        <p className="selection-note">Los conteos y labels aceptan listas separadas por coma o salto de linea.</p>
+                      )}
+                    </div>
+                  )}
                   {selectedLibraryConfig && (
                     <div className="object-config">
                       <div className="field-pair">
@@ -9847,13 +10007,13 @@ function App() {
         </section>
 
         <section className="panel-section export-section">
-          <div className="panel-title">
-            <Code2 size={18} />
-            <h2>Codigo TikZ</h2>
+          <div className="panel-title paper-composer-title">
+            <BookOpen size={18} />
+            <h2>Paper Composer</h2>
           </div>
           <div className="paper-composer">
             <div className="paper-composer-head">
-              <strong>Paper Composer</strong>
+              <strong>Target</strong>
               <span>{paperComposer.displaySize}</span>
             </div>
             <label className="field">
@@ -10054,6 +10214,10 @@ function App() {
               </label>
             </div>
           )}
+          <div className="panel-title code-output-title">
+            <Code2 size={18} />
+            <h2>Codigo TikZ</h2>
+          </div>
           <textarea className="code-output" value={tikzCode} readOnly spellCheck="false" />
           <div className="export-actions">
             <button type="button" className="ghost-button" onClick={restoreDemo}>

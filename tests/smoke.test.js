@@ -7,6 +7,7 @@ import { libraryPresets } from '../src/tikzLibraryPresets.js'
 
 const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 const paletteSource = readFileSync(new URL('../src/tikzPaletteItems.js', import.meta.url), 'utf8')
+const diagramConfigSource = readFileSync(new URL('../src/diagramConfig.js', import.meta.url), 'utf8')
 const todoSource = readFileSync(new URL('../TODO.md', import.meta.url), 'utf8')
 
 test('TODO implementation hooks are present', () => {
@@ -49,6 +50,9 @@ test('function plots support multi-series styling and marked points', () => {
 
 test('paper composer controls wire journal targets to canvas guides and checklist', () => {
   assert.match(appSource, /Paper Composer/)
+  assert.match(appSource, /paper-composer-title/)
+  assert.match(appSource, /code-output-title/)
+  assert.match(appSource, /Paper Composer[\s\S]*Codigo TikZ[\s\S]*textarea className="code-output"/)
   assert.match(appSource, /applyPaperTarget/)
   assert.match(appSource, /paperTargets\.map/)
   assert.match(appSource, /subfigureLayouts\.map/)
@@ -59,6 +63,19 @@ test('paper composer controls wire journal targets to canvas guides and checklis
   assert.match(appSource, /Alto paper cm/)
   assert.match(appSource, /figureWrapperControls\.showWrapToggle/)
   assert.match(appSource, /Mostrar guias paper/)
+})
+
+test('native diagram presets expose editable labels and repeatable structures', () => {
+  assert.match(appSource, /diagramConfigForElement/)
+  assert.match(appSource, /updateSelectedDiagramConfig/)
+  assert.match(appSource, /selectedDiagramConfigFields/)
+  assert.match(appSource, /Labels circuito/)
+  assert.match(diagramConfigSource, /Barras Gantt/)
+  assert.match(diagramConfigSource, /Labels pipeline/)
+  assert.match(diagramConfigSource, /Nodos por capa/)
+  assert.match(diagramConfigSource, /Labels capas/)
+  assert.match(appSource, /ganttTasksForConfig/)
+  assert.match(appSource, /dlLayersForConfig/)
 })
 
 test('text labels resize with persistent dimensions and export font size', () => {
