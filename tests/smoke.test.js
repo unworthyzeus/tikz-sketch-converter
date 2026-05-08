@@ -78,6 +78,14 @@ test('native diagram presets expose editable labels and repeatable structures', 
   assert.match(appSource, /dlLayersForConfig/)
 })
 
+test('library objects expose universal snippet label editing', () => {
+  assert.match(appSource, /editableLibrarySnippetLines/)
+  assert.match(appSource, /selectedSnippetLabels/)
+  assert.match(appSource, /updateSelectedSnippetLabel/)
+  assert.match(appSource, /Etiquetas del objeto/)
+  assert.match(appSource, /applySnippetLabelOverrides/)
+})
+
 test('text labels resize with persistent dimensions and export font size', () => {
   assert.match(appSource, /labelMetricsForElement/)
   assert.match(appSource, /labelWidth/)

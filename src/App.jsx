@@ -92,6 +92,7 @@ import {
 import { advancedPgfplotsAxisOptions } from './pgfplotsOptions'
 import { previewKindForPreset } from './previewKinds'
 import { rasterSafeSvgText } from './svgRasterExport'
+import { applySnippetLabelOverrides, editableSnippetLabelsForLines } from './snippetLabels'
 import { libraryPresets } from './tikzLibraryPresets'
 import { libraryPaletteItems } from './tikzPaletteItems'
 import { diagramPaletteItems, filterPaletteItems, objectPaletteItems, paletteGroupsFor } from './paletteTaxonomy'
@@ -1122,6 +1123,7 @@ function defaultLibraryConfig(preset = {}) {
     datasetTag: '',
     referenceName: '',
     metadataJson: '',
+    snippetLabelOverrides: {},
   }
   return { ...baseConfig, ...libraryProfileDefaultConfig(preset) }
 }
@@ -3577,6 +3579,14 @@ function libraryMetadataCommentLines(element, preset = getLibraryPreset(element)
   return [`% metadata: ${entries.map(([key, value]) => `${key}=${String(value).replace(/\s+/g, '_')}`).join(', ')}`]
 }
 
+function editableLibrarySnippetLines(element, preset = getLibraryPreset(element)) {
+  const color = element.stroke ?? '#111111'
+  const fill = element.fill ?? 'none'
+  const configuredSnippet = buildConfiguredLibrarySnippet(preset, element)
+  const rawBody = (configuredSnippet ?? preset.snippet ?? []).map((line) => replaceLibraryTokens(line, element, color, fill))
+  return applyLibraryConfigToSnippet(rawBody, preset, element)
+}
+
 function buildLibraryTikz(element, ensureColor) {
   const preset = getLibraryPreset(element)
   const config = getLibraryConfig(element, preset)
@@ -3584,7 +3594,9 @@ function buildLibraryTikz(element, ensureColor) {
   const fill = ensureColor(element.fill)
   const configuredSnippet = buildConfiguredLibrarySnippet(preset, element)
   const rawBody = (configuredSnippet ?? preset.snippet).map((line) => replaceLibraryTokens(line, element, color, fill))
-  const body = applyLibraryConfigToSnippet(rawBody, preset, element)
+  const body = applySnippetLabelOverrides(applyLibraryConfigToSnippet(rawBody, preset, element), config.snippetLabelOverrides, {
+    formatText: formatTikzNodeText,
+  })
   const scopeStretch = configuredSnippet ? { x: 1, y: 1 } : { x: config.stretchX, y: config.stretchY }
   const extraNodes = buildExtraNodeTikz(element, color, fill, scopeStretch)
   const metadataComments = libraryMetadataCommentLines(element, preset, config)
@@ -4202,6 +4214,15 @@ function App() {
   const selectedFunctionOptions = selectedElement?.type === 'function' ? functionOptionsFor(selectedElement) : defaultFunctionOptions
   const selectedFunctionSeries = selectedElement?.type === 'function' ? editableFunctionSeriesFor(selectedElement) : []
   const selectedLibraryConfig = selectedElement?.type === 'library' ? getLibraryConfig(selectedElement) : null
+  const selectedLibraryPreset = selectedElement?.type === 'library' ? getLibraryPreset(selectedElement) : null
+  const selectedSnippetLabelOverrides = selectedLibraryConfig?.snippetLabelOverrides ?? {}
+  const selectedSnippetLabels =
+    selectedElement?.type === 'library' && selectedLibraryPreset
+      ? editableSnippetLabelsForLines(editableLibrarySnippetLines(selectedElement, selectedLibraryPreset)).map((label) => ({
+          ...label,
+          value: Object.hasOwn(selectedSnippetLabelOverrides, label.key) ? selectedSnippetLabelOverrides[label.key] : label.value,
+        }))
+      : []
   const selectedDiagramConfig = selectedElement?.type === 'diagram' ? diagramConfigForElement(selectedElement) : null
   const selectedDiagramConfigFields =
     selectedElement?.type === 'diagram' ? (diagramConfigFieldSpecs[selectedElement.diagramKind] ?? []) : []
@@ -4214,7 +4235,6 @@ function App() {
           dl: 'Labels capas',
         }[selectedElement.diagramKind] ?? 'Labels diagrama'
       : ''
-  const selectedLibraryPreset = selectedElement?.type === 'library' ? getLibraryPreset(selectedElement) : null
   const selectedLibraryProfile = selectedLibraryPreset ? libraryObjectProfileForPreset(selectedLibraryPreset) : null
   const selectedLibraryProfileKeys = selectedLibraryPreset ? libraryProfileFieldKeysForPreset(selectedLibraryPreset) : new Set()
   const selectedLibraryConfigSections = selectedLibraryPreset ? libraryConfigSectionsForPreset(selectedLibraryPreset) : []
@@ -4757,6 +4777,17 @@ function App() {
   const updateSelectedLibraryConfig = (patch) => {
     if (selectedElement?.type !== 'library') return
     updateSelected({ config: { ...getLibraryConfig(selectedElement), ...patch } })
+  }
+
+  const updateSelectedSnippetLabel = (key, value) => {
+    if (selectedElement?.type !== 'library') return
+    const config = getLibraryConfig(selectedElement)
+    updateSelectedLibraryConfig({
+      snippetLabelOverrides: {
+        ...(config.snippetLabelOverrides ?? {}),
+        [key]: value,
+      },
+    })
   }
 
   const updateSelectedDiagramConfig = (patch) => {
@@ -8163,6 +8194,21 @@ function App() {
     )
   }
 
+  const renderSnippetLabelField = (label) => (
+    <label key={label.key} className="field">
+      <span>
+        {label.label} {label.kind ? `(${label.kind})` : ''}
+      </span>
+      <input
+        aria-label={`Etiqueta ${label.label}`}
+        type="text"
+        value={label.value}
+        placeholder={label.value}
+        onChange={(event) => updateSelectedSnippetLabel(label.key, event.target.value)}
+      />
+    </label>
+  )
+
   return (
     <main className="app-shell">
       <aside className="tool-rail" aria-label="Herramientas de dibujo">
@@ -9787,6 +9833,14 @@ function App() {
                           onChange={(event) => updateSelectedLibraryConfig({ label: event.target.value })}
                         />
                       </label>
+                      {selectedSnippetLabels.length > 0 && (
+                        <details className="config-details snippet-label-details" open>
+                          <summary>Etiquetas del objeto</summary>
+                          <div className="object-option-grid snippet-label-grid">
+                            {selectedSnippetLabels.map(renderSnippetLabelField)}
+                          </div>
+                        </details>
+                      )}
                       {selectedCircuitQuickComponent && (
                         <div className="circuit-config">
                           <label className="toggle">
