@@ -2,6 +2,7 @@ import { splitTikzOptions } from './tikzOptions.js'
 
 const defaultErrorBarOptions = '/pgfplots/error bars/y dir=both, /pgfplots/error bars/y explicit'
 const numericTokenPattern = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i
+const legendModes = new Set(['auto', 'manual', 'axis', 'none'])
 
 function formatNumber(value) {
   if (!Number.isFinite(value)) return '0'
@@ -12,6 +13,96 @@ function formatNumber(value) {
 function headerForColumnCount(count) {
   const names = ['x', 'y', 'z']
   return Array.from({ length: count }, (_, index) => names[index] ?? `c${index + 1}`).join(' ')
+}
+
+function normalizedLegendMode(value) {
+  return legendModes.has(value) ? value : 'auto'
+}
+
+function commandGroupContents(line, command) {
+  const contents = []
+  let searchIndex = 0
+
+  while (searchIndex < line.length) {
+    const commandIndex = line.indexOf(command, searchIndex)
+    if (commandIndex === -1) break
+
+    const openIndex = line.indexOf('{', commandIndex + command.length)
+    if (openIndex === -1) break
+
+    let depth = 0
+    let inMath = false
+    let escaped = false
+    let found = false
+
+    for (let index = openIndex; index < line.length; index += 1) {
+      const char = line[index]
+
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+      if (char === '$') {
+        inMath = !inMath
+        continue
+      }
+      if (inMath) continue
+
+      if (char === '{') depth += 1
+      if (char === '}') {
+        depth -= 1
+        if (depth === 0) {
+          contents.push(line.slice(openIndex + 1, index))
+          searchIndex = index + 1
+          found = true
+          break
+        }
+      }
+    }
+
+    if (!found) break
+  }
+
+  return contents
+}
+
+export function splitLegendEntries(value = '') {
+  return splitTikzOptions(value)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+export function libraryLegendEntriesFromLines(lines = []) {
+  return lines
+    .flatMap((line) => [
+      ...commandGroupContents(line, '\\addlegendentry'),
+      ...commandGroupContents(line, '\\legend').flatMap(splitLegendEntries),
+    ])
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function stripLegendCommandLines(lines = []) {
+  return lines.filter((line) => !/^\\(?:addlegendentry|legend)\b/.test(line.trimStart()))
+}
+
+export function libraryLegendAxisOptions(lines = [], config = {}) {
+  if (normalizedLegendMode(config.legendMode) !== 'axis') return []
+
+  const explicitEntries = splitLegendEntries(config.legendEntries)
+  const entries = explicitEntries.length ? explicitEntries : libraryLegendEntriesFromLines(lines)
+  return entries.length ? [`legend entries={${entries.join(',')}}`] : []
+}
+
+export function applyLibraryLegendMode(lines = [], config = {}) {
+  const mode = normalizedLegendMode(config.legendMode)
+  if (mode !== 'axis' && mode !== 'none') return lines
+
+  return stripLegendCommandLines(lines)
 }
 
 export function parseLibraryPlotDataTable(value = '') {
@@ -211,7 +302,8 @@ export function libraryAddPlotTikzOptions(config = {}) {
 
   if (`${config.plotDomain ?? ''}`.trim()) options.push(`domain=${`${config.plotDomain}`.trim()}`)
   if (Number.isFinite(samples) && Math.round(samples) !== 120) options.push(`samples=${Math.round(samples)}`)
-  if (config.markStyle) options.push(`mark=${config.markStyle}`)
+  if (config.markStyle === 'none') options.push('mark=none')
+  else if (config.markStyle) options.push(`mark=${config.markStyle}`)
   if (config.plotSmooth) options.push('smooth')
   if (config.shader) options.push(`shader=${config.shader}`)
   if (config.pointMeta) options.push(`point meta=${config.pointMeta}`)

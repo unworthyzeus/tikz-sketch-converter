@@ -56,11 +56,13 @@ import {
   libraryProfileSectionSpecsForPreset,
 } from './libraryObjectProfiles'
 import {
+  applyLibraryLegendMode,
   applyLibraryPlotDataTable,
   applyLibraryPlotModulation,
   applyPgfplotsAxisMode,
   functionPgfplotsAxisSettings,
   libraryAddPlotTikzOptions,
+  libraryLegendAxisOptions,
 } from './libraryPlotOptions'
 import {
   buildBarChartSnippet,
@@ -591,6 +593,13 @@ const functionMarkerOptions = [
   { value: 'diamond*', label: 'Rombo' },
 ]
 
+const legendModeOptions = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'manual', label: 'addlegendentry / legend' },
+  { value: 'axis', label: 'legend entries' },
+  { value: 'none', label: 'Sin leyenda' },
+]
+
 const functionQuickExpressions = [
   'sin(x)',
   'cos(2*x)',
@@ -696,7 +705,8 @@ const axisModeOptions = [
 ]
 
 const markStyleOptions = [
-  { value: '', label: 'Sin marca' },
+  { value: '', label: 'Auto' },
+  { value: 'none', label: 'Sin marca' },
   { value: '*', label: 'Dot' },
   { value: 'o', label: 'Circle' },
   { value: 'square*', label: 'Square' },
@@ -839,8 +849,10 @@ const objectConfigSections = [
       { key: 'xlabel', label: 'xlabel', type: 'text', placeholder: '$x$' },
       { key: 'ylabel', label: 'ylabel', type: 'text', placeholder: '$y$' },
       { key: 'plotTitle', label: 'Title', type: 'text' },
+      { key: 'legendMode', label: 'Legend type', type: 'select', options: legendModeOptions },
       { key: 'legendPos', label: 'Legend pos', type: 'select', options: legendPositionOptions },
       { key: 'legendColumns', label: 'Legend cols', type: 'number', min: 1, max: 8, step: 1 },
+      { key: 'legendEntries', label: 'Legend entries', type: 'text', placeholder: '$x^2$, $2-x^2$' },
       { key: 'markStyle', label: 'Mark', type: 'select', options: markStyleOptions },
       { key: 'plotSmooth', label: 'Smooth', type: 'checkbox' },
       { key: 'axisEqual', label: 'Axis equal image', type: 'checkbox' },
@@ -1113,8 +1125,10 @@ const defaultFunctionOptions = {
   axisLineStyle: '',
   gridLineStyle: '',
   enlargeLimits: '',
+  legendMode: 'auto',
   legendPos: 'north east',
   legendColumns: 1,
+  legendEntries: '',
   colormap: '',
   axisEqual: false,
   minorTicks: 0,
@@ -1498,8 +1512,10 @@ function defaultLibraryConfig(preset = {}) {
     xlabel: '',
     ylabel: '',
     plotTitle: '',
+    legendMode: 'auto',
     legendPos: '',
     legendColumns: 1,
+    legendEntries: '',
     markStyle: '',
     plotSmooth: false,
     axisEqual: false,
@@ -1630,6 +1646,7 @@ function getLibraryConfig(element, preset = getLibraryPreset(element)) {
     xMode: enumValue(config.xMode, axisModeOptions, 'linear'),
     yMode: enumValue(config.yMode, axisModeOptions, 'linear'),
     samples: Math.round(numberInRange(config.samples, 120, 2, 1000)),
+    legendMode: enumValue(config.legendMode, legendModeOptions, 'auto'),
     legendPos: enumValue(config.legendPos, legendPositionOptions, ''),
     legendColumns: Math.round(numberInRange(config.legendColumns, 1, 1, 8)),
     markStyle: enumValue(config.markStyle, markStyleOptions, ''),
@@ -2384,6 +2401,21 @@ function functionLineStyleTikz(value) {
 
 function functionLineStyleSvg(value) {
   return functionLineStyleOption(value).dashArray
+}
+
+function legendEntriesFromText(value = '') {
+  return splitTikzOptions(value)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function functionLegendLabels(displaySeries, options) {
+  const explicitEntries = legendEntriesFromText(options.legendEntries)
+  if (explicitEntries.length) return explicitEntries
+
+  return displaySeries
+    .map(({ series }) => `${series.legend ?? ''}`.trim())
+    .filter(Boolean)
 }
 
 function evaluateScalarExpression(value, x = 0) {
@@ -3691,7 +3723,7 @@ function applyLibraryConfigToSnippet(lines, preset, element) {
   const common = libraryCommonTikzOptions(config)
   const nodeOptions = [...common, ...libraryNodeTikzOptions(config)]
   const drawOptions = [...common, config.edgeStyle !== 'solid' ? config.edgeStyle : '']
-  const axisOptions = libraryAxisTikzOptions(config)
+  const axisOptions = [...libraryAxisTikzOptions(config), ...libraryLegendAxisOptions(lines, config)]
   const addPlotOptions = libraryAddPlotTikzOptions(config)
   const matrixOptions = libraryMatrixTikzOptions(config)
   const graphOptions = libraryGraphTikzOptions(config)
@@ -3712,6 +3744,7 @@ function applyLibraryConfigToSnippet(lines, preset, element) {
   nextLines = injectTikzOptionsIntoLines(nextLines, addPlotOptions, ['\\addplot3', '\\addplot+', '\\addplot'])
   nextLines = applyLibraryPlotModulation(nextLines, preset.id, config)
   nextLines = applyLibraryPlotDataTable(nextLines, config.dataTable)
+  nextLines = applyLibraryLegendMode(nextLines, config)
   nextLines = injectTikzOptionsIntoLines(nextLines, matrixOptions, ['\\matrix'])
   nextLines = injectTikzOptionsIntoLines(nextLines, ganttOptions, ['\\begin{ganttchart}'])
   nextLines = injectTikzOptionsIntoLines(nextLines, nodeOptions, ['\\node'])
@@ -4114,9 +4147,11 @@ function collectRequirements(elements) {
     }
 
     if (element.type === 'function' && functionOptionsFor(element).usePgfplots) {
+      const functionOptions = functionOptionsFor(element)
       packages.add('\\usepackage{pgfplots}')
       afterPreamble.add('\\pgfplotsset{compat=1.18}')
-      if (functionOptionsFor(element).colormap?.trim()) pgfplotsLibraries.add('colormaps')
+      if (functionOptions.colormap?.trim()) pgfplotsLibraries.add('colormaps')
+      if (functionOptions.axisType === 'polaraxis') pgfplotsLibraries.add('polar')
     }
 
     if (element.type === 'arrow') {
@@ -4302,7 +4337,11 @@ function buildTikz(elements, exportOptions = {}) {
     if (element.type === 'function') {
       const functionOptions = functionOptionsFor(element)
       const displaySeries = functionDisplaySeries(element)
-      const hasFunctionLegend = displaySeries.some(({ series }) => series.legend)
+      const functionLegendMode = legendModeOptions.some((option) => option.value === functionOptions.legendMode)
+        ? functionOptions.legendMode
+        : 'auto'
+      const functionLegendLabelValues = functionLegendLabels(displaySeries, functionOptions)
+      const hasFunctionLegend = functionLegendMode !== 'none' && functionLegendLabelValues.length > 0
       const graphLayout = functionPreviewLayout(element)
       const graphBounds = graphLayout.frameBounds
       const graphDataBounds = graphLayout.dataBounds
@@ -4340,6 +4379,9 @@ function buildTikz(elements, exportOptions = {}) {
           functionOptions.xTicks?.trim() ? `xtick={${functionOptions.xTicks.trim()}}` : '',
           functionOptions.yTicks?.trim() ? `ytick={${functionOptions.yTicks.trim()}}` : '',
           hasFunctionLegend ? `legend pos=${functionOptions.legendPos || 'north east'}` : '',
+          hasFunctionLegend && functionLegendMode === 'axis'
+            ? `legend entries={${functionLegendLabelValues.map(formatTikzNodeText).join(',')}}`
+            : '',
           ...advancedPgfplotsAxisOptions({
             ...functionOptions,
             legendColumns: hasFunctionLegend ? functionOptions.legendColumns : 1,
@@ -4358,7 +4400,9 @@ function buildTikz(elements, exportOptions = {}) {
             functionOptions.plotOptions,
             `line width=${formatNumber(series.width)}pt`,
             series.plotOptions,
-          ].filter(Boolean)
+        ].filter(Boolean)
+        const usesAxisLegendEntries = hasFunctionLegend && functionLegendMode === 'axis'
+        const usesPerSeriesLegendEntries = hasFunctionLegend && !usesAxisLegendEntries
         displaySeries.forEach(({ series, points }) => {
           const dataPoints = parseFunctionDataTable(series.dataTable)
           if (dataPoints.length) {
@@ -4366,7 +4410,7 @@ function buildTikz(elements, exportOptions = {}) {
             const tableRows = functionDataTableRows(tablePoints)
             const addplotOptions = makeAddplotOptions(series)
             if (functionOptions.errorBars && functionDataTableUsesYError(tablePoints)) addplotOptions.push('y error=yerr')
-            const legend = series.legend ? `\n${linePrefix}  \\addlegendentry{${formatTikzNodeText(series.legend)}}` : ''
+            const legend = usesPerSeriesLegendEntries && series.legend ? `\n${linePrefix}  \\addlegendentry{${formatTikzNodeText(series.legend)}}` : ''
             pictureLines.push(`${linePrefix}  \\addplot[${addplotOptions.join(', ')}] table[row sep=\\\\] {`)
             tableRows.forEach((row) => pictureLines.push(`${linePrefix}    ${row}\\\\`))
             pictureLines.push(`${linePrefix}  };${legend}`)
@@ -4376,7 +4420,10 @@ function buildTikz(elements, exportOptions = {}) {
           const segments = splitDrawableSegments(points.map((point) => (point ? { x: point.x, y: point.y } : null)))
           segments.forEach((segment, index) => {
             const coords = segment.map((point) => `(${formatNumber(point.x)},${formatNumber(point.y)})`).join(' ')
-            const legend = series.legend && index === 0 ? `\n${linePrefix}  \\addlegendentry{${formatTikzNodeText(series.legend)}}` : ''
+            const legend =
+              usesPerSeriesLegendEntries && series.legend && index === 0
+                ? `\n${linePrefix}  \\addlegendentry{${formatTikzNodeText(series.legend)}}`
+                : ''
             pictureLines.push(`${linePrefix}  \\addplot[${makeAddplotOptions(series).join(', ')}] coordinates { ${coords} };${legend}`)
           })
         })
@@ -4466,7 +4513,7 @@ function buildTikz(elements, exportOptions = {}) {
             pictureLines.push(`${linePrefix}\\draw[densely dashed, color=gray!55] (${formatNumber(start.x)},${formatNumber(start.y)}) -- (${formatNumber(end.x)},${formatNumber(end.y)});`)
           })
         }
-        const legends = displaySeries.map(({ series }) => series.legend).filter(Boolean)
+        const legends = functionLegendMode === 'none' ? [] : functionLegendLabelValues
         if (legends.length) {
           const bounds = elementBounds(element)
           legends.forEach((legend, legendIndex) => {
@@ -8173,7 +8220,24 @@ function App() {
       const bottomRight = worldToScreen({ x: bounds.maxX, y: bounds.minY })
       const xTicks = graphTicks(dataBounds.minX, dataBounds.maxX, 7)
       const yTicks = graphTicks(dataBounds.minY, dataBounds.maxY, 5)
-      const legendEntries = functionLegendEntries(displaySeries)
+      const baseLegendEntries = functionLegendEntries(displaySeries)
+      const explicitLegendEntries = legendEntriesFromText(functionOptions.legendEntries)
+      const fallbackLegendEntry = {
+        id: 'explicit-legend',
+        color: element.stroke,
+        lineStyle: functionOptions.lineStyle,
+        markerStyle: functionOptions.markerStyle,
+      }
+      const legendEntries =
+        functionOptions.legendMode === 'none'
+          ? []
+          : explicitLegendEntries.length
+            ? explicitLegendEntries.map((label, index) => ({
+                ...(baseLegendEntries[index % Math.max(1, baseLegendEntries.length)] ?? fallbackLegendEntry),
+                id: `explicit-legend-${index}`,
+                label,
+              }))
+            : baseLegendEntries
       const markerPoints = [
         ...(functionOptions.showXIntercepts ? features.xIntercepts.slice(0, 8).map((point) => ({ ...point, label: '$x_0$' })) : []),
         ...(functionOptions.showYIntercept && features.yIntercept ? [{ ...features.yIntercept, label: '$y_0$' }] : []),
@@ -8244,7 +8308,8 @@ function App() {
       }
 
       const renderFunctionLegend = () => {
-        const shouldShowLegend = !halo && legendEntries.length && (displaySeries.length > 1 || functionOptions.legend?.trim())
+        const shouldShowLegend =
+          !halo && legendEntries.length && (displaySeries.length > 1 || functionOptions.legend?.trim() || explicitLegendEntries.length)
         if (!shouldShowLegend) return null
 
         const rowHeight = 18
@@ -10122,6 +10187,19 @@ function App() {
                     </div>
                     <div className="field-pair">
                       <label className="field">
+                        <span>Tipo leyenda</span>
+                        <select
+                          value={functionOptionsFor(selectedElement).legendMode}
+                          onChange={(event) => updateSelectedFunctionOptions({ legendMode: event.target.value })}
+                        >
+                          {legendModeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
                         <span>Legend pos</span>
                         <select
                           value={functionOptionsFor(selectedElement).legendPos}
@@ -10134,6 +10212,8 @@ function App() {
                           <option value="outer north east">outer north east</option>
                         </select>
                       </label>
+                    </div>
+                    <div className="field-pair">
                       <label className="field">
                         <span>Colormap</span>
                         <select
@@ -10147,8 +10227,6 @@ function App() {
                           <option value="blackwhite">blackwhite</option>
                         </select>
                       </label>
-                    </div>
-                    <div className="field-pair">
                       <label className="field">
                         <span>Minor ticks</span>
                         <input
@@ -10160,6 +10238,8 @@ function App() {
                           onChange={(event) => updateSelectedFunctionOptions({ minorTicks: Number(event.target.value) })}
                         />
                       </label>
+                    </div>
+                    <div className="field-pair">
                       <label className="field">
                         <span>Legend cols</span>
                         <input
@@ -10169,6 +10249,14 @@ function App() {
                           step="1"
                           value={functionOptionsFor(selectedElement).legendColumns}
                           onChange={(event) => updateSelectedFunctionOptions({ legendColumns: Number(event.target.value) })}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Legend entries</span>
+                        <input
+                          value={functionOptionsFor(selectedElement).legendEntries}
+                          onChange={(event) => updateSelectedFunctionOptions({ legendEntries: event.target.value })}
+                          placeholder="$x^2$, $2-x^2$"
                         />
                       </label>
                     </div>

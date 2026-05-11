@@ -38,11 +38,12 @@ const plotAxisStyleFields = [
   'gridLineStyle',
   'enlargeLimits',
 ]
+const plotLegendFields = ['legendMode', 'legendPos', 'legendColumns', 'legendEntries']
 
 test('BER plots expose an exact semilog communications profile', () => {
   assert.equal(libraryObjectProfileForPreset(preset('plot-ber')).id, 'plotBer')
   const keys = fieldKeys('plot-ber')
-  assert.deepEqual(keys.slice(0, 27), [
+  assert.deepEqual(keys.slice(0, 29), [
     'axisWidth',
     'axisHeight',
     'xMode',
@@ -53,8 +54,7 @@ test('BER plots expose an exact semilog communications profile', () => {
     'xlabel',
     'ylabel',
     'plotTitle',
-    'legendPos',
-    'legendColumns',
+    ...plotLegendFields,
     ...plotAxisStyleFields,
     'markStyle',
     'plotSmooth',

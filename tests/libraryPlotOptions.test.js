@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  applyLibraryLegendMode,
   applyLibraryPlotDataTable,
   applyLibraryPlotModulation,
   applyPgfplotsAxisMode,
   functionPgfplotsAxisSettings,
+  libraryLegendAxisOptions,
   pgfplotsAxisEnvironmentForModes,
   libraryAddPlotTikzOptions,
   parseLibraryPlotDataTable,
@@ -92,6 +94,38 @@ test('libraryAddPlotTikzOptions emits error bars only when enabled', () => {
       errorBarOptions: '/pgfplots/error bars/y dir=both',
     }).includes('/pgfplots/error bars/y dir=both'),
   )
+})
+
+test('libraryAddPlotTikzOptions can force a preset marker off', () => {
+  assert.ok(libraryAddPlotTikzOptions({ markStyle: 'none' }).includes('mark=none'))
+  assert.equal(libraryAddPlotTikzOptions({ markStyle: '' }).includes('mark=none'), false)
+})
+
+test('library legend axis mode converts snippet legends into axis entries', () => {
+  const lines = [
+    '\\begin{axis}[legend pos=north east]',
+    '  \\addplot coordinates {(0,0) (1,1)};',
+    '  \\addlegendentry{fit}',
+    '  \\legend{$x^2$,$2-x^2$}',
+    '\\end{axis}',
+  ]
+
+  assert.deepEqual(libraryLegendAxisOptions(lines, { legendMode: 'axis' }), ['legend entries={fit,$x^2$,$2-x^2$}'])
+  assert.deepEqual(
+    applyLibraryLegendMode(lines, { legendMode: 'axis' }),
+    ['\\begin{axis}[legend pos=north east]', '  \\addplot coordinates {(0,0) (1,1)};', '\\end{axis}'],
+  )
+})
+
+test('library legend none mode removes legend commands without injecting entries', () => {
+  const lines = ['\\begin{axis}', '  \\addplot coordinates {(0,0)};', '  \\addlegendentry{measurements}', '\\end{axis}']
+
+  assert.deepEqual(libraryLegendAxisOptions(lines, { legendMode: 'none' }), [])
+  assert.deepEqual(applyLibraryLegendMode(lines, { legendMode: 'none' }), [
+    '\\begin{axis}',
+    '  \\addplot coordinates {(0,0)};',
+    '\\end{axis}',
+  ])
 })
 
 test('pgfplotsAxisEnvironmentForModes switches semilog environments from explicit axis modes', () => {

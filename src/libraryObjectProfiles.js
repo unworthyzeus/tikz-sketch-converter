@@ -8,6 +8,7 @@ const plotAxisStyleFields = [
   'gridLineStyle',
   'enlargeLimits',
 ]
+const plotLegendFields = ['legendMode', 'legendPos', 'legendColumns', 'legendEntries']
 
 const commonProfileSections = [
   {
@@ -93,8 +94,7 @@ const exactProfiles = {
           'xlabel',
           'ylabel',
           'plotTitle',
-          'legendPos',
-          'legendColumns',
+          ...plotLegendFields,
           ...plotAxisStyleFields,
           'markStyle',
           'plotSmooth',
@@ -441,8 +441,7 @@ const exactProfiles = {
           'xlabel',
           'ylabel',
           'plotTitle',
-          'legendPos',
-          'legendColumns',
+          ...plotLegendFields,
           ...plotAxisStyleFields,
         ],
       },
@@ -472,8 +471,7 @@ const exactProfiles = {
           'xlabel',
           'ylabel',
           'plotTitle',
-          'legendPos',
-          'legendColumns',
+          ...plotLegendFields,
           'minorTicks',
           ...plotAxisStyleFields,
         ],

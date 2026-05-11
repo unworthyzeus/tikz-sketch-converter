@@ -29,6 +29,16 @@ test('function plot defaults expose axis sizing and title controls', () => {
   assert.match(appSource, /title=\{\$\{formatTikzNodeText\(functionOptions\.plotTitle\)\}\}/)
 })
 
+test('function plot defaults expose legend mode controls and polar requirements', () => {
+  const { defaultFunctionOptions } = loadFunctionExportDefaults()
+
+  assert.equal(defaultFunctionOptions.legendMode, 'auto')
+  assert.equal(defaultFunctionOptions.legendEntries, '')
+  assert.match(appSource, /legend entries=\{\$\{functionLegendLabelValues\.map\(formatTikzNodeText\)\.join\(','\)\}\}/)
+  assert.match(appSource, /functionOptions\.axisType === 'polaraxis'/)
+  assert.match(appSource, /pgfplotsLibraries\.add\('polar'\)/)
+})
+
 test('function table export wires y-error columns into PGFPlots tables', () => {
   assert.match(appSource, /functionDataTableRows\(tablePoints\)/)
   assert.match(appSource, /functionDataTableUsesYError\(tablePoints\)/)
