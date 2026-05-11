@@ -1,6 +1,62 @@
 const numberPattern = String.raw`[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?`
 const coordinatePattern = new RegExp(String.raw`\(\s*(${numberPattern})\s*,\s*(${numberPattern})\s*\)`, 'gi')
 
+function unique(values) {
+  return [...new Set(values.filter(Boolean))]
+}
+
+function splitDependencyList(value = '') {
+  return `${value ?? ''}`
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function stripLatexDocumentWrappers(source = '') {
+  return `${source ?? ''}`
+    .replace(/\\documentclass(?:\[[^\]]*])?\{[^}]+}/g, '')
+    .replace(/\\usepackage(?:\[[^\]]*])?\{[^}]+}/g, '')
+    .replace(/\\usetikzlibrary\{[^}]+}/g, '')
+    .replace(/\\usepgfplotslibrary\{[^}]+}/g, '')
+    .replace(/\\pgfplotsset\{[^}]+}/g, '')
+    .replace(/\\begin\{document}/g, '')
+    .replace(/\\end\{document}/g, '')
+}
+
+function tikzPictureBodies(source = '') {
+  const text = `${source ?? ''}`
+  const bodies = [...text.matchAll(/\\begin\{tikzpicture}(?:\[[^\]]*])?([\s\S]*?)\\end\{tikzpicture}/gi)].map(
+    (match) => match[1],
+  )
+  return bodies.length ? bodies : [stripLatexDocumentWrappers(text)]
+}
+
+export function tikzSnippetBodyLines(snippet = '') {
+  return tikzPictureBodies(snippet).flatMap((body) =>
+    body
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('%')),
+  )
+}
+
+export function tikzDependenciesFromSource(source = '') {
+  const text = `${source ?? ''}`
+  const packages = [...text.matchAll(/\\usepackage(?:\[[^\]]*])?\{[^}]+}/g)].map((match) => match[0])
+  const libraries = [...text.matchAll(/\\usetikzlibrary\{([^}]+)}/g)].flatMap((match) => splitDependencyList(match[1]))
+  const pgfplotsLibraries = [...text.matchAll(/\\usepgfplotslibrary\{([^}]+)}/g)].flatMap((match) =>
+    splitDependencyList(match[1]),
+  )
+  const afterPreamble = [...text.matchAll(/\\pgfplotsset\{[^}]+}/g)].map((match) => match[0])
+
+  return {
+    packages: unique(packages),
+    libraries: unique(libraries),
+    pgfplotsLibraries: unique(pgfplotsLibraries),
+    afterPreamble: unique(afterPreamble),
+  }
+}
+
 function readCoordinates(source) {
   return [...`${source ?? ''}`.matchAll(coordinatePattern)].map((match) => ({
     x: Number(match[1]),
@@ -38,14 +94,12 @@ function arrowStyleFor(options = '', statement = '') {
 }
 
 function statementLines(snippet = '') {
-  const body = `${snippet ?? ''}`
-    .replace(/\\begin\{tikzpicture}(\[[^\]]*])?/g, '')
-    .replace(/\\end\{tikzpicture}/g, '')
-
-  return body
-    .split(';')
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('%'))
+  return tikzPictureBodies(snippet).flatMap((body) =>
+    body
+      .split(';')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('%')),
+  )
 }
 
 function parseNode(statement) {

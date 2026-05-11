@@ -41,3 +41,14 @@ export async function writeClipboardText(value, environment = globalThis) {
     documentRef.body.removeChild(textarea)
   }
 }
+
+export async function readClipboardText(environment = globalThis) {
+  const clipboard = environment.navigator?.clipboard
+  if (typeof clipboard?.readText !== 'function') return ''
+
+  try {
+    return `${await clipboard.readText()}`
+  } catch {
+    return ''
+  }
+}

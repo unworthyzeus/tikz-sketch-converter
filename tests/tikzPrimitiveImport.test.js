@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseEditableTikzPrimitives } from '../src/tikzPrimitiveImport.js'
+import { parseEditableTikzPrimitives, tikzDependenciesFromSource, tikzSnippetBodyLines } from '../src/tikzPrimitiveImport.js'
 
 test('parseEditableTikzPrimitives imports multiple basic TikZ primitives', () => {
   const result = parseEditableTikzPrimitives(String.raw`
@@ -46,4 +46,58 @@ test('parseEditableTikzPrimitives preserves unsupported commands for snippet fal
 
   assert.equal(result.elements.length, 1)
   assert.deepEqual(result.unsupported, [String.raw`\draw (0,0) .. controls (1,1) .. (2,0);`])
+})
+
+test('parseEditableTikzPrimitives reads primitives from a full TeX document', () => {
+  const result = parseEditableTikzPrimitives(String.raw`
+    \documentclass{article}
+    \usepackage{tikz}
+    \begin{document}
+    \begin{tikzpicture}
+      \draw (0,0) -- (1,0);
+      \node at (0.5,0.2) {$x$};
+    \end{tikzpicture}
+    \end{document}
+  `)
+
+  assert.equal(result.unsupported.length, 0)
+  assert.deepEqual(
+    result.elements.map((element) => element.type),
+    ['line', 'text'],
+  )
+})
+
+test('tikzSnippetBodyLines preserves unsupported environment bodies without document wrappers', () => {
+  assert.deepEqual(
+    tikzSnippetBodyLines(String.raw`
+      \documentclass{standalone}
+      \usepackage{pgfplots}
+      \begin{document}
+      \begin{tikzpicture}
+        \begin{axis}
+          \addplot coordinates {(0,0) (1,1)};
+        \end{axis}
+      \end{tikzpicture}
+      \end{document}
+    `),
+    [String.raw`\begin{axis}`, String.raw`\addplot coordinates {(0,0) (1,1)};`, String.raw`\end{axis}`],
+  )
+})
+
+test('tikzDependenciesFromSource extracts TeX requirements for fallback snippets', () => {
+  assert.deepEqual(
+    tikzDependenciesFromSource(String.raw`
+      \usepackage[american]{circuitikz}
+      \usepackage{pgfplots}
+      \usetikzlibrary{arrows.meta, positioning}
+      \usepgfplotslibrary{colormaps, polar}
+      \pgfplotsset{compat=1.18}
+    `),
+    {
+      packages: [String.raw`\usepackage[american]{circuitikz}`, String.raw`\usepackage{pgfplots}`],
+      libraries: ['arrows.meta', 'positioning'],
+      pgfplotsLibraries: ['colormaps', 'polar'],
+      afterPreamble: [String.raw`\pgfplotsset{compat=1.18}`],
+    },
+  )
 })

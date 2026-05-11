@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { writeClipboardText } from '../src/clipboard.js'
+import { readClipboardText, writeClipboardText } from '../src/clipboard.js'
 
 test('writeClipboardText uses navigator.clipboard when available', async () => {
   const writes = []
@@ -75,4 +75,31 @@ test('writeClipboardText reports false when no copy mechanism succeeds', async (
   })
 
   assert.equal(ok, false)
+})
+
+test('readClipboardText uses navigator clipboard and tolerates denied reads', async () => {
+  assert.equal(
+    await readClipboardText({
+      navigator: {
+        clipboard: {
+          readText: async () => 'selection-json',
+        },
+      },
+    }),
+    'selection-json',
+  )
+
+  assert.equal(
+    await readClipboardText({
+      navigator: {
+        clipboard: {
+          readText: async () => {
+            throw new Error('denied')
+          },
+        },
+      },
+    }),
+    '',
+  )
+  assert.equal(await readClipboardText({}), '')
 })

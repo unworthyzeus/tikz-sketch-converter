@@ -43,7 +43,7 @@ import './App.css'
 import { normalizeStoredBoardPayload, prependRecentBoard, safeReadJsonStorage } from './boardPersistence'
 import { circuitDrawTikzOptions } from './circuitOptions'
 import { buildConnectivityNets, rotateNetlistPoints } from './circuitNetlist'
-import { writeClipboardText } from './clipboard'
+import { readClipboardText, writeClipboardText } from './clipboard'
 import { moveElementBy } from './elementTransforms'
 import { createEditorKeydownHandler } from './editorKeyboard'
 import { functionFrameBoundsForDataBounds, mapFunctionPointToFrame, resizeFunctionPlotToBounds } from './functionLayout'
@@ -100,7 +100,7 @@ import { advancedPgfplotsAxisOptions } from './pgfplotsOptions'
 import { previewKindForPreset } from './previewKinds'
 import { rasterSafeSvgText, svgExportDimensions } from './svgRasterExport'
 import { applySnippetLabelOverrides, editableSnippetLabelsForLines } from './snippetLabels'
-import { parseEditableTikzPrimitives } from './tikzPrimitiveImport'
+import { parseEditableTikzPrimitives, tikzDependenciesFromSource, tikzSnippetBodyLines } from './tikzPrimitiveImport'
 import { libraryPresets } from './tikzLibraryPresets'
 import { libraryPaletteItems } from './tikzPaletteItems'
 import { diagramPaletteItems, filterPaletteItems, objectPaletteItems, paletteGroupsFor } from './paletteTaxonomy'
@@ -262,7 +262,7 @@ const messages = {
     paperGuidesUseFixedTarget: 'Show guides (switches to IEEE column)',
     paperGuidesContentNote: 'Content bounds has no fixed paper frame; enabling guides switches to IEEE column.',
     restoreDemo: 'Restore demo',
-    importJson: 'Import JSON',
+    importJson: 'Import JSON/TikZ',
     saveJson: 'Save JSON',
     settingsTitle: 'Settings',
     closeSettings: 'Close settings',
@@ -404,7 +404,7 @@ const messages = {
     paperGuidesUseFixedTarget: 'Mostrar guias (cambia a IEEE column)',
     paperGuidesContentNote: 'Content bounds no tiene marco de papel fijo; al activar guias se cambia a IEEE column.',
     restoreDemo: 'Restaurar demo',
-    importJson: 'Importar JSON',
+    importJson: 'Importar JSON/TikZ',
     saveJson: 'Guardar JSON',
     settingsTitle: 'Ajustes',
     closeSettings: 'Cerrar ajustes',
@@ -546,7 +546,7 @@ const messages = {
     paperGuidesUseFixedTarget: 'Mostra guies (canvia a IEEE column)',
     paperGuidesContentNote: 'Content bounds no te marc de paper fix; en activar guies es canvia a IEEE column.',
     restoreDemo: 'Restaura demo',
-    importJson: 'Importa JSON',
+    importJson: 'Importa JSON/TikZ',
     saveJson: 'Desa JSON',
     settingsTitle: 'Configuració',
     closeSettings: 'Tanca configuració',
@@ -1958,6 +1958,12 @@ function readInitialSharedBoard() {
 function readInitialLocalBoard() {
   if (typeof window === 'undefined') return null
   return normalizeStoredBoardPayload(safeReadJsonStorage(window.localStorage, 'tikz-sketch-autosave'), normalizeBoardElement)
+}
+
+function looksLikeTikzSource(source = '') {
+  return /\\(?:begin\{tikzpicture}|draw\b|path\b|node\b|addplot\b|matrix\b|coordinate\b|begin\{axis}|begin\{tikzcd}|usepackage(?:\[[^\]]*])?\{[^}]*?(?:tikz|pgfplots|circuitikz)[^}]*})/i.test(
+    source,
+  )
 }
 
 function cloneElementForPaste(element, offset = { x: 0.6, y: -0.6 }) {
@@ -5688,19 +5694,22 @@ function App() {
     setTool('select')
   }
 
-  const importEditableTikzSnippet = () => {
-    const parsed = parseEditableTikzPrimitives(customLibrary.snippet)
+  const buildImportedTikzElements = (source, options = {}) => {
+    const parsed = parseEditableTikzPrimitives(source)
     const importedElements = parsed.elements.map((element) => ({
       ...makeBaseElement(),
       title: 'Imported TikZ primitive',
       ...element,
     }))
+    const dependencies = options.dependencies ?? {}
+    const fallbackLines = parsed.elements.length ? parsed.unsupported : tikzSnippetBodyLines(source)
 
-    if (parsed.unsupported.length) {
+    if (fallbackLines.length) {
+      const importTitle = options.title || customLibrary.title || 'Imported TikZ'
       const unsupportedPreset = {
-        id: `imported-snippet-${Date.now()}`,
-        group: customLibrary.group || 'Imported',
-        title: `${customLibrary.title || 'Imported TikZ'} fallback`,
+        id: `imported-snippet-${createId()}`,
+        group: options.group || customLibrary.group || 'Imported',
+        title: `${importTitle} fallback`,
         description: 'Unsupported TikZ lines preserved as a custom snippet',
         origin: { x: -1.5 + importedElements.length * 0.35, y: 1.5 - importedElements.length * 0.25 },
         stroke: settings.stroke,
@@ -5711,9 +5720,11 @@ function App() {
         width: 4.8,
         height: 2.4,
         preview: 'flow',
-        packages: splitList(customLibrary.packages || '\\usepackage{tikz}'),
-        libraries: splitList(customLibrary.libraries),
-        snippet: parsed.unsupported,
+        packages: dependencies.packages?.length ? dependencies.packages : splitList(customLibrary.packages || '\\usepackage{tikz}'),
+        libraries: dependencies.libraries?.length ? dependencies.libraries : splitList(customLibrary.libraries),
+        pgfplotsLibraries: dependencies.pgfplotsLibraries ?? [],
+        afterPreamble: dependencies.afterPreamble ?? [],
+        snippet: fallbackLines,
       }
       importedElements.push({
         ...makeLibraryElement(unsupportedPreset),
@@ -5725,6 +5736,12 @@ function App() {
         customPreset: unsupportedPreset,
       })
     }
+
+    return importedElements
+  }
+
+  const importEditableTikzSnippet = () => {
+    const importedElements = buildImportedTikzElements(customLibrary.snippet)
 
     if (!importedElements.length) {
       window.alert('No encontre primitivas TikZ editables en ese snippet.')
@@ -5796,9 +5813,22 @@ function App() {
     await writeClipboardText(JSON.stringify({ version: 1, elements: selectedElements }, null, 2))
   }
 
-  const pasteSelection = (sourceElements = clipboardElements) => {
-    if (!sourceElements.length) return
-    const clones = sourceElements.map((element) => cloneElementForPaste(element))
+  const readSelectionFromClipboard = async () => {
+    const clipboardText = await readClipboardText()
+    if (!clipboardText.trim()) return []
+
+    try {
+      const board = normalizeStoredBoardPayload(JSON.parse(clipboardText), normalizeBoardElement)
+      return board?.elements ?? []
+    } catch {
+      return []
+    }
+  }
+
+  const pasteSelection = async (sourceElements = clipboardElements) => {
+    const pasteSource = sourceElements.length ? sourceElements : await readSelectionFromClipboard()
+    if (!pasteSource.length) return
+    const clones = pasteSource.map((element) => cloneElementForPaste(element))
     commitElementsWithSelection([...elements, ...clones], clones.map((element) => element.id))
     setTool('select')
   }
@@ -5919,28 +5949,47 @@ function App() {
     if (!file) return
 
     try {
-      const payload = JSON.parse(await file.text())
-      const rawElements = Array.isArray(payload) ? payload : payload.elements
-      if (!Array.isArray(rawElements)) throw new Error('Missing elements array')
-      if (!rawElements.every((element) => element && typeof element === 'object' && typeof element.type === 'string')) {
-        throw new Error('Invalid element payload')
-      }
-      const nextElements = rawElements.map(normalizeBoardElement).filter(Boolean)
-      if (rawElements.length && !nextElements.length) throw new Error('No valid elements found')
+      const text = await file.text()
+      let jsonError = null
 
-      pushHistory(elements)
-      setElements(nextElements)
-      setSelectedId(nextElements[0]?.id ?? null)
-      setSelectedIds(nextElements[0]?.id ? [nextElements[0].id] : [])
-      setFuture([])
-      if (payload.settings && typeof payload.settings === 'object') {
-        setSettings((state) => ({ ...state, ...payload.settings }))
+      try {
+        const payload = JSON.parse(text)
+        const board = normalizeStoredBoardPayload(payload, normalizeBoardElement)
+        if (!board) throw new Error('Missing elements array')
+
+        pushHistory(elements)
+        setElements(board.elements)
+        setSelectedId(board.elements[0]?.id ?? null)
+        setSelectedIds(board.elements[0]?.id ? [board.elements[0].id] : [])
+        setFuture([])
+        if (board.settings) {
+          setSettings((state) => ({ ...state, ...board.settings }))
+        }
+        setTheme(board.theme)
+        if (board.viewport) {
+          if (board.viewport.canvasPan) setCanvasPan(board.viewport.canvasPan)
+          if (board.viewport.zoom) setCanvasZoom(board.viewport.zoom)
+        }
+        setTool('select')
+        return
+      } catch (error) {
+        jsonError = error
       }
-      if (payload.theme === 'dark' || payload.theme === 'light') setTheme(payload.theme)
-      if (payload.viewport && typeof payload.viewport === 'object') {
-        if (payload.viewport.canvasPan) setCanvasPan(payload.viewport.canvasPan)
-        if (payload.viewport.zoom) setCanvasZoom(payload.viewport.zoom)
-      }
+
+      if (!looksLikeTikzSource(text)) throw jsonError
+
+      const dependencies = tikzDependenciesFromSource(text)
+      const importedElements = buildImportedTikzElements(text, {
+        title: file.name.replace(/\.[^.]+$/, '') || 'Imported TikZ',
+        group: 'Imported',
+        dependencies: {
+          ...dependencies,
+          packages: dependencies.packages.length ? dependencies.packages : ['\\usepackage{tikz}'],
+        },
+      })
+      if (!importedElements.length) throw new Error('No editable TikZ statements found')
+
+      commitElementsWithSelection([...elements, ...importedElements], importedElements.map((element) => element.id))
       setTool('select')
     } catch (error) {
       window.alert(`No pude importar ese archivo: ${error.message}`)
@@ -8810,7 +8859,7 @@ function App() {
             ref={importInputRef}
             className="hidden-file-input"
             type="file"
-            accept="application/json,.json,.txt"
+            accept="application/json,.json,.tex,.tikz,.txt"
             onChange={importBoardState}
           />
           <div>
@@ -9541,7 +9590,7 @@ function App() {
           {!selectedElement && (
             <>
               <p className="empty-state">{t('emptySelection')}</p>
-              <button type="button" className="ghost-button full" onClick={() => pasteSelection()} disabled={!clipboardElements.length}>
+              <button type="button" className="ghost-button full" onClick={() => pasteSelection()}>
                 <Files size={17} />
                 {t('pasteSelection')}
               </button>
@@ -9560,7 +9609,7 @@ function App() {
                   <Copy size={16} />
                   {t('copySelection')}
                 </button>
-                <button type="button" className="ghost-button" onClick={() => pasteSelection()} disabled={!clipboardElements.length}>
+                <button type="button" className="ghost-button" onClick={() => pasteSelection()}>
                   <Files size={16} />
                   {t('paste')}
                 </button>

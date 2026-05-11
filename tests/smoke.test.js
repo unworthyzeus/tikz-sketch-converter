@@ -184,7 +184,7 @@ test('generic palette previews are semantically classified', () => {
   assert.match(appSource, /renderFlowPreview/)
   assert.match(appSource, /kind\.includes\('kalman'\)/)
   assert.match(appSource, /normalizeBoardElement/)
-  assert.match(appSource, /map\(normalizeBoardElement\)/)
+  assert.match(appSource, /normalizeStoredBoardPayload\(payload, normalizeBoardElement\)/)
 })
 
 test('library objects expose advanced configurable TikZ metadata', () => {
