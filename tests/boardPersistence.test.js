@@ -30,6 +30,18 @@ test('normalizeStoredBoardPayload restores persisted editable board state', () =
   assert.deepEqual(board.viewport, { zoom: 1.25 })
 })
 
+test('normalizeStoredBoardPayload preserves an intentionally empty board', () => {
+  const board = normalizeStoredBoardPayload({
+    elements: [],
+    settings: { autosave: true },
+    viewport: { zoom: 0.75 },
+  })
+
+  assert.deepEqual(board.elements, [])
+  assert.deepEqual(board.settings, { autosave: true })
+  assert.deepEqual(board.viewport, { zoom: 0.75 })
+})
+
 test('prependRecentBoard keeps the newest saved board visible first', () => {
   const recent = prependRecentBoard(
     [
@@ -43,5 +55,21 @@ test('prependRecentBoard keeps the newest saved board visible first', () => {
   assert.deepEqual(recent, [
     { name: 'Autosave', savedAt: '2026-05-11T10:00:00.000Z', count: 4 },
     { name: 'Older', savedAt: '2026-05-10T10:00:00.000Z', count: 2 },
+  ])
+})
+
+test('prependRecentBoard replaces older entries with the same board name', () => {
+  const recent = prependRecentBoard(
+    [
+      { name: 'Autosave', savedAt: '2026-05-10T10:00:00.000Z', count: 2 },
+      { name: 'Imported', savedAt: '2026-05-09T10:00:00.000Z', count: 6 },
+    ],
+    { name: 'Autosave', savedAt: '2026-05-11T10:00:00.000Z', count: 0 },
+    5,
+  )
+
+  assert.deepEqual(recent, [
+    { name: 'Autosave', savedAt: '2026-05-11T10:00:00.000Z', count: 0 },
+    { name: 'Imported', savedAt: '2026-05-09T10:00:00.000Z', count: 6 },
   ])
 })

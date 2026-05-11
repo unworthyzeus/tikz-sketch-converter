@@ -48,6 +48,7 @@ import { createEditorKeydownHandler } from './editorKeyboard'
 import { functionFrameBoundsForDataBounds, mapFunctionPointToFrame, resizeFunctionPlotToBounds } from './functionLayout'
 import { curveMarkerPoints, functionLegendEntries, functionSeriesIsRenderable, markerGlyphParts } from './functionPreview'
 import { functionDataTableRows, functionDataTableUsesYError, parseFunctionDataTable } from './functionDataTable'
+import { selectableGroupIds, toggleGroupedSelection } from './groupSelection'
 import { latexSymbolGroups } from './latexSymbols'
 import { configDrivenRequirements } from './libraryRequirements'
 import {
@@ -272,6 +273,7 @@ const messages = {
     autosave: 'Local autosave',
     recentBoards: 'Recent local boards',
     noRecent: 'No recent boards yet',
+    recentItemObjects: '{count} objects',
     helpTitle: 'Help and status',
     closeHelp: 'Close help',
     tutorial: 'Tutorial',
@@ -413,6 +415,7 @@ const messages = {
     autosave: 'Autosave local',
     recentBoards: 'Tableros locales recientes',
     noRecent: 'No hay recientes todavía',
+    recentItemObjects: '{count} objetos',
     helpTitle: 'Ayuda y estado',
     closeHelp: 'Cerrar ayuda',
     tutorial: 'Tutorial',
@@ -554,6 +557,7 @@ const messages = {
     autosave: 'Autodesat local',
     recentBoards: 'Taulers locals recents',
     noRecent: 'Encara no hi ha recents',
+    recentItemObjects: '{count} objectes',
     helpTitle: 'Ajuda i estat',
     closeHelp: 'Tanca ajuda',
     tutorial: 'Tutorial',
@@ -4907,8 +4911,10 @@ function App() {
   }
 
   const selectOnly = (id) => {
-    setSelectedId(id)
-    setSelectedIds(id ? [id] : [])
+    const element = elements.find((candidate) => candidate.id === id)
+    const nextIds = element ? selectableGroupIds(elements, element) : []
+    setSelectedId(element ? id : null)
+    setSelectedIds(nextIds)
   }
 
   const snapToTerminal = (point, ignoreIds = []) => {
@@ -5268,15 +5274,14 @@ function App() {
     if (tool !== 'select') return
 
     if (event.shiftKey) {
-      const nextSelectedIds = selectedIds.includes(targetElement.id)
-        ? selectedIds.filter((id) => id !== targetElement.id)
-        : [...selectedIds, targetElement.id]
+      const nextSelectedIds = toggleGroupedSelection(selectedIds, selectableGroupIds(elements, targetElement))
       setSelectedIds(nextSelectedIds)
       setSelectedId(nextSelectedIds.at(-1) ?? null)
       return
     }
 
-    const activeSelectionIds = selectedIds.includes(targetElement.id) ? selectedIds : [targetElement.id]
+    const targetSelectionIds = selectableGroupIds(elements, targetElement)
+    const activeSelectionIds = selectedIds.includes(targetElement.id) ? selectedIds : targetSelectionIds
     setSelectedId(targetElement.id)
     setSelectedIds(activeSelectionIds)
 
@@ -5941,7 +5946,7 @@ function App() {
         throw new Error('Invalid element payload')
       }
       const nextElements = rawElements.map(normalizeBoardElement).filter(Boolean)
-      if (!nextElements.length) throw new Error('No valid elements found')
+      if (rawElements.length && !nextElements.length) throw new Error('No valid elements found')
 
       pushHistory(elements)
       setElements(nextElements)
@@ -11074,8 +11079,8 @@ function App() {
               </label>
             </div>
             <div className="recent-list">
-              <strong>Recent local boards</strong>
-              {recentBoards.length ? recentBoards.map((item, index) => <span key={`${item.savedAt}-${index}`}>{item.name} · {item.count} objetos</span>) : <span>No hay recientes todavia</span>}
+              <strong>{t('recentBoards')}</strong>
+              {recentBoards.length ? recentBoards.map((item, index) => <span key={`${item.savedAt}-${index}`}>{item.name} - {t('recentItemObjects', { count: item.count })}</span>) : <span>{t('noRecent')}</span>}
             </div>
           </section>
         </div>

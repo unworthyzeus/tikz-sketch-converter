@@ -17,7 +17,7 @@ export function normalizeStoredBoardPayload(payload, normalizeElement = (element
   if (!Array.isArray(rawElements)) return null
 
   const elements = rawElements.map(normalizeElement).filter(Boolean)
-  if (!elements.length) return null
+  if (rawElements.length && !elements.length) return null
 
   return {
     elements,
@@ -34,6 +34,7 @@ export function prependRecentBoard(recentBoards, board, limit = 5) {
     savedAt: board?.savedAt || new Date().toISOString(),
     count: Number.isFinite(Number(board?.count)) ? Number(board.count) : 0,
   }
+  const seenNames = new Set([entry.name])
 
   return [
     entry,
@@ -43,6 +44,11 @@ export function prependRecentBoard(recentBoards, board, limit = 5) {
         name: item.name || 'Autosave',
         savedAt: item.savedAt || '',
         count: Number.isFinite(Number(item.count)) ? Number(item.count) : 0,
-      })),
+      }))
+      .filter((item) => {
+        if (seenNames.has(item.name)) return false
+        seenNames.add(item.name)
+        return true
+      }),
   ].slice(0, Math.max(1, limit))
 }
