@@ -42,6 +42,7 @@ import 'katex/dist/katex.min.css'
 import './App.css'
 import { normalizeStoredBoardPayload, prependRecentBoard, safeReadJsonStorage } from './boardPersistence'
 import { circuitDrawTikzOptions } from './circuitOptions'
+import { buildConnectivityNets, rotateNetlistPoints } from './circuitNetlist'
 import { writeClipboardText } from './clipboard'
 import { moveElementBy } from './elementTransforms'
 import { createEditorKeydownHandler } from './editorKeyboard'
@@ -3356,12 +3357,14 @@ function libraryBounds(element) {
 }
 
 function terminalPointsForElement(element) {
+  const renderedPoints = (points) => rotateNetlistPoints(points.filter(Boolean), boundsCenter(elementBounds(element)), element.rotation)
+
   if (element.type === 'line' || element.type === 'arrow') {
-    return [element.start, element.end]
+    return renderedPoints([element.start, element.end])
   }
 
   if (element.type === 'path') {
-    return [element.points[0], element.points.at(-1)].filter(Boolean)
+    return renderedPoints([element.points[0], element.points.at(-1)])
   }
 
   if (element.type === 'library') {
@@ -3372,13 +3375,13 @@ function terminalPointsForElement(element) {
 
     const scale = Number(element.scale) || 1
     const end = circuitEndPoint(config)
-    return [
+    return renderedPoints([
       element.origin,
       {
         x: element.origin.x + end.x * scale,
         y: element.origin.y + end.y * scale,
       },
-    ]
+    ])
   }
 
   return []
@@ -3392,16 +3395,19 @@ function inferCircuitNets(elements) {
       point,
     })),
   )
-  const nets = []
-  terminals.forEach((terminal) => {
-    const match = nets.find((net) => net.terminals.some((candidate) => distance(candidate.point, terminal.point) < 0.08))
-    if (match) {
-      match.terminals.push(terminal)
-    } else {
-      nets.push({ name: `N${nets.length + 1}`, terminals: [terminal] })
-    }
-  })
-  return nets.filter((net) => net.terminals.length > 1)
+  const wireSegments = elements.flatMap((element) =>
+    wireSegmentsForElement(element).map(([start, end], index) => ({
+      id: `${element.id}:s${index}`,
+      elementId: element.id,
+      start,
+      end,
+    })),
+  )
+
+  return buildConnectivityNets({ terminals, wireSegments, intersectSegments: segmentIntersection }).nets.map((net, index) => ({
+    name: `N${index + 1}`,
+    terminals: net.terminals,
+  }))
 }
 
 function wireSegmentsForElement(element) {
@@ -3448,35 +3454,9 @@ function buildNetlistMetadata(elements) {
     })),
   )
 
-  const junctions = []
-  wireSegments.forEach((segment, index) => {
-    wireSegments.slice(index + 1).forEach((other) => {
-      const point = segmentIntersection(segment.start, segment.end, other.start, other.end)
-      if (!point) return
-      junctions.push({
-        id: `junction:${junctions.length + 1}`,
-        elementId: `${segment.elementId}+${other.elementId}`,
-        elementTitle: 'wire junction',
-        terminal: 'junction',
-        preferredNet: '',
-        point,
-        kind: 'junction',
-      })
-    })
-  })
+  const connectivity = buildConnectivityNets({ terminals, wireSegments, intersectSegments: segmentIntersection })
 
-  const allTerminals = [...terminals, ...junctions]
-  const nets = []
-  allTerminals.forEach((terminal) => {
-    const match = nets.find((net) => net.terminals.some((candidate) => distance(candidate.point, terminal.point) < 0.08))
-    if (match) {
-      match.terminals.push(terminal)
-    } else {
-      nets.push({ terminals: [terminal] })
-    }
-  })
-
-  const namedNets = nets
+  const namedNets = connectivity.nets
     .filter((net) => net.terminals.length > 1 || net.terminals.some((terminal) => terminal.preferredNet))
     .map((net, index) => {
       const preferred = net.terminals.find((terminal) => terminal.preferredNet)?.preferredNet
@@ -3524,9 +3504,9 @@ function buildNetlistMetadata(elements) {
     units: 'cm',
     terminalSnapTolerance: 0.08,
     nets: namedNets,
-    junctions: junctions.map((junction) => ({
-      x: Number(formatNumber(junction.point.x)),
-      y: Number(formatNumber(junction.point.y)),
+    junctions: connectivity.junctions.map((junction) => ({
+      x: Number(formatNumber(junction.x)),
+      y: Number(formatNumber(junction.y)),
     })),
     components,
     spiceLike: components.map((component) => component.spiceLine).filter(Boolean),
