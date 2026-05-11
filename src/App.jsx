@@ -40,6 +40,7 @@ import {
 } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 import './App.css'
+import { normalizeStoredBoardPayload, prependRecentBoard, safeReadJsonStorage } from './boardPersistence'
 import { circuitDrawTikzOptions } from './circuitOptions'
 import { writeClipboardText } from './clipboard'
 import { moveElementBy } from './elementTransforms'
@@ -95,8 +96,9 @@ import {
 } from './paperComposer'
 import { advancedPgfplotsAxisOptions } from './pgfplotsOptions'
 import { previewKindForPreset } from './previewKinds'
-import { rasterSafeSvgText } from './svgRasterExport'
+import { rasterSafeSvgText, svgExportDimensions } from './svgRasterExport'
 import { applySnippetLabelOverrides, editableSnippetLabelsForLines } from './snippetLabels'
+import { parseEditableTikzPrimitives } from './tikzPrimitiveImport'
 import { libraryPresets } from './tikzLibraryPresets'
 import { libraryPaletteItems } from './tikzPaletteItems'
 import { diagramPaletteItems, filterPaletteItems, objectPaletteItems, paletteGroupsFor } from './paletteTaxonomy'
@@ -1942,19 +1944,15 @@ function readInitialSharedBoard() {
 
   try {
     const payload = decodeBoardPayload(encoded)
-    const rawElements = Array.isArray(payload) ? payload : payload.elements
-    if (!Array.isArray(rawElements)) return null
-    const nextElements = rawElements.map(normalizeBoardElement).filter(Boolean)
-    if (!nextElements.length) return null
-    return {
-      elements: nextElements,
-      settings: payload.settings && typeof payload.settings === 'object' ? payload.settings : null,
-      theme: payload.theme === 'dark' || payload.theme === 'light' ? payload.theme : 'light',
-      viewport: payload.viewport && typeof payload.viewport === 'object' ? payload.viewport : null,
-    }
+    return normalizeStoredBoardPayload(payload, normalizeBoardElement)
   } catch {
     return null
   }
+}
+
+function readInitialLocalBoard() {
+  if (typeof window === 'undefined') return null
+  return normalizeStoredBoardPayload(safeReadJsonStorage(window.localStorage, 'tikz-sketch-autosave'), normalizeBoardElement)
 }
 
 function cloneElementForPaste(element, offset = { x: 0.6, y: -0.6 }) {
@@ -4619,17 +4617,19 @@ function buildTikz(elements, exportOptions = {}) {
 
 function App() {
   const [initialSharedBoard] = useState(readInitialSharedBoard)
+  const [initialLocalBoard] = useState(() => (initialSharedBoard ? null : readInitialLocalBoard()))
+  const initialBoard = initialSharedBoard ?? initialLocalBoard
   const [initialZoom] = useState(() =>
-    initialCanvasZoom(initialSharedBoard?.viewport?.zoom, typeof window === 'undefined' ? undefined : window.innerWidth),
+    initialCanvasZoom(initialBoard?.viewport?.zoom, typeof window === 'undefined' ? undefined : window.innerWidth),
   )
-  const initialElements = initialSharedBoard?.elements ?? seedElements
+  const initialElements = initialBoard?.elements ?? seedElements
   const initialSelectedId = initialElements[0]?.id ?? null
   const svgRef = useRef(null)
   const importInputRef = useRef(null)
   const keyboardActionsRef = useRef({})
   const [tool, setTool] = useState('select')
   const [zoom, setZoom] = useState(initialZoom)
-  const [canvasPan, setCanvasPan] = useState(initialSharedBoard?.viewport?.canvasPan ?? { x: 0, y: 0 })
+  const [canvasPan, setCanvasPan] = useState(initialBoard?.viewport?.canvasPan ?? { x: 0, y: 0 })
   const [elements, setElements] = useState(initialElements)
   const [selectedId, setSelectedId] = useState(initialSelectedId)
   const [selectedIds, setSelectedIds] = useState(initialSelectedId ? [initialSelectedId] : [])
@@ -4645,22 +4645,16 @@ function App() {
     return languageOptions.some((option) => option.value === savedLanguage) ? savedLanguage : 'en'
   })
   const [inspectorTab, setInspectorTab] = useState('add')
-  const [theme, setTheme] = useState(initialSharedBoard?.theme ?? 'light')
+  const [theme, setTheme] = useState(initialBoard?.theme ?? 'light')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [helpTab, setHelpTab] = useState('tutorial')
   const [contextMenu, setContextMenu] = useState(null)
   const [overlapCandidates, setOverlapCandidates] = useState(null)
   const [mouseWorld, setMouseWorld] = useState({ x: 0, y: 0 })
-  const [settings, setSettings] = useState({ ...defaultEditorSettings, ...(initialSharedBoard?.settings ?? {}) })
+  const [settings, setSettings] = useState({ ...defaultEditorSettings, ...(initialBoard?.settings ?? {}) })
   const [layerSearch, setLayerSearch] = useState('')
-  const [recentBoards] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('tikz-sketch-recent') ?? '[]')
-    } catch {
-      return []
-    }
-  })
+  const [recentBoards, setRecentBoards] = useState(() => safeReadJsonStorage(localStorage, 'tikz-sketch-recent', []))
   const [functionDraft, setFunctionDraft] = useState({
     expression: '0.25*x^2 - 2',
     domainStart: -6,
@@ -4713,6 +4707,7 @@ function App() {
 
   useEffect(() => {
     if (!settings.autosave) return
+    let recentUpdateTimer = null
     const payload = {
       version: 2,
       savedAt: new Date().toISOString(),
@@ -4721,12 +4716,24 @@ function App() {
       theme,
       viewport: { canvasPan, zoom },
     }
-    localStorage.setItem('tikz-sketch-autosave', JSON.stringify(payload))
-    localStorage.setItem(
-      'tikz-sketch-recent',
-      JSON.stringify([{ name: 'Autosave', savedAt: payload.savedAt, count: elements.length }, ...recentBoards.slice(0, 4)]),
-    )
-  }, [canvasPan, elements, recentBoards, settings, theme, zoom])
+
+    try {
+      localStorage.setItem('tikz-sketch-autosave', JSON.stringify(payload))
+      recentUpdateTimer = window.setTimeout(() => {
+        setRecentBoards((current) => {
+          const nextRecent = prependRecentBoard(current, { name: 'Autosave', savedAt: payload.savedAt, count: elements.length })
+          localStorage.setItem('tikz-sketch-recent', JSON.stringify(nextRecent))
+          return nextRecent
+        })
+      }, 0)
+    } catch {
+      // Local persistence is best-effort; editing should keep working in private/quota-limited storage.
+    }
+
+    return () => {
+      if (recentUpdateTimer !== null) window.clearTimeout(recentUpdateTimer)
+    }
+  }, [canvasPan, elements, settings, theme, zoom])
 
   const selectedElement = elements.find((element) => element.id === selectedId)
   const selectedElements = elements.filter((element) => selectedIds.includes(element.id))
@@ -5697,42 +5704,49 @@ function App() {
   }
 
   const importEditableTikzSnippet = () => {
-    const snippet = customLibrary.snippet
-    const pointPattern = '\\((-?\\d+(?:\\.\\d+)?),\\s*(-?\\d+(?:\\.\\d+)?)\\)'
-    const lineMatch = snippet.match(new RegExp(`${pointPattern}\\s*--\\s*${pointPattern}`))
-    const rectMatch = snippet.match(new RegExp(`${pointPattern}\\s*rectangle\\s*${pointPattern}`))
-    const nodeMatch = snippet.match(/\\node(?:\[[^\]]*])?\s*at\s*\((-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\)\s*\{([^}]*)}/)
-    let nextElement = null
+    const parsed = parseEditableTikzPrimitives(customLibrary.snippet)
+    const importedElements = parsed.elements.map((element) => ({
+      ...makeBaseElement(),
+      title: 'Imported TikZ primitive',
+      ...element,
+    }))
 
-    if (rectMatch) {
-      nextElement = {
-        ...makeBaseElement(),
-        type: 'rect',
-        start: { x: Number(rectMatch[1]), y: Number(rectMatch[2]) },
-        end: { x: Number(rectMatch[3]), y: Number(rectMatch[4]) },
+    if (parsed.unsupported.length) {
+      const unsupportedPreset = {
+        id: `imported-snippet-${Date.now()}`,
+        group: customLibrary.group || 'Imported',
+        title: `${customLibrary.title || 'Imported TikZ'} fallback`,
+        description: 'Unsupported TikZ lines preserved as a custom snippet',
+        origin: { x: -1.5 + importedElements.length * 0.35, y: 1.5 - importedElements.length * 0.25 },
+        stroke: settings.stroke,
+        fill: settings.fill,
+        fillOpacity: settings.fillOpacity,
+        scale: settings.objectScale,
+        tikzOptions: settings.tikzOptions,
+        width: 4.8,
+        height: 2.4,
+        preview: 'flow',
+        packages: splitList(customLibrary.packages || '\\usepackage{tikz}'),
+        libraries: splitList(customLibrary.libraries),
+        snippet: parsed.unsupported,
       }
-    } else if (lineMatch) {
-      nextElement = {
-        ...makeBaseElement(),
-        type: snippet.includes('->') || snippet.includes('Stealth') ? 'arrow' : 'line',
-        start: { x: Number(lineMatch[1]), y: Number(lineMatch[2]) },
-        end: { x: Number(lineMatch[3]), y: Number(lineMatch[4]) },
-      }
-    } else if (nodeMatch) {
-      nextElement = {
-        ...makeBaseElement(),
-        type: 'text',
-        position: { x: Number(nodeMatch[1]), y: Number(nodeMatch[2]) },
-        text: nodeMatch[3],
-      }
+      importedElements.push({
+        ...makeLibraryElement(unsupportedPreset),
+        stroke: settings.stroke,
+        fill: settings.fill,
+        fillOpacity: settings.fillOpacity,
+        scale: settings.objectScale,
+        tikzOptions: settings.tikzOptions,
+        customPreset: unsupportedPreset,
+      })
     }
 
-    if (!nextElement) {
-      window.alert('Solo puedo convertir automaticamente nodos, lineas y rectangulos TikZ simples por ahora.')
+    if (!importedElements.length) {
+      window.alert('No encontre primitivas TikZ editables en ese snippet.')
       return
     }
 
-    commitElements([...elements, nextElement], nextElement.id)
+    commitElementsWithSelection([...elements, ...importedElements], importedElements.map((element) => element.id))
     setTool('select')
   }
 
@@ -6013,16 +6027,17 @@ function App() {
       })
 
       const pixelRatio = Math.max(1, Math.min(6, Number(settings.exportScale) || 2))
+      const exportSize = svgExportDimensions(svgText, { width: CANVAS.width, height: CANVAS.height })
       const canvas = document.createElement('canvas')
-      canvas.width = CANVAS.width * pixelRatio
-      canvas.height = CANVAS.height * pixelRatio
+      canvas.width = Math.max(1, Math.round(exportSize.width * pixelRatio))
+      canvas.height = Math.max(1, Math.round(exportSize.height * pixelRatio))
       const context = canvas.getContext('2d')
       if (!settings.exportTransparent) {
         context.fillStyle = '#ffffff'
         context.fillRect(0, 0, canvas.width, canvas.height)
       }
       context.scale(pixelRatio, pixelRatio)
-      context.drawImage(image, 0, 0, CANVAS.width, CANVAS.height)
+      context.drawImage(image, 0, 0, exportSize.width, exportSize.height)
 
       const pngBlob = await new Promise((resolve, reject) => {
         try {
