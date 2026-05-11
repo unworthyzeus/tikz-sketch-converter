@@ -116,6 +116,20 @@ test('object resize uses the bottom-right handle without recentering', () => {
   assert.doesNotMatch(appSource, /origin: boundsCenter\(nextBounds\), scale: scale \* ratio/)
 })
 
+test('localized inspector tabs reduce right panel scrolling', () => {
+  assert.match(appSource, /const languageOptions = \[/)
+  assert.match(appSource, /value: 'ca'/)
+  assert.match(appSource, /value: 'es'/)
+  assert.match(appSource, /value: 'en'/)
+  assert.match(appSource, /translateMessage/)
+  assert.match(appSource, /tikz-sketch-language/)
+  assert.match(appSource, /inspectorTabs/)
+  assert.match(appSource, /inspectorTab === 'add'/)
+  assert.match(appSource, /inspectorTab === 'style'/)
+  assert.match(appSource, /inspectorTab === 'edit'/)
+  assert.match(appSource, /inspectorTab === 'export'/)
+})
+
 test('telecommunications and circuit palettes include requested domains', () => {
   assert.match(paletteSource, /telecom-transmitter-chain/)
   assert.match(paletteSource, /telecom-ofdm-transmitter/)

@@ -154,6 +154,39 @@ textarea:focus-visible {
   justify-content: flex-end;
 }
 
+.language-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid #d8dce4;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #303846;
+}
+
+.language-picker select {
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .hidden-file-input {
   display: none;
 }
@@ -333,6 +366,46 @@ textarea:focus-visible {
   background: var(--panel-bg);
   box-sizing: border-box;
   overflow: auto;
+}
+
+.inspector-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid #d8dce4;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--panel-bg) 92%, #ffffff);
+  backdrop-filter: blur(8px);
+}
+
+.inspector-tabs button {
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  min-height: 46px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #4b5563;
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.inspector-tabs button:hover {
+  border-color: #c7ccd6;
+  background: #f5f6f8;
+}
+
+.inspector-tabs button.is-active {
+  border-color: #111111;
+  background: #111111;
+  color: #ffffff;
 }
 
 .panel-section {
@@ -725,7 +798,14 @@ textarea:focus-visible {
 }
 
 .library-section {
-  max-height: 500px;
+  min-height: 0;
+  max-height: calc(100vh - 112px);
+}
+
+.library-count {
+  color: #5d6675;
+  font-size: 11px;
+  font-weight: 720;
 }
 
 .library-filter-row {
@@ -1633,6 +1713,8 @@ html[data-theme='dark'] .icon-danger,
 html[data-theme='dark'] .context-menu,
 html[data-theme='dark'] .overlap-menu,
 html[data-theme='dark'] .modal-panel,
+html[data-theme='dark'] .language-picker,
+html[data-theme='dark'] .inspector-tabs,
 html[data-theme='dark'] .help-tabs button,
 html[data-theme='dark'] .circuit-config,
 html[data-theme='dark'] .config-details,
@@ -1666,6 +1748,10 @@ html[data-theme='dark'] .context-menu select {
   color: #edf0f4;
 }
 
+html[data-theme='dark'] .language-picker select {
+  color: #edf0f4;
+}
+
 html[data-theme='dark'] .tool-button,
 html[data-theme='dark'] .ghost-button,
 html[data-theme='dark'] .zoom-button,
@@ -1673,6 +1759,7 @@ html[data-theme='dark'] .chip-button,
 html[data-theme='dark'] .preset-button,
 html[data-theme='dark'] .library-button,
 html[data-theme='dark'] .filter-chip,
+html[data-theme='dark'] .inspector-tabs button,
 html[data-theme='dark'] .help-tabs button {
   color: #d7dce4;
 }
@@ -1692,6 +1779,7 @@ html[data-theme='dark'] .chip-button:hover,
 html[data-theme='dark'] .preset-button:hover,
 html[data-theme='dark'] .library-button:hover,
 html[data-theme='dark'] .filter-chip:hover,
+html[data-theme='dark'] .inspector-tabs button:hover,
 html[data-theme='dark'] .context-menu button:hover {
   border-color: #edf0f4;
   background: #252c37;
@@ -1705,6 +1793,7 @@ html[data-theme='dark'] .layer-row.is-active {
 html[data-theme='dark'] .tool-button.is-active,
 html[data-theme='dark'] .ghost-button.is-active,
 html[data-theme='dark'] .filter-chip.is-active,
+html[data-theme='dark'] .inspector-tabs button.is-active,
 html[data-theme='dark'] .help-tabs button.is-active,
 html[data-theme='dark'] .primary-button {
   border-color: #edf0f4;
@@ -1769,6 +1858,10 @@ html[data-theme='dark'] .paper-guide-panel-label {
   }
 
   .export-section {
+    grid-column: 1 / -1;
+  }
+
+  .inspector-tabs {
     grid-column: 1 / -1;
   }
 }

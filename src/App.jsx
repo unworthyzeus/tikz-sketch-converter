@@ -14,6 +14,7 @@ import {
   Files,
   Grid3X3,
   GitBranch,
+  Languages,
   Layers,
   Link,
   Minus,
@@ -134,6 +135,434 @@ const fillColors = [
   { label: 'Violet wash', value: '#ede9fe' },
   { label: 'Cyan wash', value: '#cffafe' },
 ]
+
+const languageOptions = [
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Español' },
+  { value: 'ca', label: 'Català' },
+]
+
+const messages = {
+  en: {
+    language: 'Language',
+    subtitle: 'Visual editor for paper-ready TikZ sketches, plots, circuits and diagrams.',
+    madeBy: 'Made by Guillem Moreno Garcia',
+    undo: 'Undo',
+    redo: 'Redo',
+    github: 'GitHub',
+    eraser: 'Eraser',
+    clearBoard: 'Clear board',
+    hideGrid: 'Hide grid',
+    showGrid: 'Show grid',
+    exportTex: 'Export .TeX',
+    exportPng: 'Export PNG',
+    exportSvg: 'Export SVG',
+    overleafZip: 'Overleaf ZIP',
+    copyUrl: 'Copy URL',
+    urlCopied: 'URL copied',
+    urlGenerated: 'URL generated',
+    help: 'Help',
+    settings: 'Settings',
+    changeTheme: 'Change theme',
+    copyTexCode: 'Copy .TeX code',
+    copied: 'Copied',
+    copyFailed: 'Could not copy',
+    tabAdd: 'Add',
+    tabStyle: 'Style',
+    tabEdit: 'Edit',
+    tabExport: 'Export',
+    stroke: 'Stroke',
+    fill: 'Fill',
+    fillOpacity: 'Fill opacity',
+    lineWidth: 'Line width',
+    arrowType: 'Arrow type',
+    addArrow: 'Add arrow',
+    objectScale: 'Object scale',
+    tikzOptions: 'TikZ options',
+    dashed: 'Dashed',
+    snapGrid: 'Grid snap',
+    terminals: 'Terminals',
+    routeWires: '90° wires',
+    layersLayout: 'Layers and layout',
+    searchLayer: 'Search layer',
+    functionGraph: 'Function / graph',
+    from: 'From',
+    to: 'To',
+    samples: 'Samples',
+    curveStyle: 'Curve style',
+    'lineStyle.solid': 'Solid',
+    'lineStyle.dashed': 'Dashed',
+    'lineStyle.densely-dashed': 'Dense dash',
+    'lineStyle.dotted': 'Dotted',
+    'lineStyle.dash-dot': 'Dash-dot',
+    addGraph: 'Add graph',
+    addToSelectedGraph: 'Add to selected graph',
+    labelSymbols: 'Label and symbols',
+    selectedText: 'Selected text',
+    newLabelText: 'Text for new label',
+    openLatexSymbols: 'Open LaTeX symbols',
+    closeLatexSymbols: 'Close LaTeX symbols',
+    searchSymbol: 'Search symbol',
+    symbolCount: '{count} symbols',
+    diagrams: 'Diagrams',
+    diagramCircuitTitle: 'RC circuit',
+    diagramCircuitDescription: 'Source, resistor and capacitor',
+    diagramGanttTitle: 'ML Gantt',
+    diagramGanttDescription: 'Task plan with bars',
+    diagramMlTitle: 'ML pipeline',
+    diagramMlDescription: 'Data, features, model, metrics',
+    diagramDlTitle: 'DL network',
+    diagramDlDescription: 'Connected dense layers',
+    tikzObjects: 'TikZ objects',
+    searchObject: 'Search object or symbol',
+    libraryResults: '{count} objects',
+    customSnippet: 'Custom TikZ snippet',
+    title: 'Title',
+    packages: 'Packages',
+    libraries: 'TikZ libraries',
+    snippet: 'Snippet',
+    addCustomBlock: 'Add custom block',
+    importEditable: 'Import as editable object',
+    selection: 'Selection',
+    emptySelection: 'Select a canvas element to edit it or recognize freehand traces.',
+    pasteSelection: 'Paste selection',
+    selectedMany: '{count} selected',
+    selectedObjects: '{count} objects',
+    noSelection: 'No selection',
+    freeGrid: 'Free grid',
+    terminalOn: 'terminals',
+    terminalOff: 'no terminals',
+    deleteSelected: 'Delete selected',
+    copySelection: 'Copy sel.',
+    paste: 'Paste',
+    duplicate: 'Duplicate',
+    multiEditNote: 'Multi-edit active: colors, stroke width, dashed style and TikZ options apply to every selected object.',
+    layerName: 'Layer name',
+    rotation: 'Rotation',
+    group: 'Group',
+    widthCm: 'Width cm',
+    heightCm: 'Height cm',
+    codeTikz: 'TikZ code',
+    exportGridAxes: 'Export reference axes',
+    monochromeOutput: 'Monochrome output',
+    wrapFigure: 'Wrap in figure',
+    exportPreset: 'Export preset',
+    paperStyle: 'Paper style',
+    exportScale: 'PNG/SVG scale',
+    exportMargin: 'Export margin',
+    transparentBackground: 'Transparent background',
+    cropContent: 'Crop to content',
+    restoreDemo: 'Restore demo',
+    importJson: 'Import JSON',
+    saveJson: 'Save JSON',
+    settingsTitle: 'Settings',
+    closeSettings: 'Close settings',
+    darkMode: 'Dark mode',
+    snapTerminals: 'Snap to terminals',
+    rightAngleWires: 'Route wires at right angles',
+    wireMode: 'Wire mode',
+    includeGridTikz: 'Include grid/axes in TikZ',
+    autosave: 'Local autosave',
+    recentBoards: 'Recent local boards',
+    noRecent: 'No recent boards yet',
+    helpTitle: 'Help and status',
+    closeHelp: 'Close help',
+    tutorial: 'Tutorial',
+    updates: 'Updates',
+    knownBugs: 'Known bugs',
+    tutorialOne: 'Drag TikZ objects to the canvas, Shift-click to multi-select, and click repeatedly on overlapping objects to cycle the selection.',
+    tutorialTwo: 'For circuits, enable terminal snap, draw 90-degree routed wires, and edit labels, values, terminals and orientation from Selection.',
+    tutorialThree: 'The result can be copied as `.TeX` code or exported as `.tex`, PNG, SVG, editable JSON or a shareable URL.',
+    updatesOne: 'Latest changes: circuit panel, independent pan mode, dark mode, SVG export, shareable URLs and multi-selection.',
+    updatesTwo: 'TikZ objects now support extra nodes, scaling, fills, TikZ options and contextual replacement.',
+    bugsOne: 'Known limitation: terminal snap infers connections geometrically; it does not validate complete electrical networks like a simulator.',
+    bugsTwo: 'Standalone snippets such as PGFPlots or tikz-cd export correctly, but their canvas thumbnail is still approximate.',
+    replace: 'Replace',
+    preset: 'Preset...',
+    underCursor: '{count} objects under cursor',
+  },
+  es: {
+    language: 'Idioma',
+    subtitle: 'Editor visual para convertir bocetos, funciones, circuitos y diagramas en TikZ listo para papers.',
+    madeBy: 'Hecho por Guillem Moreno Garcia',
+    undo: 'Deshacer',
+    redo: 'Rehacer',
+    github: 'GitHub',
+    eraser: 'Borrador',
+    clearBoard: 'Limpiar tablero',
+    hideGrid: 'Ocultar grid',
+    showGrid: 'Mostrar grid',
+    exportTex: 'Exportar .TeX',
+    exportPng: 'Exportar PNG',
+    exportSvg: 'Exportar SVG',
+    overleafZip: 'Overleaf ZIP',
+    copyUrl: 'Copiar URL',
+    urlCopied: 'URL copiada',
+    urlGenerated: 'URL generada',
+    help: 'Ayuda',
+    settings: 'Ajustes',
+    changeTheme: 'Cambiar tema',
+    copyTexCode: 'Copiar código .TeX',
+    copied: 'Copiado',
+    copyFailed: 'No se pudo copiar',
+    tabAdd: 'Añadir',
+    tabStyle: 'Estilo',
+    tabEdit: 'Editar',
+    tabExport: 'Exportar',
+    stroke: 'Borde / trazo',
+    fill: 'Relleno',
+    fillOpacity: 'Opacidad relleno',
+    lineWidth: 'Grosor',
+    arrowType: 'Tipo de flecha',
+    addArrow: 'Añadir flecha',
+    objectScale: 'Escala objetos',
+    tikzOptions: 'Opciones TikZ',
+    dashed: 'Discontinua',
+    snapGrid: 'Grid snap',
+    terminals: 'Terminales',
+    routeWires: 'Cable 90°',
+    layersLayout: 'Capas y layout',
+    searchLayer: 'Buscar capa',
+    functionGraph: 'Función / gráfico',
+    from: 'Desde',
+    to: 'Hasta',
+    samples: 'Muestras',
+    curveStyle: 'Estilo de curva',
+    'lineStyle.solid': 'Continua',
+    'lineStyle.dashed': 'Discontinua',
+    'lineStyle.densely-dashed': 'Dash densa',
+    'lineStyle.dotted': 'Punteada',
+    'lineStyle.dash-dot': 'Dash-dot',
+    addGraph: 'Añadir gráfico',
+    addToSelectedGraph: 'Añadir al gráfico seleccionado',
+    labelSymbols: 'Etiqueta y símbolos',
+    selectedText: 'Texto seleccionado',
+    newLabelText: 'Texto para nueva etiqueta',
+    openLatexSymbols: 'Abrir símbolos LaTeX',
+    closeLatexSymbols: 'Cerrar símbolos LaTeX',
+    searchSymbol: 'Buscar símbolo',
+    symbolCount: '{count} símbolos',
+    diagrams: 'Diagramas',
+    diagramCircuitTitle: 'Circuito RC',
+    diagramCircuitDescription: 'Fuente, resistor y capacitor',
+    diagramGanttTitle: 'Gantt ML',
+    diagramGanttDescription: 'Plan de tareas con barras',
+    diagramMlTitle: 'Pipeline ML',
+    diagramMlDescription: 'Datos, features, modelo, métricas',
+    diagramDlTitle: 'Red DL',
+    diagramDlDescription: 'Capas densas conectadas',
+    tikzObjects: 'Objetos TikZ',
+    searchObject: 'Buscar objeto o símbolo',
+    libraryResults: '{count} objetos',
+    customSnippet: 'Snippet TikZ personalizado',
+    title: 'Título',
+    packages: 'Paquetes',
+    libraries: 'Librerías TikZ',
+    snippet: 'Snippet',
+    addCustomBlock: 'Añadir bloque personalizado',
+    importEditable: 'Importar como objeto editable',
+    selection: 'Selección',
+    emptySelection: 'Selecciona un elemento del lienzo para editarlo o convertir trazos a figuras.',
+    pasteSelection: 'Pegar selección',
+    selectedMany: '{count} seleccionados',
+    selectedObjects: '{count} objetos',
+    noSelection: 'Sin selección',
+    freeGrid: 'Grid libre',
+    terminalOn: 'terminales',
+    terminalOff: 'sin terminales',
+    deleteSelected: 'Eliminar seleccionado',
+    copySelection: 'Copiar sel.',
+    paste: 'Pegar',
+    duplicate: 'Duplicar',
+    multiEditNote: 'Edición múltiple activa: colores, grosor, discontinuidad y opciones TikZ se aplican a todos los objetos seleccionados.',
+    layerName: 'Nombre en capas',
+    rotation: 'Rotación',
+    group: 'Grupo',
+    widthCm: 'Ancho cm',
+    heightCm: 'Alto cm',
+    codeTikz: 'Código TikZ',
+    exportGridAxes: 'Exportar ejes de referencia',
+    monochromeOutput: 'Salida monocroma',
+    wrapFigure: 'Envolver en figure',
+    exportPreset: 'Preset export',
+    paperStyle: 'Estilo paper',
+    exportScale: 'Escala PNG/SVG',
+    exportMargin: 'Margen export',
+    transparentBackground: 'Fondo transparente',
+    cropContent: 'Crop contenido',
+    restoreDemo: 'Restaurar demo',
+    importJson: 'Importar JSON',
+    saveJson: 'Guardar JSON',
+    settingsTitle: 'Ajustes',
+    closeSettings: 'Cerrar ajustes',
+    darkMode: 'Modo oscuro',
+    snapTerminals: 'Snap a terminales',
+    rightAngleWires: 'Rutar cables en ángulos rectos',
+    wireMode: 'Modo de cable',
+    includeGridTikz: 'Incluir grid/ejes en TikZ',
+    autosave: 'Autosave local',
+    recentBoards: 'Tableros locales recientes',
+    noRecent: 'No hay recientes todavía',
+    helpTitle: 'Ayuda y estado',
+    closeHelp: 'Cerrar ayuda',
+    tutorial: 'Tutorial',
+    updates: 'Updates',
+    knownBugs: 'Bugs conocidos',
+    tutorialOne: 'Arrastra objetos TikZ al lienzo, usa Shift+clic para seleccionar varios, y clic repetido sobre objetos superpuestos para ciclar la selección.',
+    tutorialTwo: 'Para circuitos, activa snap a terminales, dibuja líneas con ruteo 90 grados y edita etiqueta, valor, terminales y orientación desde Selección.',
+    tutorialThree: 'El resultado se puede copiar como código `.TeX`, exportar como `.tex`, PNG, SVG, JSON editable o URL compartible.',
+    updatesOne: 'Últimos cambios: panel de circuitos, modo pan independiente, dark mode, SVG export, URLs compartibles y selección múltiple.',
+    updatesTwo: 'Los objetos TikZ ahora aceptan nodos extra, escalado, relleno, opciones TikZ y reemplazo desde menú contextual.',
+    bugsOne: 'Limitación conocida: el snap infiere terminales por geometría local; no valida redes eléctricas completas como un simulador.',
+    bugsTwo: 'Los snippets standalone como PGFPlots o tikz-cd se exportan correctamente, pero su miniatura en canvas sigue siendo aproximada.',
+    replace: 'Reemplazar',
+    preset: 'Preset...',
+    underCursor: '{count} objetos bajo el cursor',
+  },
+  ca: {
+    language: 'Idioma',
+    subtitle: 'Editor visual per convertir esbossos, funcions, circuits i diagrames en TikZ llest per a papers.',
+    madeBy: 'Fet per Guillem Moreno Garcia',
+    undo: 'Desfés',
+    redo: 'Refés',
+    github: 'GitHub',
+    eraser: 'Goma',
+    clearBoard: 'Neteja el tauler',
+    hideGrid: 'Amaga la graella',
+    showGrid: 'Mostra la graella',
+    exportTex: 'Exporta .TeX',
+    exportPng: 'Exporta PNG',
+    exportSvg: 'Exporta SVG',
+    overleafZip: 'Overleaf ZIP',
+    copyUrl: 'Copia URL',
+    urlCopied: 'URL copiada',
+    urlGenerated: 'URL generada',
+    help: 'Ajuda',
+    settings: 'Configuració',
+    changeTheme: 'Canvia el tema',
+    copyTexCode: 'Copia el codi .TeX',
+    copied: 'Copiat',
+    copyFailed: 'No s’ha pogut copiar',
+    tabAdd: 'Afegeix',
+    tabStyle: 'Estil',
+    tabEdit: 'Edita',
+    tabExport: 'Exporta',
+    stroke: 'Vora / traç',
+    fill: 'Farciment',
+    fillOpacity: 'Opacitat del farciment',
+    lineWidth: 'Gruix',
+    arrowType: 'Tipus de fletxa',
+    addArrow: 'Afegeix fletxa',
+    objectScale: 'Escala objectes',
+    tikzOptions: 'Opcions TikZ',
+    dashed: 'Discontínua',
+    snapGrid: 'Ajusta a graella',
+    terminals: 'Terminals',
+    routeWires: 'Cables 90°',
+    layersLayout: 'Capes i layout',
+    searchLayer: 'Cerca capa',
+    functionGraph: 'Funció / gràfic',
+    from: 'Des de',
+    to: 'Fins a',
+    samples: 'Mostres',
+    curveStyle: 'Estil de corba',
+    'lineStyle.solid': 'Contínua',
+    'lineStyle.dashed': 'Discontínua',
+    'lineStyle.densely-dashed': 'Guió dens',
+    'lineStyle.dotted': 'Puntejada',
+    'lineStyle.dash-dot': 'Guió-punt',
+    addGraph: 'Afegeix gràfic',
+    addToSelectedGraph: 'Afegeix al gràfic seleccionat',
+    labelSymbols: 'Etiqueta i símbols',
+    selectedText: 'Text seleccionat',
+    newLabelText: 'Text per a nova etiqueta',
+    openLatexSymbols: 'Obre símbols LaTeX',
+    closeLatexSymbols: 'Tanca símbols LaTeX',
+    searchSymbol: 'Cerca símbol',
+    symbolCount: '{count} símbols',
+    diagrams: 'Diagrames',
+    diagramCircuitTitle: 'Circuit RC',
+    diagramCircuitDescription: 'Font, resistor i condensador',
+    diagramGanttTitle: 'Gantt ML',
+    diagramGanttDescription: 'Pla de tasques amb barres',
+    diagramMlTitle: 'Pipeline ML',
+    diagramMlDescription: 'Dades, features, model, mètriques',
+    diagramDlTitle: 'Xarxa DL',
+    diagramDlDescription: 'Capes denses connectades',
+    tikzObjects: 'Objectes TikZ',
+    searchObject: 'Cerca objecte o símbol',
+    libraryResults: '{count} objectes',
+    customSnippet: 'Snippet TikZ personalitzat',
+    title: 'Títol',
+    packages: 'Paquets',
+    libraries: 'Llibreries TikZ',
+    snippet: 'Snippet',
+    addCustomBlock: 'Afegeix bloc personalitzat',
+    importEditable: 'Importa com a objecte editable',
+    selection: 'Selecció',
+    emptySelection: 'Selecciona un element del llenç per editar-lo o convertir traços a figures.',
+    pasteSelection: 'Enganxa selecció',
+    selectedMany: '{count} seleccionats',
+    selectedObjects: '{count} objectes',
+    noSelection: 'Cap selecció',
+    freeGrid: 'Graella lliure',
+    terminalOn: 'terminals',
+    terminalOff: 'sense terminals',
+    deleteSelected: 'Elimina seleccionat',
+    copySelection: 'Copia sel.',
+    paste: 'Enganxa',
+    duplicate: 'Duplica',
+    multiEditNote: 'Edició múltiple activa: colors, gruix, discontinuïtat i opcions TikZ s’apliquen a tots els objectes seleccionats.',
+    layerName: 'Nom a capes',
+    rotation: 'Rotació',
+    group: 'Grup',
+    widthCm: 'Amplada cm',
+    heightCm: 'Alçada cm',
+    codeTikz: 'Codi TikZ',
+    exportGridAxes: 'Exporta eixos de referència',
+    monochromeOutput: 'Sortida monocroma',
+    wrapFigure: 'Embolcalla en figure',
+    exportPreset: 'Preset export',
+    paperStyle: 'Estil paper',
+    exportScale: 'Escala PNG/SVG',
+    exportMargin: 'Marge export',
+    transparentBackground: 'Fons transparent',
+    cropContent: 'Retalla contingut',
+    restoreDemo: 'Restaura demo',
+    importJson: 'Importa JSON',
+    saveJson: 'Desa JSON',
+    settingsTitle: 'Configuració',
+    closeSettings: 'Tanca configuració',
+    darkMode: 'Mode fosc',
+    snapTerminals: 'Ajusta a terminals',
+    rightAngleWires: 'Ruta cables amb angles rectes',
+    wireMode: 'Mode de cable',
+    includeGridTikz: 'Inclou graella/eixos en TikZ',
+    autosave: 'Autodesat local',
+    recentBoards: 'Taulers locals recents',
+    noRecent: 'Encara no hi ha recents',
+    helpTitle: 'Ajuda i estat',
+    closeHelp: 'Tanca ajuda',
+    tutorial: 'Tutorial',
+    updates: 'Actualitzacions',
+    knownBugs: 'Bugs coneguts',
+    tutorialOne: 'Arrossega objectes TikZ al llenç, usa Shift+clic per seleccionar-ne diversos i clica repetidament sobre objectes superposats per ciclar la selecció.',
+    tutorialTwo: 'Per a circuits, activa l’ajust a terminals, dibuixa línies amb ruteig de 90 graus i edita etiqueta, valor, terminals i orientació des de Selecció.',
+    tutorialThree: 'El resultat es pot copiar com a codi `.TeX`, exportar com `.tex`, PNG, SVG, JSON editable o URL compartible.',
+    updatesOne: 'Últims canvis: panell de circuits, mode pan independent, mode fosc, export SVG, URLs compartibles i selecció múltiple.',
+    updatesTwo: 'Els objectes TikZ ara accepten nodes extra, escalat, farciment, opcions TikZ i reemplaçament contextual.',
+    bugsOne: 'Limitació coneguda: l’ajust infereix terminals per geometria local; no valida xarxes elèctriques completes com un simulador.',
+    bugsTwo: 'Els snippets standalone com PGFPlots o tikz-cd s’exporten correctament, però la seva miniatura al canvas continua sent aproximada.',
+    replace: 'Reemplaça',
+    preset: 'Preset...',
+    underCursor: '{count} objectes sota el cursor',
+  },
+}
+
+function translateMessage(language, key, values = {}) {
+  const template = messages[language]?.[key] ?? messages.en[key] ?? key
+  return template.replace(/\{(\w+)\}/g, (_, name) => `${values[name] ?? ''}`)
+}
 
 const functionLineStyleOptions = [
   { value: 'solid', label: 'Continua', tikz: '', dashArray: '' },
@@ -615,7 +1044,7 @@ const defaultEditorSettings = {
   arrowStyle: 'stealth',
   objectScale: 1,
   tikzOptions: '',
-  labelText: 'Etiqueta',
+  labelText: 'Label',
   exportGrid: false,
   monochromeExport: true,
   wrapFigure: true,
@@ -853,7 +1282,7 @@ function mathContent(text) {
   const trimmed = text.trim()
   const mathMatch = trimmed.match(/^\$(.*)\$$/)
   if (mathMatch) return mathMatch[1].trim()
-  if (!trimmed || trimmed === 'Etiqueta') return ''
+  if (!trimmed || trimmed === 'Etiqueta' || trimmed === 'Label') return ''
   return trimmed
 }
 
@@ -872,7 +1301,7 @@ function appendLatexSymbol(text, symbol) {
 
   const value = symbol.value ?? symbol
   const current = text.trim()
-  if (!current || current === 'Etiqueta') return `$${value}$`
+  if (!current || current === 'Etiqueta' || current === 'Label') return `$${value}$`
   if (/^\$.*\$$/.test(current)) return current.replace(/\$$/, ` ${value}$`)
   return `${current} $${value}$`
 }
@@ -4153,8 +4582,13 @@ function App() {
   const [interaction, setInteraction] = useState(null)
   const [past, setPast] = useState([])
   const [future, setFuture] = useState([])
-  const [copyLabel, setCopyLabel] = useState('Copy .TeX code')
-  const [shareLabel, setShareLabel] = useState('Copiar URL')
+  const [copyLabel, setCopyLabel] = useState('copyTexCode')
+  const [shareLabel, setShareLabel] = useState('copyUrl')
+  const [language, setLanguage] = useState(() => {
+    const savedLanguage = localStorage.getItem('tikz-sketch-language')
+    return languageOptions.some((option) => option.value === savedLanguage) ? savedLanguage : 'en'
+  })
+  const [inspectorTab, setInspectorTab] = useState('add')
   const [theme, setTheme] = useState(initialSharedBoard?.theme ?? 'light')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -4195,9 +4629,21 @@ function App() {
     snippet: '\\node[draw=__COLOR__, rounded corners=2pt] (a) at (0,0) {Custom};\n\\draw[-{Stealth}, draw=__COLOR__] (a) -- ++(2,0) node[right] {edit me};',
   })
 
+  const t = (key, values) => translateMessage(language, key, values)
+  const inspectorTabs = [
+    { id: 'add', label: t('tabAdd'), icon: Code2 },
+    { id: 'style', label: t('tabStyle'), icon: Layers },
+    { id: 'edit', label: t('tabEdit'), icon: Sparkles },
+    { id: 'export', label: t('tabExport'), icon: Download },
+  ]
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
+
+  useEffect(() => {
+    localStorage.setItem('tikz-sketch-language', language)
+  }, [language])
 
   useEffect(() => {
     let mounted = true
@@ -5258,8 +5704,8 @@ function App() {
 
   const copyTikz = async () => {
     const copied = await writeClipboardText(tikzCode)
-    setCopyLabel(copied ? 'Copiado' : 'No se pudo copiar')
-    window.setTimeout(() => setCopyLabel('Copy .TeX code'), 1200)
+    setCopyLabel(copied ? 'copied' : 'copyFailed')
+    window.setTimeout(() => setCopyLabel('copyTexCode'), 1200)
   }
 
   const downloadTikz = () => {
@@ -5386,8 +5832,8 @@ function App() {
     const nextUrl = `${window.location.origin}${window.location.pathname}${window.location.search}#board=${encoded}`
     const copied = await writeClipboardText(nextUrl)
     window.history.replaceState(null, '', nextUrl)
-    setShareLabel(copied ? 'URL copiada' : 'URL generada')
-    window.setTimeout(() => setShareLabel('Copiar URL'), 1400)
+    setShareLabel(copied ? 'urlCopied' : 'urlGenerated')
+    window.setTimeout(() => setShareLabel('copyUrl'), 1400)
   }
 
   const importBoardState = async (event) => {
@@ -8252,10 +8698,10 @@ function App() {
           })}
         </div>
         <div className="rail-actions">
-          <button type="button" className="tool-button subtle" title="Deshacer" aria-label="Deshacer" onClick={undo} disabled={!past.length}>
+          <button type="button" className="tool-button subtle" title={t('undo')} aria-label={t('undo')} onClick={undo} disabled={!past.length}>
             <RotateCcw size={19} />
           </button>
-          <button type="button" className="tool-button subtle" title="Rehacer" aria-label="Rehacer" onClick={redo} disabled={!future.length}>
+          <button type="button" className="tool-button subtle" title={t('redo')} aria-label={t('redo')} onClick={redo} disabled={!future.length}>
             <RotateCw size={19} />
           </button>
         </div>
@@ -8273,11 +8719,22 @@ function App() {
           <div>
             <h1>TikZ Sketch Converter</h1>
             <p>
-              Editor visual para convertir bocetos, funciones y diagramas en TikZ limpio para papers.
-              <span className="byline">Made by Guillem Moreno Garcia</span>
+              {t('subtitle')}
+              <span className="byline">{t('madeBy')}</span>
             </p>
           </div>
           <div className="topbar-actions">
+            <label className="language-picker">
+              <Languages size={16} />
+              <span className="sr-only">{t('language')}</span>
+              <select value={language} onChange={(event) => setLanguage(event.target.value)} aria-label={t('language')}>
+                {languageOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <a
               className="ghost-button repo-link"
               href="https://github.com/unworthyzeus/tikz-sketch-converter"
@@ -8285,7 +8742,7 @@ function App() {
               rel="noreferrer"
             >
               <GitBranch size={17} />
-              GitHub
+              {t('github')}
             </a>
             <button
               type="button"
@@ -8293,50 +8750,50 @@ function App() {
               onClick={() => setTool((current) => (current === 'erase' ? 'select' : 'erase'))}
             >
               <Eraser size={17} />
-              Borrador
+              {t('eraser')}
             </button>
             <button type="button" className="ghost-button danger-action" onClick={clearBoard} disabled={!elements.length}>
               <Trash2 size={17} />
-              Limpiar tablero
+              {t('clearBoard')}
             </button>
             <button type="button" className="ghost-button" onClick={() => setSettings((state) => ({ ...state, grid: !state.grid }))}>
               <Grid3X3 size={17} />
-              {settings.grid ? 'Ocultar grid' : 'Mostrar grid'}
+              {settings.grid ? t('hideGrid') : t('showGrid')}
             </button>
             <button type="button" className="ghost-button" onClick={downloadTikz}>
               <Download size={17} />
-              Exportar .TeX
+              {t('exportTex')}
             </button>
             <button type="button" className="ghost-button" onClick={downloadOverleafZip}>
               <Download size={17} />
-              Overleaf ZIP
+              {t('overleafZip')}
             </button>
             <button type="button" className="ghost-button" onClick={downloadCanvasPng}>
               <Download size={17} />
-              Exportar PNG
+              {t('exportPng')}
             </button>
             <button type="button" className="ghost-button" onClick={downloadCanvasSvg}>
               <Download size={17} />
-              Exportar SVG
+              {t('exportSvg')}
             </button>
             <button type="button" className="ghost-button" onClick={copyShareUrl}>
               <Link size={17} />
-              {shareLabel}
+              {t(shareLabel)}
             </button>
             <button type="button" className="ghost-button" onClick={() => setHelpOpen(true)}>
               <BookOpen size={17} />
-              Ayuda
+              {t('help')}
             </button>
             <button type="button" className="ghost-button" onClick={() => setSettingsOpen(true)}>
               <Settings size={17} />
-              Ajustes
+              {t('settings')}
             </button>
-            <button type="button" className="ghost-button icon-only" onClick={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))} title="Cambiar tema" aria-label="Cambiar tema">
+            <button type="button" className="ghost-button icon-only" onClick={() => setTheme((value) => (value === 'dark' ? 'light' : 'dark'))} title={t('changeTheme')} aria-label={t('changeTheme')}>
               {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
             </button>
             <button type="button" className="primary-button" onClick={copyTikz}>
               <Copy size={17} />
-              {copyLabel}
+              {t(copyLabel)}
             </button>
           </div>
         </header>
@@ -8421,28 +8878,47 @@ function App() {
         </div>
 
         <footer className="status-strip">
-          <span>{elements.length} elementos</span>
+          <span>{t('selectedObjects', { count: elements.length })}</span>
           <span>
             {selectedIds.length > 1
-              ? `${selectedIds.length} seleccionados`
+              ? t('selectedMany', { count: selectedIds.length })
               : selectedElement
                 ? elementLabel(selectedElement)
-                : 'Sin seleccion'}
+                : t('noSelection')}
           </span>
           <span>x {formatNumber(mouseWorld.x)} - y {formatNumber(mouseWorld.y)}</span>
-          <span>{settings.snap ? `Grid ${SNAP_STEP}` : 'Grid libre'} - {settings.terminalSnap ? 'terminales' : 'sin terminales'}</span>
+          <span>{settings.snap ? `Grid ${SNAP_STEP}` : t('freeGrid')} - {settings.terminalSnap ? t('terminalOn') : t('terminalOff')}</span>
         </footer>
       </section>
 
       <aside className="inspector">
+        <div className="inspector-tabs" role="tablist" aria-label="Inspector">
+          {inspectorTabs.map((tab) => {
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={inspectorTab === tab.id}
+                className={inspectorTab === tab.id ? 'is-active' : ''}
+                onClick={() => setInspectorTab(tab.id)}
+              >
+                <Icon size={16} />
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+        {inspectorTab === 'style' && (
         <section className="panel-section compact">
           <div className="panel-title">
             <Layers size={18} />
-            <h2>Estilo</h2>
+            <h2>{t('tabStyle')}</h2>
           </div>
           <div className="color-group">
-            <span className="color-label">Borde / trazo</span>
-            <div className="color-row" aria-label="Color de trazo">
+            <span className="color-label">{t('stroke')}</span>
+            <div className="color-row" aria-label={t('stroke')}>
               {strokeColors.map((color) => (
                 <button
                   key={color.value}
@@ -8459,8 +8935,8 @@ function App() {
             </div>
           </div>
           <div className="color-group">
-            <span className="color-label">Relleno</span>
-            <div className="color-row" aria-label="Color de relleno">
+            <span className="color-label">{t('fill')}</span>
+            <div className="color-row" aria-label={t('fill')}>
               {fillColors.map((color) => (
                 <button
                   key={color.value}
@@ -8477,7 +8953,7 @@ function App() {
             </div>
           </div>
           <label className="field">
-            <span>Opacidad relleno</span>
+            <span>{t('fillOpacity')}</span>
             <input
               type="range"
               min="0.05"
@@ -8492,7 +8968,7 @@ function App() {
             />
           </label>
           <label className="field">
-            <span>Grosor</span>
+            <span>{t('lineWidth')}</span>
             <input
               type="range"
               min="0.4"
@@ -8507,7 +8983,7 @@ function App() {
             />
           </label>
           <label className="field">
-            <span>Tipo de flecha</span>
+            <span>{t('arrowType')}</span>
             <select
               value={selectedElement?.type === 'arrow' ? selectedElement.arrowStyle ?? settings.arrowStyle : settings.arrowStyle}
               onChange={(event) => {
@@ -8524,10 +9000,10 @@ function App() {
           </label>
           <button type="button" className="ghost-button full" onClick={() => setTool('arrow')}>
             <ArrowRight size={17} />
-            Anadir flecha
+            {t('addArrow')}
           </button>
           <label className="field">
-            <span>Escala objetos</span>
+            <span>{t('objectScale')}</span>
             <input
               type="range"
               min="0.4"
@@ -8544,7 +9020,7 @@ function App() {
             />
           </label>
           <label className="field">
-            <span>Opciones TikZ</span>
+            <span>{t('tikzOptions')}</span>
             <input
               type="text"
               value={selectedElement?.tikzOptions ?? settings.tikzOptions}
@@ -8565,7 +9041,7 @@ function App() {
                   updateSelected({ dashed: event.target.checked })
                 }}
               />
-              <span>Discontinua</span>
+              <span>{t('dashed')}</span>
             </label>
             <label className="toggle">
               <input
@@ -8573,7 +9049,7 @@ function App() {
                 checked={settings.snap}
                 onChange={(event) => setSettings((state) => ({ ...state, snap: event.target.checked }))}
               />
-              <span>Grid snap</span>
+              <span>{t('snapGrid')}</span>
             </label>
             <label className="toggle">
               <input
@@ -8581,7 +9057,7 @@ function App() {
                 checked={settings.terminalSnap}
                 onChange={(event) => setSettings((state) => ({ ...state, terminalSnap: event.target.checked }))}
               />
-              <span>Terminales</span>
+              <span>{t('terminals')}</span>
             </label>
             <label className="toggle">
               <input
@@ -8589,18 +9065,20 @@ function App() {
                 checked={settings.routeWires}
                 onChange={(event) => setSettings((state) => ({ ...state, routeWires: event.target.checked }))}
               />
-              <span>Cable 90°</span>
+              <span>{t('routeWires')}</span>
             </label>
           </div>
         </section>
+        )}
 
+        {inspectorTab === 'edit' && (
         <section className="panel-section layers-section">
           <div className="panel-title">
             <Layers size={18} />
-            <h2>Capas y layout</h2>
+            <h2>{t('layersLayout')}</h2>
           </div>
           <label className="field">
-            <span>Buscar capa</span>
+            <span>{t('searchLayer')}</span>
             <input value={layerSearch} onChange={(event) => setLayerSearch(event.target.value)} placeholder="nombre, tipo, formula..." />
           </label>
           <div className="layer-action-grid">
@@ -8664,11 +9142,14 @@ function App() {
             ))}
           </div>
         </section>
+        )}
 
+        {inspectorTab === 'add' && (
+        <>
         <section className="panel-section">
           <div className="panel-title">
             <Sigma size={18} />
-            <h2>Funcion / grafico</h2>
+            <h2>{t('functionGraph')}</h2>
           </div>
           <label className="field">
             <span>f(x)</span>
@@ -8681,7 +9162,7 @@ function App() {
           </label>
           <div className="field-pair">
             <label className="field">
-              <span>Desde</span>
+              <span>{t('from')}</span>
               <input
                 type="number"
                 value={functionDraft.domainStart}
@@ -8689,7 +9170,7 @@ function App() {
               />
             </label>
             <label className="field">
-              <span>Hasta</span>
+              <span>{t('to')}</span>
               <input
                 type="number"
                 value={functionDraft.domainEnd}
@@ -8698,7 +9179,7 @@ function App() {
             </label>
           </div>
           <label className="field">
-            <span>Muestras</span>
+            <span>{t('samples')}</span>
             <input
               type="number"
               min="8"
@@ -8708,14 +9189,14 @@ function App() {
             />
           </label>
           <label className="field">
-            <span>Estilo de curva</span>
+            <span>{t('curveStyle')}</span>
             <select
               value={functionDraft.lineStyle}
               onChange={(event) => setFunctionDraft((state) => ({ ...state, lineStyle: event.target.value }))}
             >
               {functionLineStyleOptions.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {t(`lineStyle.${option.value}`)}
                 </option>
               ))}
             </select>
@@ -8747,12 +9228,12 @@ function App() {
           </div>
           <button type="button" className="primary-button full" onClick={addFunction}>
             <Sigma size={17} />
-            Anadir grafico
+            {t('addGraph')}
           </button>
           {selectedElement?.type === 'function' && (
             <button type="button" className="ghost-button full" onClick={addFunctionToSelectedGraph}>
               <Sigma size={17} />
-              Anadir al grafico seleccionado
+              {t('addToSelectedGraph')}
             </button>
           )}
         </section>
@@ -8760,20 +9241,20 @@ function App() {
         <section className="panel-section symbol-section">
           <div className="panel-title">
             <Type size={18} />
-            <h2>Etiqueta y simbolos</h2>
+            <h2>{t('labelSymbols')}</h2>
           </div>
           <label className="field">
-            <span>{selectedElement?.type === 'text' ? 'Texto seleccionado' : 'Texto para nueva etiqueta'}</span>
+            <span>{selectedElement?.type === 'text' ? t('selectedText') : t('newLabelText')}</span>
             <input type="text" value={activeLabelText} onChange={(event) => updateLabelText(event.target.value)} />
           </label>
           <button type="button" className="ghost-button full" onClick={() => setSymbolsOpen((value) => !value)}>
             <Sigma size={17} />
-            {symbolsOpen ? 'Cerrar simbolos LaTeX' : 'Abrir simbolos LaTeX'}
+            {symbolsOpen ? t('closeLatexSymbols') : t('openLatexSymbols')}
           </button>
           {symbolsOpen && (
             <div className="symbol-picker">
               <label className="field">
-                <span>Buscar simbolo</span>
+                <span>{t('searchSymbol')}</span>
                 <input
                   type="search"
                   value={symbolSearch}
@@ -8781,7 +9262,7 @@ function App() {
                   placeholder="alpha, subset, arrow, integral..."
                 />
               </label>
-              <div className="symbol-count">{visibleLatexSymbols.length} simbolos</div>
+              <div className="symbol-count">{t('symbolCount', { count: visibleLatexSymbols.length })}</div>
               <div className="symbol-grid">
                 {visibleLatexSymbols.map((symbol) => (
                   <button
@@ -8803,7 +9284,7 @@ function App() {
         <section className="panel-section">
           <div className="panel-title">
             <CircuitBoard size={18} />
-            <h2>Diagramas</h2>
+            <h2>{t('diagrams')}</h2>
           </div>
           <div className="preset-grid">
             {diagramPresets.map((preset) => {
@@ -8812,8 +9293,8 @@ function App() {
                 <button key={preset.kind} type="button" className="preset-button" onClick={() => addDiagramPreset(preset)}>
                   <Icon size={17} />
                   <span>
-                    <strong>{preset.title}</strong>
-                    <small>{preset.description}</small>
+                    <strong>{t(`diagram${preset.kind.charAt(0).toUpperCase()}${preset.kind.slice(1)}Title`)}</strong>
+                    <small>{t(`diagram${preset.kind.charAt(0).toUpperCase()}${preset.kind.slice(1)}Description`)}</small>
                   </span>
                 </button>
               )
@@ -8865,10 +9346,10 @@ function App() {
         <section className="panel-section library-section">
           <div className="panel-title">
             <Code2 size={18} />
-            <h2>Objetos TikZ</h2>
+            <h2>{t('tikzObjects')}</h2>
           </div>
           <label className="field">
-            <span>Buscar objeto o simbolo</span>
+            <span>{t('searchObject')}</span>
             <input
               type="search"
               value={librarySearch}
@@ -8876,7 +9357,8 @@ function App() {
               placeholder="resistor, gate, antenna, shape..."
             />
           </label>
-          <div className="library-filter-row" aria-label="Filtrar objetos TikZ">
+          <div className="library-count">{t('libraryResults', { count: visiblePaletteItems.length })}</div>
+          <div className="library-filter-row" aria-label={t('tikzObjects')}>
             {paletteGroups.map((group) => (
               <button
                 key={group}
@@ -8908,9 +9390,9 @@ function App() {
             ))}
           </div>
           <details className="custom-snippet">
-            <summary>Custom TikZ snippet</summary>
+            <summary>{t('customSnippet')}</summary>
             <label className="field">
-              <span>Titulo</span>
+              <span>{t('title')}</span>
               <input
                 type="text"
                 value={customLibrary.title}
@@ -8918,7 +9400,7 @@ function App() {
               />
             </label>
             <label className="field">
-              <span>Paquetes</span>
+              <span>{t('packages')}</span>
               <input
                 type="text"
                 value={customLibrary.packages}
@@ -8926,7 +9408,7 @@ function App() {
               />
             </label>
             <label className="field">
-              <span>Librerias TikZ</span>
+              <span>{t('libraries')}</span>
               <input
                 type="text"
                 value={customLibrary.libraries}
@@ -8934,7 +9416,7 @@ function App() {
               />
             </label>
             <label className="field">
-              <span>Snippet</span>
+              <span>{t('snippet')}</span>
               <textarea
                 className="snippet-input"
                 value={customLibrary.snippet}
@@ -8943,57 +9425,60 @@ function App() {
               />
             </label>
             <button type="button" className="ghost-button full" onClick={addCustomLibrary}>
-              Add custom block
+              {t('addCustomBlock')}
             </button>
             <button type="button" className="ghost-button full" onClick={importEditableTikzSnippet}>
-              Importar como objeto editable
+              {t('importEditable')}
             </button>
           </details>
         </section>
+        </>
+        )}
 
+        {inspectorTab === 'edit' && (
         <section className="panel-section grow">
           <div className="panel-title">
             <Sparkles size={18} />
-          <h2>Seleccion</h2>
+          <h2>{t('selection')}</h2>
           </div>
           {!selectedElement && (
             <>
-              <p className="empty-state">Selecciona un elemento del lienzo para editarlo o convertir trazos a figuras.</p>
+              <p className="empty-state">{t('emptySelection')}</p>
               <button type="button" className="ghost-button full" onClick={() => pasteSelection()} disabled={!clipboardElements.length}>
                 <Files size={17} />
-                Pegar seleccion
+                {t('pasteSelection')}
               </button>
             </>
           )}
           {selectedElement && (
             <div className="selection-editor">
               <div className="selected-heading">
-                <span>{selectedIds.length > 1 ? `${selectedIds.length} elementos` : elementLabel(selectedElement)}</span>
-                <button type="button" className="icon-danger" title="Eliminar" aria-label="Eliminar seleccionado" onClick={deleteSelected}>
+                <span>{selectedIds.length > 1 ? t('selectedObjects', { count: selectedIds.length }) : elementLabel(selectedElement)}</span>
+                <button type="button" className="icon-danger" title={t('deleteSelected')} aria-label={t('deleteSelected')} onClick={deleteSelected}>
                   <Trash2 size={17} />
                 </button>
               </div>
               <div className="selection-actions">
                 <button type="button" className="ghost-button" onClick={copySelection}>
                   <Copy size={16} />
-                  Copiar sel.
+                  {t('copySelection')}
                 </button>
                 <button type="button" className="ghost-button" onClick={() => pasteSelection()} disabled={!clipboardElements.length}>
                   <Files size={16} />
-                  Pegar
+                  {t('paste')}
                 </button>
                 <button type="button" className="ghost-button" onClick={duplicateSelection}>
                   <CopyPlus size={16} />
-                  Duplicar
+                  {t('duplicate')}
                 </button>
               </div>
               {selectedIds.length > 1 && (
                 <p className="selection-note">
-                  Edicion multiple activa: colores, grosor, discontinuidad y opciones TikZ se aplican a todos los objetos seleccionados.
+                  {t('multiEditNote')}
                 </p>
               )}
               <label className="field">
-                <span>Nombre en capas</span>
+                <span>{t('layerName')}</span>
                 <input
                   type="text"
                   value={selectedElement.displayName ?? ''}
@@ -9003,7 +9488,7 @@ function App() {
               </label>
               <div className="field-pair">
                 <label className="field">
-                  <span>Rotacion</span>
+                  <span>{t('rotation')}</span>
                   <input
                     type="number"
                     step="1"
@@ -9012,7 +9497,7 @@ function App() {
                   />
                 </label>
                 <label className="field">
-                  <span>Grupo</span>
+                  <span>{t('group')}</span>
                   <input
                     type="text"
                     value={selectedElement.groupId ?? ''}
@@ -9023,7 +9508,7 @@ function App() {
               {selectionBounds && (
                 <div className="field-pair">
                   <label className="field">
-                    <span>Ancho cm</span>
+                    <span>{t('widthCm')}</span>
                     <input
                       type="number"
                       step="0.05"
@@ -9036,7 +9521,7 @@ function App() {
                     />
                   </label>
                   <label className="field">
-                    <span>Alto cm</span>
+                    <span>{t('heightCm')}</span>
                     <input
                       type="number"
                       step="0.05"
@@ -9271,7 +9756,7 @@ function App() {
                         >
                           {functionLineStyleOptions.map((option) => (
                             <option key={option.value} value={option.value}>
-                              {option.label}
+                              {t(`lineStyle.${option.value}`)}
                             </option>
                           ))}
                         </select>
@@ -9381,7 +9866,7 @@ function App() {
                               >
                                 {functionLineStyleOptions.map((option) => (
                                   <option key={option.value} value={option.value}>
-                                    {option.label}
+                                    {t(`lineStyle.${option.value}`)}
                                   </option>
                                 ))}
                               </select>
@@ -10080,7 +10565,9 @@ function App() {
             </div>
           )}
         </section>
+        )}
 
+        {inspectorTab === 'export' && (
         <section className="panel-section export-section">
           <div className="panel-title paper-composer-title">
             <BookOpen size={18} />
@@ -10180,13 +10667,17 @@ function App() {
               ))}
             </div>
           </div>
+          <div className="panel-title">
+            <Code2 size={18} />
+            <h2>{t('codeTikz')}</h2>
+          </div>
           <label className="toggle export-toggle">
             <input
               type="checkbox"
               checked={settings.exportGrid}
               onChange={(event) => setSettings((state) => ({ ...state, exportGrid: event.target.checked }))}
             />
-            <span>Exportar ejes de referencia</span>
+            <span>{t('exportGridAxes')}</span>
           </label>
           <label className="toggle export-toggle">
             <input
@@ -10194,7 +10685,7 @@ function App() {
               checked={settings.monochromeExport}
               onChange={(event) => setSettings((state) => ({ ...state, monochromeExport: event.target.checked }))}
             />
-            <span>Salida monocroma</span>
+            <span>{t('monochromeOutput')}</span>
           </label>
           {figureWrapperControls.showWrapToggle && (
             <label className="toggle export-toggle">
@@ -10203,12 +10694,12 @@ function App() {
                 checked={settings.wrapFigure}
                 onChange={(event) => setSettings((state) => ({ ...state, wrapFigure: event.target.checked }))}
               />
-              <span>Envolver en figure</span>
+              <span>{t('wrapFigure')}</span>
             </label>
           )}
           <div className="field-pair">
             <label className="field">
-              <span>Preset export</span>
+              <span>{t('exportPreset')}</span>
               <select value={settings.exportPreset} onChange={(event) => setSettings((state) => ({ ...state, exportPreset: event.target.value }))}>
                 {exportPresetOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -10218,7 +10709,7 @@ function App() {
               </select>
             </label>
             <label className="field">
-              <span>Estilo paper</span>
+              <span>{t('paperStyle')}</span>
               <select value={settings.journalStyle} onChange={(event) => setSettings((state) => ({ ...state, journalStyle: event.target.value }))}>
                 {journalStyleOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -10230,7 +10721,7 @@ function App() {
           </div>
           <div className="field-pair">
             <label className="field">
-              <span>Escala PNG/SVG</span>
+              <span>{t('exportScale')}</span>
               <input
                 type="number"
                 min="1"
@@ -10241,7 +10732,7 @@ function App() {
               />
             </label>
             <label className="field">
-              <span>Margen export</span>
+              <span>{t('exportMargin')}</span>
               <input
                 type="number"
                 min="0"
@@ -10258,7 +10749,7 @@ function App() {
                 checked={settings.exportTransparent}
                 onChange={(event) => setSettings((state) => ({ ...state, exportTransparent: event.target.checked }))}
               />
-              <span>Fondo transparente</span>
+              <span>{t('transparentBackground')}</span>
             </label>
             <label className="toggle">
               <input
@@ -10266,7 +10757,7 @@ function App() {
                 checked={settings.exportCrop}
                 onChange={(event) => setSettings((state) => ({ ...state, exportCrop: event.target.checked }))}
               />
-              <span>Crop contenido</span>
+              <span>{t('cropContent')}</span>
             </label>
           </div>
           {figureWrapperControls.showMetadataFields && (
@@ -10296,63 +10787,64 @@ function App() {
           <textarea className="code-output" value={tikzCode} readOnly spellCheck="false" wrap="soft" />
           <div className="export-actions">
             <button type="button" className="ghost-button" onClick={restoreDemo}>
-              Restaurar demo
+              {t('restoreDemo')}
             </button>
             <button type="button" className="ghost-button" onClick={() => importInputRef.current?.click()}>
               <Upload size={17} />
-              Importar JSON
+              {t('importJson')}
             </button>
             <button type="button" className="ghost-button" onClick={downloadBoardState}>
               <Download size={17} />
-              Guardar JSON
+              {t('saveJson')}
             </button>
             <button type="button" className="ghost-button" onClick={downloadCanvasPng}>
               <Download size={17} />
-              Exportar PNG
+              {t('exportPng')}
             </button>
             <button type="button" className="ghost-button" onClick={downloadCanvasSvg}>
               <Download size={17} />
-              Exportar SVG
+              {t('exportSvg')}
             </button>
             <button type="button" className="ghost-button" onClick={downloadOverleafZip}>
               <Download size={17} />
-              Overleaf ZIP
+              {t('overleafZip')}
             </button>
             <button type="button" className="ghost-button" onClick={copyShareUrl}>
               <Link size={17} />
-              {shareLabel}
+              {t(shareLabel)}
             </button>
             <button type="button" className="ghost-button danger-action" onClick={clearBoard} disabled={!elements.length}>
               <Trash2 size={17} />
-              Limpiar tablero
+              {t('clearBoard')}
             </button>
             <button type="button" className="primary-button" onClick={downloadTikz}>
               <Download size={17} />
-              Exportar .TeX
+              {t('exportTex')}
             </button>
           </div>
         </section>
+        )}
       </aside>
 
       {contextMenu && (
         <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu">
           <button type="button" onClick={copySelection}>
             <Copy size={15} />
-            Copiar seleccion
+            {t('copySelection')}
           </button>
           <button type="button" onClick={duplicateSelection}>
             <CopyPlus size={15} />
-            Duplicar
+            {t('duplicate')}
           </button>
           <button type="button" onClick={deleteSelected}>
             <Trash2 size={15} />
-            Eliminar
+            {t('deleteSelected')}
           </button>
           <label>
-            <span>Reemplazar</span>
+            <span>{t('replace')}</span>
             <select value="" onChange={(event) => replaceSelectedWithPreset(event.target.value)}>
               <option value="" disabled>
-                Preset...
+                {t('preset')}
               </option>
               {libraryPaletteItems.slice(0, 80).map((preset) => (
                 <option key={preset.id} value={preset.id}>
@@ -10366,7 +10858,7 @@ function App() {
 
       {overlapCandidates && (
         <div className="overlap-menu" style={{ left: overlapCandidates.x, top: overlapCandidates.y + 12 }}>
-          <span>{overlapCandidates.ids.length} objetos bajo el cursor</span>
+          <span>{t('underCursor', { count: overlapCandidates.ids.length })}</span>
           {overlapCandidates.ids.map((id) => {
             const element = elements.find((candidate) => candidate.id === id)
             if (!element) return null
@@ -10388,17 +10880,17 @@ function App() {
 
       {settingsOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setSettingsOpen(false)}>
-          <section className="modal-panel" role="dialog" aria-modal="true" aria-label="Ajustes" onMouseDown={(event) => event.stopPropagation()}>
+          <section className="modal-panel" role="dialog" aria-modal="true" aria-label={t('settingsTitle')} onMouseDown={(event) => event.stopPropagation()}>
             <div className="modal-header">
-              <h2>Ajustes</h2>
-              <button type="button" className="tool-button subtle" aria-label="Cerrar ajustes" onClick={() => setSettingsOpen(false)}>
+              <h2>{t('settingsTitle')}</h2>
+              <button type="button" className="tool-button subtle" aria-label={t('closeSettings')} onClick={() => setSettingsOpen(false)}>
                 <X size={18} />
               </button>
             </div>
             <div className="settings-grid">
               <label className="toggle">
                 <input type="checkbox" checked={theme === 'dark'} onChange={(event) => setTheme(event.target.checked ? 'dark' : 'light')} />
-                <span>Modo oscuro</span>
+                <span>{t('darkMode')}</span>
               </label>
               <label className="toggle">
                 <input
@@ -10406,7 +10898,7 @@ function App() {
                   checked={settings.terminalSnap}
                   onChange={(event) => setSettings((state) => ({ ...state, terminalSnap: event.target.checked }))}
                 />
-                <span>Snap a terminales</span>
+                <span>{t('snapTerminals')}</span>
               </label>
               <label className="toggle">
                 <input
@@ -10414,10 +10906,10 @@ function App() {
                   checked={settings.routeWires}
                   onChange={(event) => setSettings((state) => ({ ...state, routeWires: event.target.checked }))}
                 />
-                <span>Rutar cables en angulos rectos</span>
+                <span>{t('rightAngleWires')}</span>
               </label>
               <label className="field">
-                <span>Modo de cable</span>
+                <span>{t('wireMode')}</span>
                 <select value={settings.routeMode} onChange={(event) => setSettings((state) => ({ ...state, routeMode: event.target.value }))}>
                   {routeModeOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -10432,7 +10924,7 @@ function App() {
                   checked={settings.exportGrid}
                   onChange={(event) => setSettings((state) => ({ ...state, exportGrid: event.target.checked }))}
                 />
-                <span>Incluir grid/ejes en TikZ</span>
+                <span>{t('includeGridTikz')}</span>
               </label>
               <label className="toggle">
                 <input
@@ -10440,7 +10932,7 @@ function App() {
                   checked={settings.autosave}
                   onChange={(event) => setSettings((state) => ({ ...state, autosave: event.target.checked }))}
                 />
-                <span>Autosave local</span>
+                <span>{t('autosave')}</span>
               </label>
             </div>
             <div className="recent-list">
@@ -10453,18 +10945,18 @@ function App() {
 
       {helpOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setHelpOpen(false)}>
-          <section className="modal-panel help-modal" role="dialog" aria-modal="true" aria-label="Ayuda" onMouseDown={(event) => event.stopPropagation()}>
+          <section className="modal-panel help-modal" role="dialog" aria-modal="true" aria-label={t('helpTitle')} onMouseDown={(event) => event.stopPropagation()}>
             <div className="modal-header">
-              <h2>Ayuda y estado</h2>
-              <button type="button" className="tool-button subtle" aria-label="Cerrar ayuda" onClick={() => setHelpOpen(false)}>
+              <h2>{t('helpTitle')}</h2>
+              <button type="button" className="tool-button subtle" aria-label={t('closeHelp')} onClick={() => setHelpOpen(false)}>
                 <X size={18} />
               </button>
             </div>
             <div className="help-tabs" role="tablist">
               {[
-                ['tutorial', 'Tutorial'],
-                ['updates', 'Updates'],
-                ['bugs', 'Known bugs'],
+                ['tutorial', t('tutorial')],
+                ['updates', t('updates')],
+                ['bugs', t('knownBugs')],
               ].map(([id, label]) => (
                 <button key={id} type="button" className={helpTab === id ? 'is-active' : ''} onClick={() => setHelpTab(id)}>
                   {label}
@@ -10473,9 +10965,9 @@ function App() {
             </div>
             {helpTab === 'tutorial' && (
               <div className="help-copy">
-                <p>Arrastra objetos TikZ al lienzo, usa Shift+clic para seleccionar varios, y clic repetido sobre objetos superpuestos para ciclar la seleccion.</p>
-                <p>Para circuitos, activa snap a terminales, dibuja lineas con ruteo 90 grados y edita etiqueta, valor, terminales y orientacion desde Seleccion.</p>
-                <p>El resultado se puede copiar como codigo `.TeX`, exportar como `.tex`, PNG, SVG, JSON editable o URL compartible.</p>
+                <p>{t('tutorialOne')}</p>
+                <p>{t('tutorialTwo')}</p>
+                <p>{t('tutorialThree')}</p>
                 <div className="gallery-actions">
                   <button type="button" className="ghost-button" onClick={() => loadGalleryExample('qpsk')}>
                     QPSK chain
@@ -10500,14 +10992,14 @@ function App() {
             )}
             {helpTab === 'updates' && (
               <div className="help-copy">
-                <p>Ultimos cambios: panel de circuitos, modo pan independiente, dark mode, SVG export, URLs compartibles y seleccion multiple.</p>
-                <p>Los objetos TikZ ahora aceptan nodos extra, escalado, relleno, opciones TikZ y reemplazo desde menu contextual.</p>
+                <p>{t('updatesOne')}</p>
+                <p>{t('updatesTwo')}</p>
               </div>
             )}
             {helpTab === 'bugs' && (
               <div className="help-copy">
-                <p>Limitacion conocida: el snap infiere terminales por geometria local; no valida redes electricas completas como un simulador.</p>
-                <p>Los snippets standalone como PGFPlots o tikz-cd se exportan correctamente, pero su miniatura en canvas sigue siendo aproximada.</p>
+                <p>{t('bugsOne')}</p>
+                <p>{t('bugsTwo')}</p>
               </div>
             )}
           </section>
