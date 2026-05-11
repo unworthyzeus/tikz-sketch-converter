@@ -70,6 +70,12 @@ test('buildPaperGuide centers the paper frame and safe-area panels in canvas wor
   closeTo(guide.panels[1].minX, 0.125)
 })
 
+test('buildPaperGuide only renders when guides are visible on a fixed paper target', () => {
+  assert.equal(buildPaperGuide({ paperTarget: 'content', showPaperGuides: true }), null)
+  assert.equal(buildPaperGuide({ paperTarget: 'ieee-column', showPaperGuides: false }), null)
+  assert.ok(buildPaperGuide({ paperTarget: 'ieee-column', showPaperGuides: true }))
+})
+
 test('parseSubfigureLabels normalizes custom labels and fills missing panel names', () => {
   assert.deepEqual(parseSubfigureLabels('left; middle', 4), ['(left)', '(middle)', '(c)', '(d)'])
   assert.deepEqual(parseSubfigureLabels('(i), (ii)', 2), ['(i)', '(ii)'])

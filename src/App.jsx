@@ -252,6 +252,9 @@ const messages = {
     exportMargin: 'Export margin',
     transparentBackground: 'Transparent background',
     cropContent: 'Crop to content',
+    showPaperGuides: 'Show paper guides',
+    paperGuidesUseFixedTarget: 'Show guides (switches to IEEE column)',
+    paperGuidesContentNote: 'Content bounds has no fixed paper frame; enabling guides switches to IEEE column.',
     restoreDemo: 'Restore demo',
     importJson: 'Import JSON',
     saveJson: 'Save JSON',
@@ -390,6 +393,9 @@ const messages = {
     exportMargin: 'Margen export',
     transparentBackground: 'Fondo transparente',
     cropContent: 'Crop contenido',
+    showPaperGuides: 'Mostrar guias paper',
+    paperGuidesUseFixedTarget: 'Mostrar guias (cambia a IEEE column)',
+    paperGuidesContentNote: 'Content bounds no tiene marco de papel fijo; al activar guias se cambia a IEEE column.',
     restoreDemo: 'Restaurar demo',
     importJson: 'Importar JSON',
     saveJson: 'Guardar JSON',
@@ -528,6 +534,9 @@ const messages = {
     exportMargin: 'Marge export',
     transparentBackground: 'Fons transparent',
     cropContent: 'Retalla contingut',
+    showPaperGuides: 'Mostra guies paper',
+    paperGuidesUseFixedTarget: 'Mostra guies (canvia a IEEE column)',
+    paperGuidesContentNote: 'Content bounds no te marc de paper fix; en activar guies es canvia a IEEE column.',
     restoreDemo: 'Restaura demo',
     importJson: 'Importa JSON',
     saveJson: 'Desa JSON',
@@ -1055,10 +1064,10 @@ const defaultEditorSettings = {
   exportTransparent: false,
   exportCrop: false,
   exportMargin: 24,
-  paperSize: 'content',
-  paperTarget: 'content',
-  paperWidthCm: '',
-  paperHeightCm: '',
+  paperSize: 'ieee-column',
+  paperTarget: 'ieee-column',
+  paperWidthCm: 8.9,
+  paperHeightCm: 6,
   paperMarginCm: 0.3,
   showPaperGuides: true,
   subfigureLayout: 'single',
@@ -4797,6 +4806,29 @@ function App() {
       journalStyle: target.journalStyle ?? state.journalStyle,
       exportPreset: target.exportPreset ?? state.exportPreset,
     }))
+  }
+
+  const setPaperGuidesVisible = (visible) => {
+    setSettings((state) => {
+      if (!visible) return { ...state, showPaperGuides: false }
+
+      const currentTarget = paperTargets.find((item) => item.id === (state.paperTarget ?? state.paperSize)) ?? paperTargets[0]
+      if (currentTarget.id !== 'content') return { ...state, showPaperGuides: true }
+
+      const fallbackTarget = paperTargets.find((item) => item.id === 'ieee-column') ?? paperTargets.find((item) => item.widthCm && item.heightCm) ?? currentTarget
+      const fixedTarget = fallbackTarget.id !== 'content'
+      return {
+        ...state,
+        showPaperGuides: true,
+        paperTarget: fallbackTarget.id,
+        paperSize: fallbackTarget.id,
+        paperWidthCm: fixedTarget ? fallbackTarget.widthCm : '',
+        paperHeightCm: fixedTarget ? fallbackTarget.heightCm : '',
+        paperMarginCm: fallbackTarget.marginCm ?? state.paperMarginCm,
+        journalStyle: fallbackTarget.journalStyle ?? state.journalStyle,
+        exportPreset: fallbackTarget.exportPreset ?? state.exportPreset,
+      }
+    })
   }
 
   const pushHistory = (snapshot = elements) => {
@@ -10654,11 +10686,14 @@ function App() {
             <label className="toggle export-toggle">
               <input
                 type="checkbox"
-                checked={settings.showPaperGuides}
-                onChange={(event) => setSettings((state) => ({ ...state, showPaperGuides: event.target.checked }))}
+                checked={paperComposer.hasFixedSize && settings.showPaperGuides}
+                onChange={(event) => setPaperGuidesVisible(event.target.checked)}
               />
-              <span>Mostrar guias paper</span>
+              <span>{paperComposer.hasFixedSize ? t('showPaperGuides') : t('paperGuidesUseFixedTarget')}</span>
             </label>
+            {!paperComposer.hasFixedSize && (
+              <p className="selection-note">{t('paperGuidesContentNote')}</p>
+            )}
             <div className="paper-checklist">
               {paperChecklist.map((item) => (
                 <span key={item.id} className={`paper-checklist-item is-${item.level}`}>

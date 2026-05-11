@@ -73,6 +73,11 @@ test('paper composer controls wire journal targets to canvas guides and checklis
   assert.match(appSource, /<details className="paper-wrapper-preview">/)
   assert.match(appSource, /className="code-output"[\s\S]*wrap="soft"/)
   assert.match(appSource, /figureWrapperControls\.showWrapToggle/)
+  assert.match(appSource, /paperTarget: 'ieee-column'/)
+  assert.match(appSource, /setPaperGuidesVisible/)
+  assert.match(appSource, /checked=\{paperComposer\.hasFixedSize && settings\.showPaperGuides\}/)
+  assert.match(appSource, /paperGuidesUseFixedTarget/)
+  assert.match(appSource, /paperGuidesContentNote/)
   assert.match(appSource, /Mostrar guias paper/)
 })
 
